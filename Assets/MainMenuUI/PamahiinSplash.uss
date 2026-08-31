@@ -1,0 +1,151 @@
+.screen {
+    flex-grow: 1;
+    background-color: rgb(5, 1, 2);
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* Ambient Back Glow Rings */
+.ring {
+    position: absolute;
+    border-radius: 999px;
+}
+.ring-outer { width: 1300px; height: 1300px; background-color: rgba(22, 2, 5, 0.35); top: -25%; }
+.ring-middle { width: 850px; height: 850px; background-color: rgba(45, 4, 10, 0.4); top: -12%; }
+.ring-inner { width: 450px; height: 450px; background-color: rgba(65, 8, 15, 0.5); top: 0%; }
+.moon {
+    position: absolute;
+    width: 85px; height: 85px;
+    border-radius: 999px;
+    background-color: rgb(85, 10, 16);
+    top: 9%;
+}
+
+/* Mist Objects */
+.mist {
+    position: absolute;
+    border-radius: 999px;
+    opacity: 0.6;
+}
+.mist-left { width: 750px; height: 280px; background-color: rgb(15, 2, 4); bottom: -120px; left: -150px; }
+.mist-right { width: 700px; height: 250px; background-color: rgb(20, 3, 6); bottom: -100px; right: -150px; }
+
+/* Skyline Silhouettes */
+.skyline {
+    position: absolute;
+    bottom: 0; right: 20%;
+    flex-direction: row;
+    align-items: flex-end;
+}
+.block {
+    background-color: rgb(8, 1, 2);
+    margin-right: 6px;
+}
+
+/* Decorative Framing */
+.frame {
+    position: absolute;
+    top: 20px; bottom: 20px; left: 20px; right: 20px;
+    border-width: 1px;
+    border-color: rgba(60, 10, 15, 0.5);
+}
+.corner {
+    position: absolute;
+    width: 6px; height: 6px;
+    background-color: rgb(120, 15, 22);
+    rotate: 45deg;
+}
+.corner-tl { top: -3px; left: -3px; }
+.corner-tr { top: -3px; right: -3px; }
+.corner-bl { bottom: -3px; left: -3px; }
+.corner-br { bottom: -3px; right: -3px; }
+
+/* Center Menu Layout */
+.content {
+    align-items: center;
+    margin-top: -50px;
+}
+.glyph {
+    color: rgb(180, 30, 40);
+    font-size: 18px;
+    margin-bottom: 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
+}
+.title {
+    color: rgb(230, 50, 60);
+    font-size: 52px;
+    letter-spacing: 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/PressStart2P-Regular.ttf");
+    text-shadow: 0px 0px 18px rgba(230, 40, 50, 0.75);
+    -unity-text-outline-width: 1px;
+    -unity-text-outline-color: rgb(40, 4, 6);
+}
+.subtitle {
+    color: rgb(130, 70, 78);
+    font-size: 22px;
+    margin-top: 4px;
+    margin-bottom: 45px;
+    -unity-font-style: italic;
+    -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
+}
+
+/* Buttons */
+.menu {
+    align-items: center;
+}
+.menu-btn {
+    background-color: rgba(0,0,0,0);
+    border-width: 0;
+    color: rgb(160, 35, 45);
+    font-size: 15px;
+    letter-spacing: 4px;
+    margin-bottom: 22px;
+    -unity-font-definition: url("project://database/Assets/Fonts/PressStart2P-Regular.ttf");
+    transition-property: color, scale;
+    transition-duration: 0.15s;
+}
+.menu-btn:hover {
+    color: rgb(240, 80, 90);
+    scale: 1.1;
+}
+
+/* Screen Switching Utility */
+.hidden {
+    display: none;
+}
+
+/* Host Lobby Player Slots */
+.slot-container {
+    flex-direction: row;
+    justify-content: center;
+}
+.player-slot {
+    width: 90px;
+    height: 100px;
+    background-color: rgba(45, 6, 10, 0.7);
+    border-width: 1px;
+    border-color: rgb(150, 30, 40);
+    align-items: center;
+    justify-content: center;
+    margin: 0 8px;
+}
+.player-slot.empty {
+    background-color: rgba(15, 2, 3, 0.4);
+    border-color: rgba(60, 10, 15, 0.4);
+}
+.slot-text {
+    color: rgb(220, 50, 60);
+    font-size: 10px;
+    letter-spacing: 1px;
+    -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
+}
+
+/* Keybind Text Styling */
+.keybind-text {
+    color: rgb(190, 140, 145);
+    font-size: 14px;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
+}

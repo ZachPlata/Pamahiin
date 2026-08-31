@@ -210,7 +210,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   ShowTopMostFoldoutHeaderGroup: 1
-  walkSpeed: 5
+  walkSpeed: 2.5
 --- !u!61 &2590631444389686374
 BoxCollider2D:
   m_ObjectHideFlags: 0
