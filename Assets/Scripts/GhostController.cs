@@ -6,6 +6,7 @@ using UnityEngine.Rendering.Universal;
 
 public enum GhostState
 {
+    Dormant,
     Wander,
     Interact,
     Evidence,
@@ -22,6 +23,11 @@ public class GhostController : NetworkBehaviour
     [SerializeField] private bool evidenceEmf5 = true;
     [SerializeField] private bool evidenceFreezingTemps = true;
     [SerializeField] private bool evidenceGhostWriting = false;
+    [SerializeField] private bool evidenceDotsProjector = false;
+    [SerializeField] private bool evidenceSpiritBox = false;
+    [SerializeField] private bool evidenceGhostOrbs = false;
+
+    public bool EvidenceSpiritBox => evidenceSpiritBox;
 
     [Header("Movement Speeds")]
     [SerializeField] private float wanderSpeed = 1.6f;
@@ -45,6 +51,7 @@ public class GhostController : NetworkBehaviour
 
     [Header("Visuals & Audio")]
     [SerializeField] private SpriteRenderer ghostSprite;
+    [SerializeField] private SpriteRenderer dotsSilhouetteSprite;
     [SerializeField] private Light2D ghostAuraLight;
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip manifestAudio;
@@ -52,9 +59,12 @@ public class GhostController : NetworkBehaviour
 
     // Network synced state
     private NetworkVariable<GhostState> currentState = new NetworkVariable<GhostState>(
-        GhostState.Wander, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        GhostState.Dormant, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private NetworkVariable<bool> isVisuallyManifested = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        
+    private NetworkVariable<bool> isDotsSilhouetteVisible = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public GhostState CurrentState => currentState.Value;
@@ -84,20 +94,34 @@ public class GhostController : NetworkBehaviour
     {
         currentState.OnValueChanged += (oldVal, newVal) => OnStateChanged(newVal);
         isVisuallyManifested.OnValueChanged += (oldVal, newVal) => UpdateVisuals(newVal);
-
-        if (IsServer)
-        {
-            favoriteRoomCenter = transform.position;
-            currentDestination = favoriteRoomCenter;
-            nextHuntAllowedTime = Time.time + huntCooldown;
-
-            if (ParanormalManager.Instance != null)
-            {
-                ParanormalManager.Instance.SetGhostInfo(transform, favoriteRoomCenter, roamRadius, evidenceFreezingTemps);
-            }
-        }
+        isDotsSilhouetteVisible.OnValueChanged += (oldVal, newVal) => UpdateDotsVisuals(newVal);
 
         UpdateVisuals(isVisuallyManifested.Value);
+    }
+
+    public void ActivateGhost()
+    {
+        if (!IsServer || currentState.Value != GhostState.Dormant) return;
+
+        GhostRoomMarker[] availableRooms = Object.FindObjectsByType<GhostRoomMarker>(FindObjectsSortMode.None);
+        if (availableRooms != null && availableRooms.Length > 0)
+        {
+            // Pick a random room and teleport the ghost there
+            GhostRoomMarker chosenRoom = availableRooms[Random.Range(0, availableRooms.Length)];
+            transform.position = chosenRoom.transform.position;
+            if (rb != null) rb.position = transform.position;
+        }
+
+        favoriteRoomCenter = transform.position;
+        currentDestination = favoriteRoomCenter;
+        nextHuntAllowedTime = Time.time + huntCooldown;
+
+        if (ParanormalManager.Instance != null)
+        {
+            ParanormalManager.Instance.SetGhostInfo(transform, favoriteRoomCenter, roamRadius, evidenceFreezingTemps);
+        }
+
+        SetState(GhostState.Wander);
     }
 
     public override void OnNetworkDespawn()
@@ -114,8 +138,29 @@ public class GhostController : NetworkBehaviour
 
         stateTimer += Time.deltaTime;
 
+        if (evidenceDotsProjector)
+        {
+            bool inDots = false;
+            var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsSortMode.None);
+            foreach (var proj in projectors)
+            {
+                if (proj.IsPoweredOn && Vector2.Distance(transform.position, proj.transform.position) <= proj.projectionRadius)
+                {
+                    inDots = true;
+                    break;
+                }
+            }
+            if (isDotsSilhouetteVisible.Value != inDots)
+            {
+                isDotsSilhouetteVisible.Value = inDots;
+            }
+        }
+
         switch (currentState.Value)
         {
+            case GhostState.Dormant:
+                // Do nothing until activated
+                break;
             case GhostState.Wander:
                 UpdateWanderState();
                 break;
@@ -333,6 +378,24 @@ public class GhostController : NetworkBehaviour
             }
         }
 
+        // Ghost writing interaction
+        if (evidenceGhostWriting)
+        {
+            var books = Object.FindObjectsByType<GhostWritingBookItem>(FindObjectsSortMode.None);
+            foreach (var book in books)
+            {
+                if (book.IsOpened && Vector2.Distance(transform.position, book.transform.position) <= 3.5f)
+                {
+                    book.WriteInBook();
+                    if (ParanormalManager.Instance != null)
+                    {
+                        ParanormalManager.Instance.RegisterEvent(book.transform.position, 2, 15f);
+                    }
+                    return;
+                }
+            }
+        }
+
         // Fallback: register ghost presence event
         if (ParanormalManager.Instance != null)
         {
@@ -343,6 +406,21 @@ public class GhostController : NetworkBehaviour
     public void StartHunt()
     {
         if (!IsServer || IsHunting) return;
+
+        // Check for nearby crucifixes that can block the hunt
+        var crucifixes = Object.FindObjectsByType<CrucifixItem>(FindObjectsSortMode.None);
+        foreach (var crucifix in crucifixes)
+        {
+            if (!crucifix.IsBurned && Vector2.Distance(transform.position, crucifix.transform.position) <= crucifix.blockRadius)
+            {
+                if (crucifix.TryBlockHunt())
+                {
+                    // Hunt successfully blocked by crucifix
+                    nextHuntAllowedTime = Time.time + huntCooldown;
+                    return;
+                }
+            }
+        }
 
         huntTimer = 0f;
         stateTimer = 0f;
@@ -372,7 +450,7 @@ public class GhostController : NetworkBehaviour
         var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsSortMode.None);
         foreach (var door in doors)
         {
-            if (door.IsExitDoor || locked)
+            if (door.IsFrontDoor)
             {
                 door.SetLocked(locked);
             }
@@ -463,14 +541,20 @@ public class GhostController : NetworkBehaviour
     {
         if (ghostSprite != null)
         {
-            // During wander, ghost is fully invisible (or very subtle alpha)
-            // During hunts, ghost manifests visually
             ghostSprite.enabled = manifested;
         }
 
         if (ghostAuraLight != null)
         {
             ghostAuraLight.enabled = manifested;
+        }
+    }
+
+    private void UpdateDotsVisuals(bool visible)
+    {
+        if (dotsSilhouetteSprite != null)
+        {
+            dotsSilhouetteSprite.enabled = visible;
         }
     }
 

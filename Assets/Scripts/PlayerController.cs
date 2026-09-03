@@ -23,8 +23,12 @@ public class PlayerController : NetworkBehaviour
     private NetworkVariable<bool> isCrouching = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+    private NetworkVariable<float> sanity = new NetworkVariable<float>(
+        100f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     public bool IsAlive => isAlive.Value;
     public bool IsCrouching => isCrouching.Value;
+    public float Sanity => sanity.Value;
     public bool IsInHideZone { get; private set; }
     public HideZone CurrentHideZone { get; private set; }
 
@@ -68,6 +72,12 @@ public class PlayerController : NetworkBehaviour
 
     private void Update()
     {
+        if (IsServer && isAlive.Value)
+        {
+            // Simple sanity drain over time
+            sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * 0.5f);
+        }
+
         if (!IsOwner || !isAlive.Value) return;
 
         // 1. Gather WASD input
@@ -190,5 +200,11 @@ public class PlayerController : NetworkBehaviour
         {
             closestInteractable.Interact();
         }
+    }
+
+    public void RestoreSanity(float amount)
+    {
+        if (!IsServer) return;
+        sanity.Value = Mathf.Min(100f, sanity.Value + amount);
     }
 }

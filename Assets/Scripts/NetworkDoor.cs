@@ -37,17 +37,25 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     [SerializeField] private bool disableObstacleColliderWhenOpen = false;
 
     [Header("Door Settings")]
-    [SerializeField] private bool isExitDoor = false; // Hunt locks exit doors
+    [SerializeField] private bool isFrontDoor = false; // Hunt locks front doors, also requires key to open initially
+    [SerializeField] private bool requiresKey = false;
 
     [Header("Legacy Settings (Fallback if no references assigned)")]
     [SerializeField] private float openAngle = 90f;
 
     public bool IsOpen => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isOpen.Value : localIsOpen;
     public bool IsLocked => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isLocked.Value : localIsLocked;
-    public bool IsExitDoor => isExitDoor;
+    public bool IsFrontDoor => isFrontDoor;
+    public bool RequiresKey => requiresKey;
+    public bool IsKeyFound => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isKeyFound.Value : localIsKeyFound;
+
+    private NetworkVariable<bool> isKeyFound = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private bool localIsOpen = false;
     private bool localIsLocked = false;
+    private bool localIsKeyFound = false;
+    private bool hasTriggeredGhostSpawn = false;
 
     // Runtime state
     private GameObject runtimeDoorObj;
@@ -344,11 +352,32 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
     }
 
+    public void UnlockWithKey()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            if (IsServer && requiresKey)
+            {
+                isKeyFound.Value = true;
+            }
+        }
+        else
+        {
+            localIsKeyFound = true;
+        }
+    }
+
     public void Interact()
     {
         if (IsLocked)
         {
             // Door is locked (e.g. during a Hunt)
+            return;
+        }
+
+        if (requiresKey && !IsKeyFound)
+        {
+            // Requires front door key
             return;
         }
 
@@ -369,11 +398,23 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             if (IsServer)
             {
                 isOpen.Value = !isOpen.Value;
+                if (isFrontDoor && isOpen.Value && !hasTriggeredGhostSpawn)
+                {
+                    hasTriggeredGhostSpawn = true;
+                    var ghost = Object.FindFirstObjectByType<GhostController>();
+                    if (ghost != null) ghost.ActivateGhost();
+                }
             }
         }
         else
         {
             localIsOpen = !localIsOpen;
+            if (isFrontDoor && localIsOpen && !hasTriggeredGhostSpawn)
+            {
+                hasTriggeredGhostSpawn = true;
+                var ghost = Object.FindFirstObjectByType<GhostController>();
+                if (ghost != null) ghost.ActivateGhost();
+            }
         }
     }
 
