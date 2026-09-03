@@ -1,0 +1,85 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="PamahiinSplash.uss" />
+
+    <ui:VisualElement name="screen" class="screen">
+        <!-- Visual Shell Elements -->
+        <ui:VisualElement name="moon" class="moon" />
+        
+        <ui:VisualElement name="bat-layer" class="bat-layer">
+            <ui:VisualElement name="bat1" class="bat" style="top:70px; left:44%;" />
+            <ui:VisualElement name="bat2" class="bat" style="top:90px; left:48%;" />
+            <ui:VisualElement name="bat3" class="bat" style="top:60px; left:53%;" />
+            <ui:VisualElement name="bat4" class="bat" style="top:100px; left:57%;" />
+            <ui:VisualElement name="bat5" class="bat" style="top:75px; left:60%;" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="mist1" class="mist mist-1" />
+        <ui:VisualElement name="mist2" class="mist mist-2" />
+        <ui:VisualElement name="castle-peaks" class="peaks" />
+
+        <ui:VisualElement name="frame" class="frame" picking-mode="Ignore">
+            <ui:VisualElement name="corner-tl" class="corner corner-tl" />
+            <ui:VisualElement name="corner-tr" class="corner corner-tr" />
+            <ui:VisualElement name="corner-bl" class="corner corner-bl" />
+            <ui:VisualElement name="corner-br" class="corner corner-br" />
+        </ui:VisualElement>
+
+        <!-- Dynamic Menu Content -->
+        <ui:VisualElement name="content" class="content">
+            <ui:Label name="glyph" text="&#10022;" class="glyph" />
+            <ui:Label name="title" text="PAMAHIIN" class="title" />
+            <ui:Label name="subtitle" text="&quot;superstition&quot;" class="subtitle" />
+
+            <!-- 1. ROOT MAIN MENU -->
+            <ui:VisualElement name="menu-main" class="menu">
+                <ui:Button name="btn-start" text="START GAME" class="menu-item primary" />
+                <ui:Button name="btn-settings" text="SETTINGS" class="menu-item" />
+                <ui:Button name="btn-help" text="HELP" class="menu-item" />
+                <ui:Button name="btn-quit" text="QUIT GAME" class="menu-item" />
+            </ui:VisualElement>
+
+            <!-- 2. START MODE MENU -->
+            <ui:VisualElement name="menu-start-mode" class="menu" style="display: none;">
+                <ui:Button name="btn-singleplayer" text="SINGLEPLAYER" class="menu-item primary" />
+                <ui:Button name="btn-multiplayer" text="MULTIPLAYER" class="menu-item" />
+                <ui:Button name="btn-back-mode" text="BACK" class="menu-item" />
+            </ui:VisualElement>
+
+            <!-- 3. MULTIPLAYER MENU -->
+            <ui:VisualElement name="menu-multiplayer" class="menu" style="display: none;">
+                <ui:Button name="btn-create-lobby" text="CREATE LOBBY" class="menu-item primary" />
+                <ui:TextField name="input-ip" text="127.0.0.1" class="menu-item" style="background-color: rgb(10,2,3); -unity-text-align: middle-center; width: 250px;" />
+                <ui:Button name="btn-join-game" text="JOIN GAME" class="menu-item" />
+                <ui:Button name="btn-back-multi" text="BACK" class="menu-item" />
+            </ui:VisualElement>
+
+            <!-- 4. LOBBY MENU -->
+            <ui:VisualElement name="menu-lobby" class="menu" style="display: none;">
+                <ui:Label text="LOBBY" class="subtitle" style="color: rgb(230, 57, 70);" />
+                <ui:Button name="btn-lobby-start" text="START GAME" class="menu-item primary" />
+                <ui:Button name="btn-back-lobby" text="LEAVE LOBBY" class="menu-item" />
+            </ui:VisualElement>
+
+            <!-- 5. SETTINGS MENU -->
+            <ui:VisualElement name="menu-settings" class="menu" style="display: none;">
+                <ui:Label text="MASTER VOLUME" class="subtitle" />
+                <ui:Slider name="slider-volume" low-value="0" high-value="100" value="50" style="width: 250px; margin-bottom: 20px;" />
+                <ui:Button name="btn-back-settings" text="BACK" class="menu-item" />
+            </ui:VisualElement>
+
+            <!-- 6. HELP MENU -->
+            <ui:VisualElement name="menu-help" class="menu" style="display: none;">
+                <ui:Label text="CONTROLS" class="subtitle" style="color: rgb(230, 57, 70);" />
+                <ui:Label text="WASD - Movement" class="subtitle" style="margin-top: 5px;" />
+                <ui:Label text="E - Interact" class="subtitle" style="margin-top: 5px;" />
+                <ui:Label text="G - Drop Items" class="subtitle" style="margin-top: 5px;" />
+                <ui:Label text="Shift - Run" class="subtitle" style="margin-top: 5px;" />
+                <ui:Label text="Left Click - Use Item" class="subtitle" style="margin-top: 5px;" />
+                <ui:Button name="btn-back-help" text="BACK" class="menu-item" style="margin-top: 20px;" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <ui:VisualElement name="vignette" class="vignette" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,151 +1,177 @@
+/* PamahiinSplash.uss
+   Notes on what does NOT port 1:1 from CSS and what to do instead:
+   - No radial-gradient / linear-gradient support in USS.
+     -> .screen background is a flat colour here; for the moody gradient look,
+        assign a background-image sprite (a soft radial PNG) in the Inspector,
+        or drop in the pixel "bg-glow" sprite Claude can generate for you.
+   - No clip-path support.
+     -> .moon and .peaks (castle silhouette) must be actual sprite images
+        (transparent PNGs) rather than CSS shapes. Assign via
+        background-image once you have the art, or ask for the sprites.
+   - No box-shadow / inset shadow.
+     -> .vignette should be a PNG with a transparent centre and dark edges,
+        stretched over the whole screen, OR skip it — UI Toolkit cameras
+        usually don't need a manual vignette if your Camera/Volume already
+        has one via post-processing.
+   - No @keyframes / CSS animation.
+     -> .title glow flicker, .bat flapping, .mist drifting all need a small
+        C# script driving style values every frame or via
+        experimental.animation. See PamahiinFlicker.cs.
+   - Fonts: import "Press Start 2P" and "VT323" as .ttf into Assets/Fonts,
+     then create a Font Asset (right-click > Create > UI Toolkit > Font
+     Asset) and reference it below via -unity-font-definition.
+*/
+
 .screen {
-    flex-grow: 1;
-    background-color: rgb(5, 1, 2);
+    width: 100%;
+    height: 100%;
+    background-color: rgb(6, 1, 2);
     align-items: center;
     justify-content: center;
     overflow: hidden;
 }
 
-/* Ambient Back Glow Rings */
-.ring {
-    position: absolute;
-    border-radius: 999px;
-}
-.ring-outer { width: 1300px; height: 1300px; background-color: rgba(22, 2, 5, 0.35); top: -25%; }
-.ring-middle { width: 850px; height: 850px; background-color: rgba(45, 4, 10, 0.4); top: -12%; }
-.ring-inner { width: 450px; height: 450px; background-color: rgba(65, 8, 15, 0.5); top: 0%; }
 .moon {
     position: absolute;
-    width: 85px; height: 85px;
-    border-radius: 999px;
-    background-color: rgb(85, 10, 16);
-    top: 9%;
+    top: 60px;
+    left: 50%;
+    width: 96px;
+    height: 96px;
+    margin-left: -48px;
+    background-color: rgb(180, 18, 26);
+    /* replace with background-image: sprite for the pixelated moon shape */
 }
 
-/* Mist Objects */
+.bat-layer {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.bat {
+    position: absolute;
+    width: 10px;
+    height: 6px;
+    background-color: rgb(13, 3, 4);
+    opacity: 0.85;
+    /* replace with a small bat sprite for the wing silhouette */
+}
+
 .mist {
     position: absolute;
+    opacity: 0.5;
     border-radius: 999px;
-    opacity: 0.6;
 }
-.mist-left { width: 750px; height: 280px; background-color: rgb(15, 2, 4); bottom: -120px; left: -150px; }
-.mist-right { width: 700px; height: 250px; background-color: rgb(20, 3, 6); bottom: -100px; right: -150px; }
 
-/* Skyline Silhouettes */
-.skyline {
+.mist-1 {
+    width: 700px;
+    height: 260px;
+    background-color: rgb(28, 3, 6);
+    bottom: 60px;
+    left: 5%;
+}
+
+.mist-2 {
+    width: 600px;
+    height: 220px;
+    background-color: rgb(42, 5, 9);
+    bottom: 40px;
+    right: 0%;
+}
+
+.peaks {
     position: absolute;
-    bottom: 0; right: 20%;
-    flex-direction: row;
-    align-items: flex-end;
-}
-.block {
-    background-color: rgb(8, 1, 2);
-    margin-right: 6px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 140px;
+    background-color: rgb(10, 2, 3);
+    /* replace with the jagged castle-silhouette sprite */
 }
 
-/* Decorative Framing */
 .frame {
     position: absolute;
-    top: 20px; bottom: 20px; left: 20px; right: 20px;
-    border-width: 1px;
-    border-color: rgba(60, 10, 15, 0.5);
+    top: 20px;
+    right: 20px;
+    bottom: 20px;
+    left: 20px;
+    border-width: 4px;
+    border-color: rgb(74, 12, 16);
 }
+
 .corner {
     position: absolute;
-    width: 6px; height: 6px;
-    background-color: rgb(120, 15, 22);
+    width: 10px;
+    height: 10px;
+    background-color: rgb(180, 18, 26);
     rotate: 45deg;
 }
-.corner-tl { top: -3px; left: -3px; }
-.corner-tr { top: -3px; right: -3px; }
-.corner-bl { bottom: -3px; left: -3px; }
-.corner-br { bottom: -3px; right: -3px; }
 
-/* Center Menu Layout */
+.corner-tl { top: 12px; left: 12px; }
+.corner-tr { top: 12px; right: 12px; }
+.corner-bl { bottom: 12px; left: 12px; }
+.corner-br { bottom: 12px; right: 12px; }
+
 .content {
     align-items: center;
-    margin-top: -50px;
+    margin-top: 40px;
 }
+
 .glyph {
-    color: rgb(180, 30, 40);
-    font-size: 18px;
-    margin-bottom: 6px;
+    font-size: 20px;
+    color: rgb(180, 18, 26);
+    margin-bottom: 14px;
     -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
 }
+
 .title {
-    color: rgb(230, 50, 60);
-    font-size: 52px;
+    font-size: 44px;
     letter-spacing: 6px;
+    color: rgb(230, 57, 70);
     -unity-font-definition: url("project://database/Assets/Fonts/PressStart2P-Regular.ttf");
-    text-shadow: 0px 0px 18px rgba(230, 40, 50, 0.75);
-    -unity-text-outline-width: 1px;
-    -unity-text-outline-color: rgb(40, 4, 6);
+    -unity-text-outline-width: 2px;
+    -unity-text-outline-color: rgb(58, 5, 8);
+    /* the layered blur glow needs PamahiinFlicker.cs pulsing a TextShadow
+       or a duplicate blurred label behind this one */
 }
+
 .subtitle {
-    color: rgb(130, 70, 78);
-    font-size: 22px;
-    margin-top: 4px;
-    margin-bottom: 45px;
+    font-size: 24px;
+    color: rgb(138, 80, 88);
+    letter-spacing: 3px;
+    margin-top: 12px;
     -unity-font-style: italic;
     -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
 }
 
-/* Buttons */
 .menu {
     align-items: center;
+    margin-top: 42px;
 }
-.menu-btn {
-    background-color: rgba(0,0,0,0);
-    border-width: 0;
-    color: rgb(160, 35, 45);
+
+.menu-item {
     font-size: 15px;
-    letter-spacing: 4px;
-    margin-bottom: 22px;
+    color: rgb(230, 57, 70);
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    letter-spacing: 3px;
+    margin-bottom: 20px;
     -unity-font-definition: url("project://database/Assets/Fonts/PressStart2P-Regular.ttf");
-    transition-property: color, scale;
+    transition-property: color;
     transition-duration: 0.15s;
 }
-.menu-btn:hover {
-    color: rgb(240, 80, 90);
-    scale: 1.1;
+
+.menu-item:hover {
+    color: rgb(255, 107, 116);
 }
 
-/* Screen Switching Utility */
-.hidden {
-    display: none;
+.menu-item.primary {
+    font-size: 17px;
 }
 
-/* Host Lobby Player Slots */
-.slot-container {
-    flex-direction: row;
-    justify-content: center;
+.vignette {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    /* assign a soft dark-edged transparent-centre PNG here */
 }
-.player-slot {
-    width: 90px;
-    height: 100px;
-    background-color: rgba(45, 6, 10, 0.7);
-    border-width: 1px;
-    border-color: rgb(150, 30, 40);
-    align-items: center;
-    justify-content: center;
-    margin: 0 8px;
-}
-.player-slot.empty {
-    background-color: rgba(15, 2, 3, 0.4);
-    border-color: rgba(60, 10, 15, 0.4);
-}
-.slot-text {
-    color: rgb(220, 50, 60);
-    font-size: 10px;
-    letter-spacing: 1px;
-    -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
-}
-
-/* Keybind Text Styling */
-.keybind-text {
-    color: rgb(190, 140, 145);
-    font-size: 14px;
-    letter-spacing: 2px;
-    margin-bottom: 6px;
-    -unity-font-definition: url("project://database/Assets/Fonts/VT323-Regular.ttf");
-}
+a
