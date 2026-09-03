@@ -3,70 +3,108 @@ using UnityEngine;
 
 public class PlayerInventory : NetworkBehaviour
 {
-    public NetworkObject[] slots = new NetworkObject[3];
+    public const int MaxSlots = 3;
+    public EquipmentItem[] slots = new EquipmentItem[MaxSlots];
     public int currentSlotIndex = 0;
+
+    public EquipmentItem CurrentItem => (currentSlotIndex >= 0 && currentSlotIndex < MaxSlots) ? slots[currentSlotIndex] : null;
 
     private void Update()
     {
         if (!IsOwner) return;
 
+        // Slot selection via numeric hotkeys (1, 2, 3)
         if (Input.GetKeyDown(KeyCode.Alpha1)) SwitchSlot(0);
         if (Input.GetKeyDown(KeyCode.Alpha2)) SwitchSlot(1);
         if (Input.GetKeyDown(KeyCode.Alpha3)) SwitchSlot(2);
 
-        NetworkObject currentItem = slots[currentSlotIndex];
-
-        if (Input.GetMouseButtonDown(0) && currentItem != null)
+        // Scroll wheel slot cycling
+        float scroll = Input.GetAxisRaw("Mouse ScrollWheel");
+        if (scroll > 0f)
         {
-            var flashlight = currentItem.GetComponent<FlashlightItem>();
-            if (flashlight != null) flashlight.UseItemRpc();
+            SwitchSlot((currentSlotIndex - 1 + MaxSlots) % MaxSlots);
+        }
+        else if (scroll < 0f)
+        {
+            SwitchSlot((currentSlotIndex + 1) % MaxSlots);
         }
 
+        EquipmentItem currentItem = CurrentItem;
+
+        // Primary Use (Left Click)
+        if (Input.GetMouseButtonDown(0) && currentItem != null)
+        {
+            currentItem.UsePrimary();
+        }
+
+        // Secondary Use (Right Click)
+        if (Input.GetMouseButtonDown(1) && currentItem != null)
+        {
+            currentItem.UseSecondary();
+        }
+
+        // Drop current item (G)
         if (Input.GetKeyDown(KeyCode.G) && currentItem != null)
         {
-            var flashlight = currentItem.GetComponent<FlashlightItem>();
-            if (flashlight != null) flashlight.DropItemRpc();
-            
-            slots[currentSlotIndex] = null; 
+            currentItem.DropItemRpc();
+            slots[currentSlotIndex] = null;
         }
     }
 
-    private void SwitchSlot(int newSlot)
+    public void SwitchSlot(int newSlot)
     {
+        if (newSlot < 0 || newSlot >= MaxSlots) return;
         if (currentSlotIndex == newSlot) return;
 
+        // Put away previously held item
         if (slots[currentSlotIndex] != null)
         {
-            slots[currentSlotIndex].GetComponent<FlashlightItem>().SetInHandRpc(false);
+            slots[currentSlotIndex].SetInHandRpc(false);
         }
 
         currentSlotIndex = newSlot;
 
+        // Bring out new item
         if (slots[currentSlotIndex] != null)
         {
-            slots[currentSlotIndex].GetComponent<FlashlightItem>().SetInHandRpc(true);
+            slots[currentSlotIndex].SetInHandRpc(true);
         }
     }
 
     public bool HasEmptySlot()
     {
-        // Check if there is at least one null slot
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < MaxSlots; i++)
         {
             if (slots[i] == null) return true;
         }
         return false;
     }
 
-    public void AddItem(NetworkObject item)
+    public bool AddItem(EquipmentItem item)
     {
-        for (int i = 0; i < 3; i++)
+        if (item == null) return false;
+
+        for (int i = 0; i < MaxSlots; i++)
         {
             if (slots[i] == null)
             {
                 slots[i] = item;
                 bool isInHand = (i == currentSlotIndex);
-                item.GetComponent<FlashlightItem>().SetInHandRpc(isInHand);
+                item.SetInHandRpc(isInHand);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void RemoveItem(EquipmentItem item)
+    {
+        for (int i = 0; i < MaxSlots; i++)
+        {
+            if (slots[i] == item)
+            {
+                slots[i] = null;
                 return;
             }
         }
