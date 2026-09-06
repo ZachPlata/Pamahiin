@@ -128,6 +128,8 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         ToggleDashboard();
     }
     
+    public string GetInteractText() => "Access Dashboard";
+    
     public bool CanDrag() => false;
     public void OnDragBegin(ulong clientId) {}
     public void OnDragUpdate(Vector2 targetPosition) {}
@@ -144,6 +146,13 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         else
         {
             uiDocument.rootVisualElement.style.display = DisplayStyle.None;
+        }
+
+        // Disable collider while UI is open to prevent accidental clicks passing through
+        var col = GetComponent<Collider2D>();
+        if (col != null)
+        {
+            col.enabled = !isDashboardOpen;
         }
     }
 
