@@ -101,7 +101,7 @@ public class VideoCameraItem : EquipmentItem
         }
     }
 
-    private void OnDestroy()
+    public override void OnDestroy()
     {
         // Cleanup just in case we are destroyed while holding it
         if (localCamera != null && cameraSettingsStored)

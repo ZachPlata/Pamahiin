@@ -1,0 +1,143 @@
+.dashboard-container {
+    flex-grow: 1;
+    background-color: rgb(20, 20, 25);
+    border-width: 4px;
+    border-color: rgb(50, 50, 60);
+    padding: 10px;
+    color: rgb(200, 255, 200); /* CRT green tint */
+}
+
+.tabs-container {
+    flex-direction: row;
+    height: 40px;
+    margin-bottom: 10px;
+    border-bottom-width: 2px;
+    border-color: rgb(100, 150, 100);
+}
+
+.tab-button {
+    flex-grow: 1;
+    background-color: rgb(30, 40, 30);
+    color: rgb(150, 200, 150);
+    font-size: 16px;
+    border-width: 1px;
+    border-color: rgb(100, 150, 100);
+    margin-right: 5px;
+}
+
+.tab-button:hover {
+    background-color: rgb(50, 70, 50);
+}
+
+.active-tab {
+    background-color: rgb(80, 120, 80);
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+}
+
+.content-container {
+    flex-grow: 1;
+    background-color: rgb(10, 10, 10);
+    padding: 15px;
+}
+
+.view {
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+
+.active-view {
+    display: flex;
+}
+
+.hidden-view {
+    display: none;
+}
+
+.screen-title {
+    font-size: 20px;
+    color: rgb(200, 255, 200);
+    margin-bottom: 10px;
+    -unity-text-align: middle-center;
+}
+
+/* CCTV */
+.cctv-screen {
+    flex-grow: 1;
+    background-color: rgb(30, 30, 30);
+    border-width: 2px;
+    border-color: rgb(100, 100, 100);
+    align-items: center;
+    justify-content: center;
+}
+
+.no-signal-text {
+    font-size: 24px;
+    color: rgb(255, 50, 50);
+    -unity-font-style: bold;
+}
+
+.control-button {
+    margin-top: 10px;
+    background-color: rgb(50, 50, 50);
+    color: white;
+}
+
+/* Sanity */
+.sanity-list {
+    flex-grow: 1;
+}
+
+.sanity-row {
+    flex-direction: row;
+    justify-content: space-between;
+    background-color: rgba(0, 255, 0, 0.1);
+    padding: 10px;
+    margin-bottom: 5px;
+}
+
+.sanity-name {
+    font-size: 18px;
+    color: white;
+}
+
+.sanity-value {
+    font-size: 18px;
+    color: rgb(200, 255, 200);
+    -unity-font-style: bold;
+}
+
+/* Activity */
+.graph-container {
+    flex-grow: 1;
+    background-color: rgb(0, 0, 0);
+    border-width: 1px;
+    border-color: rgb(100, 255, 100);
+    flex-direction: column-reverse;
+}
+
+.activity-bar-fill {
+    background-color: rgb(255, 50, 50);
+    width: 100%;
+    height: 0%; /* Changed dynamically */
+    transition-duration: 0.2s;
+}
+
+.activity-level-text {
+    margin-top: 10px;
+    font-size: 24px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+}
+
+.close-button {
+    flex-grow: 0;
+    width: 40px;
+    background-color: rgb(150, 40, 40);
+    color: white;
+}
+
+.close-button:hover {
+    background-color: rgb(200, 50, 50);
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="ExorcismUI.uss" />
+    <ui:VisualElement name="exorcism-overlay" class="overlay hidden">
+        <ui:VisualElement class="minigame-container">
+            <ui:Label text="EXORCISM IN PROGRESS" class="title-label" />
+            
+            <ui:VisualElement class="progress-bar-bg">
+                <ui:VisualElement name="sweet-spot" class="sweet-spot" />
+                <ui:VisualElement name="cursor" class="cursor" />
+            </ui:VisualElement>
+
+            <ui:Label text="Press SPACE when the cursor is in the red zone!" class="instruction-label" />
+            
+            <ui:VisualElement class="score-container">
+                <ui:Label name="lbl-score" text="0 / 3 Successful Chants" class="score-label" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

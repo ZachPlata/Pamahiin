@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="MainMenu.uss" />
+    <ui:VisualElement class="main-container">
+        
+        <!-- Atmospheric Background Layers -->
+        <ui:VisualElement name="vignette" class="bg-layer vignette" />
+        <ui:VisualElement name="bg-mist" class="bg-layer bg-mist" />
+
+        <!-- Main Menu View -->
+        <ui:VisualElement name="main-menu-view" class="view active-view">
+            <ui:Label text="Pamahiin" class="title-label" />
+            <ui:Label text="A Philippine Horror Experience" class="subtitle-label" />
+            
+            <ui:VisualElement class="button-container">
+                <ui:Button name="btn-singleplayer" text="Singleplayer" class="menu-button" />
+                <ui:Button name="btn-multiplayer" text="Multiplayer" class="menu-button" />
+                <ui:Button name="btn-help" text="Help &amp; Controls" class="menu-button" />
+                <ui:Button name="btn-quit" text="Quit Game" class="menu-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Multiplayer Host/Join View -->
+        <ui:VisualElement name="multiplayer-view" class="view hidden-view">
+            <ui:Label text="Multiplayer" class="title-label" />
+            
+            <ui:VisualElement class="button-container">
+                <ui:Button name="btn-host" text="Host Lobby" class="menu-button" />
+                
+                <ui:VisualElement class="join-container">
+                    <ui:TextField name="input-ip" label="IP Address" value="127.0.0.1" class="menu-input" />
+                    <ui:Button name="btn-join" text="Join Lobby" class="menu-button" />
+                </ui:VisualElement>
+                
+                <ui:Button name="btn-back-to-main" text="Back" class="menu-button back-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        
+        <!-- Lobby Waiting View -->
+        <ui:VisualElement name="lobby-view" class="view hidden-view">
+            <ui:Label text="Waiting in Lobby" class="title-label" />
+            
+            <ui:Label text="Waiting for Host to start the game..." class="subtitle-label" />
+            
+            <ui:ScrollView name="lobby-player-list" class="player-list-container">
+                <!-- Player items are spawned here by code -->
+            </ui:ScrollView>
+            
+            <ui:VisualElement class="button-container">
+                <ui:Button name="btn-start-game" text="Start Investigation" class="menu-button start-button" />
+                <ui:Button name="btn-leave-lobby" text="Leave Lobby" class="menu-button back-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <!-- Help / Keybinds View -->
+        <ui:VisualElement name="help-view" class="view hidden-view">
+            <ui:Label text="Controls &amp; Help" class="title-label" />
+            
+            <ui:VisualElement class="controls-list">
+                <ui:Label text="W/A/S/D - Move" class="control-text" />
+                <ui:Label text="Mouse - Look" class="control-text" />
+                <ui:Label text="Left Shift - Sprint" class="control-text" />
+                <ui:Label text="Left Click - Interact / Toggle Doors" class="control-text" />
+                <ui:Label text="F - Toggle Flashlight" class="control-text" />
+                <ui:Label text="J - Open Journal" class="control-text" />
+                <ui:Label text="Q / E - Use Primary / Secondary Item" class="control-text" />
+                <ui:Label text="1, 2, 3 - Equip Hotbar Slots" class="control-text" />
+                <ui:Label text="G - Drop Item" class="control-text" />
+                <ui:Label text="ESC - Pause Menu" class="control-text" />
+            </ui:VisualElement>
+            
+            <ui:Button name="btn-back-from-help" text="Back to Menu" class="menu-button back-button" />
+        </ui:VisualElement>
+        
+    </ui:VisualElement>
+</ui:UXML>

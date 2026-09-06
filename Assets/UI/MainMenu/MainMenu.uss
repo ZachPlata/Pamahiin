@@ -1,0 +1,171 @@
+.main-container {
+    flex-grow: 1;
+    background-image: url('project://database/Assets/UI/MainMenu/MainMenuBackground.png');
+    -unity-background-scale-mode: scale-and-crop;
+    align-items: center;
+    justify-content: center;
+}
+
+.view {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+}
+
+.active-view {
+    display: flex;
+}
+
+.hidden-view {
+    display: none;
+}
+
+.title-label {
+    font-size: 80px;
+    color: rgb(220, 50, 50);
+    -unity-font: url('project://database/Assets/Fonts/PressStart2P-Regular.ttf');
+    -unity-font-definition: initial;
+    -unity-font-style: bold;
+    margin-bottom: 10px;
+}
+
+.subtitle-label {
+    font-size: 24px;
+    color: rgb(200, 200, 200);
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    margin-bottom: 50px;
+}
+
+.button-container {
+    width: 300px;
+    align-items: stretch;
+}
+
+.menu-button {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding-top: 15px;
+    padding-bottom: 15px;
+    font-size: 28px;
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    background-color: rgb(30, 30, 30);
+    color: rgb(255, 255, 255);
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    transition-duration: 0.2s;
+}
+
+.menu-button:hover {
+    background-color: rgb(60, 60, 60);
+    scale: 1.05;
+}
+
+.menu-button:active {
+    background-color: rgb(220, 50, 50);
+}
+
+.back-button {
+    margin-top: 30px;
+    background-color: rgb(40, 40, 40);
+}
+
+.start-button {
+    background-color: rgb(100, 20, 20);
+}
+
+.start-button:hover {
+    background-color: rgb(150, 30, 30);
+}
+
+.join-container {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.menu-input {
+    margin-bottom: 10px;
+}
+
+.menu-input > .unity-text-field__label {
+    color: rgb(200, 200, 200);
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    font-size: 20px;
+    min-width: 80px;
+}
+
+.menu-input > .unity-base-text-field__input {
+    background-color: rgb(20, 20, 20);
+    color: rgb(255, 255, 255);
+    border-color: rgb(50, 50, 50);
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    font-size: 20px;
+}
+
+/* Atmospheric VFX Layers */
+.bg-layer {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.vignette {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /* We'll generate a proper vignette texture in C# */
+}
+
+.bg-mist {
+    background-color: rgba(20, 10, 10, 0.3);
+}
+
+/* Lobby Player List */
+.player-list-container {
+    width: 400px;
+    height: 250px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-color: rgb(150, 30, 30);
+    border-width: 1px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 10px;
+}
+
+.player-slot {
+    font-size: 24px;
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    color: white;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.1);
+    margin-bottom: 5px;
+    border-radius: 4px;
+}
+
+/* Help Screen */
+.controls-list {
+    background-color: rgba(20, 0, 0, 0.8);
+    padding: 30px;
+    border-radius: 10px;
+    border-color: rgb(150, 50, 50);
+    border-width: 2px;
+}
+
+.control-text {
+    font-size: 28px;
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    color: rgb(220, 220, 220);
+    margin-bottom: 15px;
+}

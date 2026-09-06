@@ -28,25 +28,44 @@ public class PlayerInventory : NetworkBehaviour
         {
             SwitchSlot((currentSlotIndex + 1) % MaxSlots);
         }
+    }
 
-        EquipmentItem currentItem = CurrentItem;
+    public void UsePrimary()
+    {
+        if (CurrentItem != null) CurrentItem.UsePrimary();
+    }
 
-        // Primary Use (Left Click)
-        if (Input.GetMouseButtonDown(0) && currentItem != null)
+    public void UseSecondary()
+    {
+        if (CurrentItem != null) CurrentItem.UseSecondary();
+    }
+
+    public void DropCurrentItem(Vector3 dropPosition)
+    {
+        if (CurrentItem != null)
         {
-            currentItem.UsePrimary();
+            CurrentItem.DropItemRpc(dropPosition);
+            slots[currentSlotIndex] = null;
         }
+    }
 
-        // Secondary Use (Right Click)
-        if (Input.GetMouseButtonDown(1) && currentItem != null)
+    public void DropAllItems(Vector3 dropPosition)
+    {
+        for (int i = 0; i < MaxSlots; i++)
         {
-            currentItem.UseSecondary();
+            if (slots[i] != null)
+            {
+                slots[i].DropItemRpc(dropPosition + (Vector3)(Random.insideUnitCircle * 0.5f));
+                slots[i] = null;
+            }
         }
+    }
 
-        // Drop current item (G)
-        if (Input.GetKeyDown(KeyCode.G) && currentItem != null)
+    public void PlaceCurrentItem(Vector3 placePosition, Quaternion placeRotation)
+    {
+        if (CurrentItem != null)
         {
-            currentItem.DropItemRpc();
+            CurrentItem.PlaceItemRpc(placePosition, placeRotation);
             slots[currentSlotIndex] = null;
         }
     }

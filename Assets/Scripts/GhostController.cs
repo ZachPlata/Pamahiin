@@ -19,13 +19,16 @@ public enum GhostState
 public class GhostController : NetworkBehaviour
 {
     [Header("Ghost Identity & Evidence")]
-    [SerializeField] private string ghostName = "White Lady";
+    public string ghostName = "White Lady";
     [SerializeField] private bool evidenceEmf5 = true;
     [SerializeField] private bool evidenceFreezingTemps = true;
     [SerializeField] private bool evidenceGhostWriting = false;
     [SerializeField] private bool evidenceDotsProjector = false;
     [SerializeField] private bool evidenceSpiritBox = false;
     [SerializeField] private bool evidenceGhostOrbs = false;
+
+    [Header("Ghost Orb Prefab")]
+    [SerializeField] private GameObject ghostOrbPrefab;
 
     public bool EvidenceSpiritBox => evidenceSpiritBox;
 
@@ -103,7 +106,7 @@ public class GhostController : NetworkBehaviour
     {
         if (!IsServer || currentState.Value != GhostState.Dormant) return;
 
-        GhostRoomMarker[] availableRooms = Object.FindObjectsByType<GhostRoomMarker>(FindObjectsSortMode.None);
+        GhostRoomMarker[] availableRooms = Object.FindObjectsByType<GhostRoomMarker>(FindObjectsInactive.Exclude);
         if (availableRooms != null && availableRooms.Length > 0)
         {
             // Pick a random room and teleport the ghost there
@@ -115,6 +118,16 @@ public class GhostController : NetworkBehaviour
         favoriteRoomCenter = transform.position;
         currentDestination = favoriteRoomCenter;
         nextHuntAllowedTime = Time.time + huntCooldown;
+
+        if (evidenceGhostOrbs && ghostOrbPrefab != null)
+        {
+            var orb = Instantiate(ghostOrbPrefab, favoriteRoomCenter, Quaternion.identity);
+            var netObj = orb.GetComponent<NetworkObject>();
+            if (netObj != null) netObj.Spawn();
+            
+            var orbSys = orb.GetComponent<GhostOrbSystem>();
+            if (orbSys != null) orbSys.Initialize(favoriteRoomCenter, roamRadius);
+        }
 
         if (ParanormalManager.Instance != null)
         {
@@ -141,7 +154,7 @@ public class GhostController : NetworkBehaviour
         if (evidenceDotsProjector)
         {
             bool inDots = false;
-            var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsSortMode.None);
+            var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsInactive.Exclude);
             foreach (var proj in projectors)
             {
                 if (proj.IsPoweredOn && Vector2.Distance(transform.position, proj.transform.position) <= proj.projectionRadius)
@@ -242,11 +255,8 @@ public class GhostController : NetworkBehaviour
             currentDestination = favoriteRoomCenter + randomOffset;
         }
 
-        // Automatic hunt trigger if cooldown has elapsed
-        if (Time.time >= nextHuntAllowedTime && Random.value < 0.002f)
-        {
-            StartHunt();
-        }
+        // Automatic hunts are disabled in Phase 3.
+        // Hunts will only trigger via ForceStartHunt() during the Exorcism phase.
     }
 
     private void UpdateInteractState()
@@ -381,7 +391,7 @@ public class GhostController : NetworkBehaviour
         // Ghost writing interaction
         if (evidenceGhostWriting)
         {
-            var books = Object.FindObjectsByType<GhostWritingBookItem>(FindObjectsSortMode.None);
+            var books = Object.FindObjectsByType<GhostWritingBookItem>(FindObjectsInactive.Exclude);
             foreach (var book in books)
             {
                 if (book.IsOpened && Vector2.Distance(transform.position, book.transform.position) <= 3.5f)
@@ -403,12 +413,20 @@ public class GhostController : NetworkBehaviour
         }
     }
 
+    public void ForceStartHunt()
+    {
+        if (!IsServer) return;
+        
+        // Exorcism hunts cannot be blocked and ignore cooldowns!
+        InternalStartHunt();
+    }
+
     public void StartHunt()
     {
         if (!IsServer || IsHunting) return;
 
         // Check for nearby crucifixes that can block the hunt
-        var crucifixes = Object.FindObjectsByType<CrucifixItem>(FindObjectsSortMode.None);
+        var crucifixes = Object.FindObjectsByType<CrucifixItem>(FindObjectsInactive.Exclude);
         foreach (var crucifix in crucifixes)
         {
             if (!crucifix.IsBurned && Vector2.Distance(transform.position, crucifix.transform.position) <= crucifix.blockRadius)
@@ -422,6 +440,11 @@ public class GhostController : NetworkBehaviour
             }
         }
 
+        InternalStartHunt();
+    }
+
+    private void InternalStartHunt()
+    {
         huntTimer = 0f;
         stateTimer = 0f;
         isVisuallyManifested.Value = true;
@@ -447,7 +470,7 @@ public class GhostController : NetworkBehaviour
 
     private void SetDoorsLocked(bool locked)
     {
-        var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsSortMode.None);
+        var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);
         foreach (var door in doors)
         {
             if (door.IsFrontDoor)

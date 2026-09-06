@@ -70,6 +70,22 @@ public class ParanormalManager : MonoBehaviour
     }
 
     /// <summary>
+    /// Returns a global activity level (0-10) for the Truck Dashboard based on recent events.
+    /// </summary>
+    public int GetGlobalActivityLevel()
+    {
+        int total = 0;
+        foreach (var ev in activeEvents)
+        {
+            total += ev.emfLevel;
+        }
+        
+        // Add random ambient noise or scale it
+        int level = Mathf.Clamp(total, 0, 10);
+        return level;
+    }
+
+    /// <summary>
     /// Checks for nearby paranormal events and returns the highest EMF reading and direction.
     /// </summary>
     public int GetHighestEmfAt(Vector2 checkPosition, float radius, out Vector2 closestSourceDirection, out float distanceToSource)

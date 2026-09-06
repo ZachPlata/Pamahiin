@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="EndGameUI.uss" />
+    <ui:VisualElement name="endgame-overlay" class="overlay hidden">
+        <ui:VisualElement class="reveal-container">
+            <ui:Label text="INVESTIGATION CONCLUDED" class="main-title" />
+            
+            <ui:VisualElement class="result-box">
+                <ui:Label text="The entity haunting this location was a..." class="sub-title" />
+                <ui:Label name="lbl-true-ghost" text="[Ghost Name]" class="true-ghost-label" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="guess-box">
+                <ui:Label text="Your Deduction:" class="small-title" />
+                <ui:Label name="lbl-your-guess" text="[Your Guess]" class="guess-label" />
+                <ui:Label name="lbl-result-status" text="SUCCESS" class="status-label success" />
+            </ui:VisualElement>
+
+            <ui:Button name="btn-return-lobby" text="Return to Lobby" class="return-button" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

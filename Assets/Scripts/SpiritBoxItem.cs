@@ -61,7 +61,7 @@ public class SpiritBoxItem : EquipmentItem
         if (ParanormalManager.Instance != null)
         {
             // Simple check: is a ghost near us with spirit box evidence?
-            var ghost = Object.FindFirstObjectByType<GhostController>();
+            var ghost = Object.FindAnyObjectByType<GhostController>();
             if (ghost != null && ghost.EvidenceSpiritBox)
             {
                 float dist = Vector2.Distance(transform.position, ghost.transform.position);

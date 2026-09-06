@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="TruckDashboard.uss" />
+    <ui:VisualElement class="dashboard-container">
+        
+        <!-- Header / Tabs -->
+        <ui:VisualElement class="tabs-container">
+            <ui:Button name="tab-cctv" text="CCTV Feed" class="tab-button active-tab" />
+            <ui:Button name="tab-sanity" text="Sanity Monitor" class="tab-button" />
+            <ui:Button name="tab-activity" text="Activity Monitor" class="tab-button" />
+            <ui:Button name="btn-close" text="X" class="tab-button close-button" />
+        </ui:VisualElement>
+
+        <!-- Main Content Area -->
+        <ui:VisualElement class="content-container">
+            
+            <!-- CCTV Screen -->
+            <ui:VisualElement name="view-cctv" class="view active-view">
+                <ui:Label text="CAMERA 01 - MAIN ENTRANCE" class="screen-title" />
+                <ui:VisualElement name="cctv-image-container" class="cctv-screen">
+                    <ui:Label text="NO SIGNAL" class="no-signal-text" />
+                </ui:VisualElement>
+                <ui:Button name="btn-next-camera" text="Next Camera" class="control-button" />
+            </ui:VisualElement>
+
+            <!-- Sanity Monitor Screen -->
+            <ui:VisualElement name="view-sanity" class="view hidden-view">
+                <ui:Label text="TEAM SANITY LEVELS" class="screen-title" />
+                <ui:ScrollView name="sanity-list-container" class="sanity-list">
+                    <!-- Player sanity rows will be dynamically added here via script -->
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- Activity Monitor Screen -->
+            <ui:VisualElement name="view-activity" class="view hidden-view">
+                <ui:Label text="EMF ACTIVITY SENSORS" class="screen-title" />
+                <ui:VisualElement class="graph-container">
+                    <ui:VisualElement name="activity-bar" class="activity-bar-fill" />
+                </ui:VisualElement>
+                <ui:Label name="lbl-activity-level" text="Activity Level: 0" class="activity-level-text" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

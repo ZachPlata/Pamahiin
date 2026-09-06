@@ -13,7 +13,7 @@ public class FrontDoorKeyItem : NetworkBehaviour, IInteractable
     private void PickupKeyRpc()
     {
         // Unlock all front doors
-        var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsSortMode.None);
+        var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);
         foreach (var door in doors)
         {
             if (door.IsFrontDoor)
@@ -37,4 +37,13 @@ public class FrontDoorKeyItem : NetworkBehaviour, IInteractable
     {
         return "Grab Front Door Key";
     }
+
+    // --- IInteractable Dragging Methods ---
+    public bool CanDrag() => false;
+    
+    public void OnDragBegin(ulong clientId) { }
+    
+    public void OnDragUpdate(Vector2 targetPos) { }
+    
+    public void OnDragEnd(ulong clientId) { }
 }

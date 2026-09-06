@@ -12,8 +12,13 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private float sprintSpeed = 5.5f;
     [SerializeField] private float crouchSpeed = 1.6f;
 
+    [Header("Stamina Settings")]
+    [SerializeField] private float maxStamina = 1.25f;
+    [SerializeField] private float staminaRegenRate = 0.5f;
+    private float currentStamina;
+
     [Header("Interaction Settings")]
-    [SerializeField] private float interactRange = 1.5f;
+    [SerializeField] private float maxReachRadius = 2.5f;
     [SerializeField] private LayerMask interactLayer;
 
     // Network states
@@ -39,17 +44,21 @@ public class PlayerController : NetworkBehaviour
 
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
+    private PlayerInventory inventory;
     private Vector2 moveInput;
     private Vector2 mousePosition;
     private Camera localCamera;
 
     private Vector3 originalScale;
+    private IInteractable currentDraggedInteractable = null;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+        inventory = GetComponent<PlayerInventory>();
         originalScale = transform.localScale;
+        currentStamina = maxStamina;
     }
 
     public override void OnNetworkSpawn()
@@ -74,8 +83,17 @@ public class PlayerController : NetworkBehaviour
     {
         if (IsServer && isAlive.Value)
         {
-            // Simple sanity drain over time
-            sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * 0.5f);
+            bool inDark = true;
+            if (inventory != null && inventory.CurrentItem is FlashlightItem flashlight)
+            {
+                if (flashlight.IsLightOn) inDark = false;
+            }
+
+            if (inDark)
+            {
+                // Light-based sanity drain (only drain in the dark)
+                sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * 0.5f);
+            }
         }
 
         if (!IsOwner || !isAlive.Value) return;
@@ -85,8 +103,8 @@ public class PlayerController : NetworkBehaviour
         float moveY = Input.GetAxisRaw("Vertical");
         moveInput = new Vector2(moveX, moveY).normalized;
 
-        // 2. Crouch input (Ctrl or C)
-        bool crouchHeld = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.C);
+        // 2. Crouch input (C)
+        bool crouchHeld = Input.GetKey(KeyCode.C);
         if (crouchHeld != isCrouching.Value)
         {
             isCrouching.Value = crouchHeld;
@@ -104,12 +122,74 @@ public class PlayerController : NetworkBehaviour
             localCamera = Camera.main;
         }
 
-        // 4. Interact Input
+        // 4. Targeted Interact Input (E)
         if (Input.GetKeyDown(KeyCode.E))
         {
             TryInteract();
         }
+
+        // 5. Contextual Left Click (Drag vs Use Primary vs Interact)
+        if (Input.GetMouseButtonDown(0))
+        {
+            var hovered = GetHoveredInteractable();
+            if (hovered != null)
+            {
+                if (hovered.CanDrag())
+                {
+                    currentDraggedInteractable = hovered;
+                    currentDraggedInteractable.OnDragBegin(NetworkManager.Singleton.LocalClientId);
+                }
+                else
+                {
+                    hovered.Interact();
+                }
+            }
+            else
+            {
+                if (inventory != null) inventory.UsePrimary();
+            }
+        }
+
+        if (Input.GetMouseButtonUp(0) && currentDraggedInteractable != null)
+        {
+            currentDraggedInteractable.OnDragEnd(NetworkManager.Singleton.LocalClientId);
+            currentDraggedInteractable = null;
+        }
+
+        if (currentDraggedInteractable != null)
+        {
+            Vector2 dragTarget = mousePosition;
+            if (Vector2.Distance(transform.position, dragTarget) > maxReachRadius)
+            {
+                dragTarget = (Vector2)transform.position + ((dragTarget - (Vector2)transform.position).normalized * maxReachRadius);
+            }
+            currentDraggedInteractable.OnDragUpdate(dragTarget);
+        }
+
+        // 6. Place Item (Right Click)
+        if (Input.GetMouseButtonDown(1))
+        {
+            if (Vector2.Distance(transform.position, mousePosition) <= maxReachRadius)
+            {
+                if (inventory != null) inventory.PlaceCurrentItem(mousePosition, transform.rotation);
+            }
+        }
+
+        // 7. Drop Item (G)
+        if (Input.GetKeyDown(KeyCode.G))
+        {
+            if (inventory != null) inventory.DropCurrentItem(transform.position);
+        }
+
+        // 8. Hooks for UI / Audio
+        if (Input.GetKeyDown(KeyCode.J)) OpenJournal();
+        if (Input.GetKeyDown(KeyCode.V)) ToggleLocalVoice();
+        if (Input.GetKeyDown(KeyCode.B)) ToggleRadioVoice();
     }
+
+    private void OpenJournal() { /* Stub for Journal UI */ }
+    private void ToggleLocalVoice() { /* Stub for Proximity Chat */ }
+    private void ToggleRadioVoice() { /* Stub for Radio Chat */ }
 
     private void FixedUpdate()
     {
@@ -121,9 +201,14 @@ public class PlayerController : NetworkBehaviour
         {
             currentSpeed = crouchSpeed;
         }
-        else if (Input.GetKey(KeyCode.LeftShift))
+        else if (Input.GetKey(KeyCode.LeftShift) && currentStamina > 0f)
         {
             currentSpeed = sprintSpeed;
+            currentStamina -= Time.fixedDeltaTime;
+        }
+        else
+        {
+            currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenRate * Time.fixedDeltaTime);
         }
 
         rb.MovePosition(rb.position + moveInput * currentSpeed * Time.fixedDeltaTime);
@@ -153,11 +238,19 @@ public class PlayerController : NetworkBehaviour
     {
         if (!alive)
         {
+            if (IsOwner && inventory != null)
+            {
+                inventory.DropAllItems(transform.position);
+            }
+
             // Death state visuals and collision
             if (spriteRenderer != null)
             {
                 spriteRenderer.color = new Color(0.4f, 0.4f, 0.4f, 0.5f);
             }
+
+            // Change layer to Spectator so ghosts and physics doors ignore them
+            gameObject.layer = LayerMask.NameToLayer("Spectator");
 
             // Disable physics interaction
             var col = GetComponent<Collider2D>();
@@ -175,30 +268,26 @@ public class PlayerController : NetworkBehaviour
         isAlive.Value = false;
     }
 
-    private void TryInteract()
+    private IInteractable GetHoveredInteractable()
     {
-        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, interactRange, interactLayer);
+        if (Vector2.Distance(transform.position, mousePosition) > maxReachRadius) return null;
 
-        IInteractable closestInteractable = null;
-        float closestDistance = float.MaxValue;
-
+        // Cast a small circle at the mouse cursor
+        Collider2D[] hits = Physics2D.OverlapCircleAll(mousePosition, 0.2f, interactLayer);
         foreach (var hit in hits)
         {
-            IInteractable interactable = hit.GetComponent<IInteractable>();
-            if (interactable != null)
-            {
-                float distance = Vector2.Distance(transform.position, hit.transform.position);
-                if (distance < closestDistance)
-                {
-                    closestDistance = distance;
-                    closestInteractable = interactable;
-                }
-            }
+            var interactable = hit.GetComponent<IInteractable>();
+            if (interactable != null) return interactable;
         }
+        return null;
+    }
 
-        if (closestInteractable != null)
+    private void TryInteract()
+    {
+        var hovered = GetHoveredInteractable();
+        if (hovered != null)
         {
-            closestInteractable.Interact();
+            hovered.Interact();
         }
     }
 

@@ -19,11 +19,14 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         ulong.MaxValue, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     protected NetworkVariable<bool> isInHand = new NetworkVariable<bool>(
         true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    protected NetworkVariable<bool> isPlaced = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public string ItemName => itemName;
     public bool IsInHand => isInHand.Value;
     public ulong CurrentHolderClientId => ownerClientId.Value;
-    public bool IsOnGround => ownerClientId.Value == ulong.MaxValue;
+    public bool IsOnGround => ownerClientId.Value == ulong.MaxValue && !isPlaced.Value;
+    public bool IsPlaced => ownerClientId.Value == ulong.MaxValue && isPlaced.Value;
 
     protected virtual void Awake()
     {
@@ -35,30 +38,30 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         ownerClientId.OnValueChanged += (oldVal, newVal) => UpdateEquipState(newVal);
         isInHand.OnValueChanged += (oldVal, newVal) => OnInHandChanged(newVal);
+        isPlaced.OnValueChanged += (oldVal, newVal) => OnPlacedChanged(newVal);
 
         UpdateEquipState(ownerClientId.Value);
         OnInHandChanged(isInHand.Value);
+        OnPlacedChanged(isPlaced.Value);
     }
 
     protected virtual void Update()
     {
         // Follow the owner's hand/position smoothly
-        if (ownerClientId.Value != ulong.MaxValue)
+        if (ownerClientId.Value != ulong.MaxValue && NetworkManager.Singleton != null && NetworkManager.Singleton.SpawnManager != null)
         {
-            if (NetworkManager.Singleton != null && 
-                NetworkManager.Singleton.ConnectedClients != null &&
-                NetworkManager.Singleton.ConnectedClients.TryGetValue(ownerClientId.Value, out var client) &&
-                client.PlayerObject != null)
+            var playerObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(ownerClientId.Value);
+            if (playerObj != null)
             {
-                transform.position = client.PlayerObject.transform.position;
-                transform.rotation = client.PlayerObject.transform.rotation;
+                transform.position = playerObj.transform.position;
+                transform.rotation = playerObj.transform.rotation;
             }
         }
     }
 
     public virtual void Interact()
     {
-        if (IsOnGround)
+        if (IsOnGround || IsPlaced)
         {
             var localPlayer = NetworkManager.Singleton?.LocalClient?.PlayerObject;
             if (localPlayer != null)
@@ -74,7 +77,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
 
     public virtual string GetInteractText()
     {
-        if (IsOnGround)
+        if (IsOnGround || IsPlaced)
         {
             var localPlayer = NetworkManager.Singleton?.LocalClient?.PlayerObject;
             if (localPlayer != null)
@@ -95,13 +98,29 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         ownerClientId.Value = clientId;
         isInHand.Value = true;
+        isPlaced.Value = false;
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public virtual void DropItemRpc()
+    public virtual void DropItemRpc(Vector3 dropPosition)
     {
         ownerClientId.Value = ulong.MaxValue;
+        isPlaced.Value = false;
         isInHand.Value = true; // Dropped items on floor should be visible
+        
+        // Update position on server before broadcasting state
+        transform.position = dropPosition;
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    public virtual void PlaceItemRpc(Vector3 placePosition, Quaternion placeRotation)
+    {
+        ownerClientId.Value = ulong.MaxValue;
+        isPlaced.Value = true;
+        isInHand.Value = true; // Placed items should be visible
+        
+        transform.position = placePosition;
+        transform.rotation = placeRotation;
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -138,14 +157,29 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
 
     protected virtual void UpdateEquipState(ulong newOwnerId)
     {
-        bool onGround = (newOwnerId == ulong.MaxValue);
+        bool onGroundOrPlaced = (newOwnerId == ulong.MaxValue);
         if (interactCollider != null)
         {
-            interactCollider.enabled = onGround;
+            interactCollider.enabled = onGroundOrPlaced;
+        }
+
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            if (!onGroundOrPlaced || isPlaced.Value)
+            {
+                rb.bodyType = RigidbodyType2D.Kinematic;
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
+            else
+            {
+                rb.bodyType = RigidbodyType2D.Dynamic;
+            }
         }
 
         // If local client picked it up, add to local inventory
-        if (!onGround && NetworkManager.Singleton != null && newOwnerId == NetworkManager.Singleton.LocalClientId)
+        if (!onGroundOrPlaced && NetworkManager.Singleton != null && newOwnerId == NetworkManager.Singleton.LocalClientId)
         {
             var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;
             if (localPlayer != null)
@@ -166,12 +200,56 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         UpdateVisuals();
     }
 
+    protected virtual void OnPlacedChanged(bool placed)
+    {
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            if (placed || ownerClientId.Value != ulong.MaxValue)
+            {
+                rb.bodyType = RigidbodyType2D.Kinematic;
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
+            else
+            {
+                rb.bodyType = RigidbodyType2D.Dynamic;
+            }
+        }
+        UpdateVisuals();
+    }
+
     protected virtual void UpdateVisuals()
     {
-        bool isVisible = isInHand.Value || IsOnGround;
+        bool isVisible = isInHand.Value || IsOnGround || IsPlaced;
         if (spriteRenderer != null)
         {
             spriteRenderer.enabled = isVisible;
         }
     }
+
+    // --- IInteractable Dragging Methods ---
+    public bool CanDrag() => IsOnGround; // Can only drag if it's dropped (not placed)
+    
+    public void OnDragBegin(ulong clientId) { }
+    
+    public void OnDragUpdate(Vector2 targetPos)
+    {
+        if (IsServer)
+        {
+            transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+        }
+        else
+        {
+            DragUpdateRpc(targetPos);
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void DragUpdateRpc(Vector2 targetPos)
+    {
+        transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+    }
+    
+    public void OnDragEnd(ulong clientId) { }
 }

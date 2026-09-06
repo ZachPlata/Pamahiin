@@ -24,4 +24,9 @@ public class DoorInteractionProxy : MonoBehaviour, IInteractable
     {
         return targetDoor != null ? targetDoor.GetInteractText() : "";
     }
+
+    public bool CanDrag() => targetDoor != null && targetDoor.CanDrag();
+    public void OnDragBegin(ulong clientId) { if (targetDoor != null) targetDoor.OnDragBegin(clientId); }
+    public void OnDragUpdate(Vector2 targetPos) { if (targetDoor != null) targetDoor.OnDragUpdate(targetPos); }
+    public void OnDragEnd(ulong clientId) { if (targetDoor != null) targetDoor.OnDragEnd(clientId); }
 }

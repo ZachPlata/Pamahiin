@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="JournalUI.uss" />
+    <ui:VisualElement name="journal-overlay" class="overlay hidden">
+        <ui:VisualElement class="journal-container">
+            
+            <ui:VisualElement class="journal-page left-page">
+                <ui:Label text="Evidence Collected" class="page-title" />
+                
+                <ui:VisualElement class="evidence-list">
+                    <ui:Toggle name="tgl-emf5" label="EMF Level 5" class="evidence-toggle" />
+                    <ui:Toggle name="tgl-freezing" label="Freezing Temperatures" class="evidence-toggle" />
+                    <ui:Toggle name="tgl-writing" label="Ghost Writing" class="evidence-toggle" />
+                    <ui:Toggle name="tgl-dots" label="D.O.T.S. Projector" class="evidence-toggle" />
+                    <ui:Toggle name="tgl-spiritbox" label="Spirit Box" class="evidence-toggle" />
+                    <ui:Toggle name="tgl-orbs" label="Ghost Orbs" class="evidence-toggle" />
+                </ui:VisualElement>
+                
+                <ui:Label text="Select 3 evidences to narrow down the entity type." class="instruction-text" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="journal-page right-page">
+                <ui:Label text="Deduction" class="page-title" />
+                
+                <ui:Label text="Based on your findings, what is haunting this location?" class="instruction-text" />
+                
+                <ui:DropdownField name="dropdown-ghost-type" label="Entity Type" choices="Tikbalang, Manananggal, Kapre, White Lady, Tiyanak, Aswang" class="ghost-dropdown" />
+                
+                <ui:VisualElement class="button-container">
+                    <ui:Button name="btn-lock-in" text="Lock In Deduction" class="lock-in-button" />
+                    <ui:Button name="btn-close" text="Close Journal" class="close-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

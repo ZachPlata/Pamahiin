@@ -401,7 +401,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                 if (isFrontDoor && isOpen.Value && !hasTriggeredGhostSpawn)
                 {
                     hasTriggeredGhostSpawn = true;
-                    var ghost = Object.FindFirstObjectByType<GhostController>();
+                    var ghost = Object.FindAnyObjectByType<GhostController>();
                     if (ghost != null) ghost.ActivateGhost();
                 }
             }
@@ -412,7 +412,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             if (isFrontDoor && localIsOpen && !hasTriggeredGhostSpawn)
             {
                 hasTriggeredGhostSpawn = true;
-                var ghost = Object.FindFirstObjectByType<GhostController>();
+                var ghost = Object.FindAnyObjectByType<GhostController>();
                 if (ghost != null) ghost.ActivateGhost();
             }
         }
@@ -478,6 +478,11 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         if (IsLocked) return "Locked";
         return IsOpen ? "Close Door" : "Open Door";
     }
+
+    public bool CanDrag() => false; // Doors are now toggled with left click per Phase 5
+    public void OnDragBegin(ulong clientId) { Interact(); } // Temporary fallback: just interact when dragged
+    public void OnDragUpdate(Vector2 targetPos) { }
+    public void OnDragEnd(ulong clientId) { }
 
     private void OnDrawGizmosSelected()
     {

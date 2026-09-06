@@ -1,0 +1,105 @@
+.overlay {
+    flex-grow: 1;
+    background-color: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.hidden {
+    display: none;
+}
+
+.journal-container {
+    flex-direction: row;
+    background-color: rgb(240, 235, 220); /* Aged paper color */
+    width: 800px;
+    height: 500px;
+    border-radius: 10px;
+    border-width: 2px;
+    border-color: rgb(100, 80, 50);
+}
+
+.journal-page {
+    flex-grow: 1;
+    width: 50%;
+    padding: 30px;
+}
+
+.left-page {
+    border-right-width: 2px;
+    border-right-color: rgb(200, 190, 170);
+}
+
+.page-title {
+    font-size: 28px;
+    color: rgb(50, 40, 30);
+    -unity-font-style: bold;
+    margin-bottom: 20px;
+    -unity-text-align: middle-center;
+}
+
+.instruction-text {
+    font-size: 14px;
+    color: rgb(100, 90, 80);
+    -unity-font-style: italic;
+    white-space: normal;
+    margin-bottom: 20px;
+    margin-top: 10px;
+}
+
+.evidence-list {
+    flex-grow: 1;
+}
+
+.evidence-toggle {
+    margin-bottom: 15px;
+    font-size: 18px;
+    color: rgb(50, 40, 30);
+}
+
+.evidence-toggle > .unity-toggle__label {
+    min-width: 200px;
+}
+
+.ghost-dropdown {
+    margin-bottom: 30px;
+}
+
+.ghost-dropdown > .unity-base-field__label {
+    color: rgb(50, 40, 30);
+    min-width: 100px;
+}
+
+.button-container {
+    align-items: center;
+    margin-top: auto;
+}
+
+.lock-in-button {
+    background-color: rgb(150, 40, 40);
+    color: white;
+    font-size: 18px;
+    padding: 10px 20px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    width: 80%;
+}
+
+.lock-in-button:hover {
+    background-color: rgb(200, 50, 50);
+}
+
+.close-button {
+    background-color: rgb(100, 90, 80);
+    color: white;
+    font-size: 16px;
+    padding: 5px 15px;
+    border-radius: 5px;
+}
+
+.close-button:hover {
+    background-color: rgb(130, 120, 110);
+}

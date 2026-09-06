@@ -1,8 +1,13 @@
+using UnityEngine;
+
 public interface IInteractable
 {
-    // What happens when the player presses E
     void Interact();
+    string GetInteractText();
     
-    // Optional: Text to show on the screen (e.g., "Press E to Open Door")
-    string GetInteractText(); 
+    // Dragging mechanics
+    bool CanDrag();
+    void OnDragBegin(ulong clientId);
+    void OnDragUpdate(Vector2 targetPos);
+    void OnDragEnd(ulong clientId);
 }

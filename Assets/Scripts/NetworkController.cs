@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -21,6 +22,48 @@ public class NetworkController : MonoBehaviour
 
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        
+        // Wait for NetworkManager to initialize
+        StartCoroutine(WaitForNetworkManager());
+    }
+
+    private IEnumerator WaitForNetworkManager()
+    {
+        while (NetworkManager.Singleton == null)
+        {
+            yield return null;
+        }
+
+        NetworkManager.Singleton.OnServerStarted += () =>
+        {
+            if (NetworkManager.Singleton.IsServer)
+            {
+                NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += OnSceneLoaded;
+            }
+        };
+    }
+
+    private void OnSceneLoaded(string sceneName, LoadSceneMode loadSceneMode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
+    {
+        if (sceneName == "GameMapScene")
+        {
+            // Optional: Handle dynamic spawning or repositioning here
+            // Find a spawn point (like the Van)
+            var spawnPoint = GameObject.Find("SpawnPoint");
+            Vector3 startPos = spawnPoint != null ? spawnPoint.transform.position : Vector3.zero;
+
+            foreach (var clientId in clientsCompleted)
+            {
+                if (NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
+                {
+                    if (client.PlayerObject != null)
+                    {
+                        // Move player to the van spawn point
+                        client.PlayerObject.transform.position = startPos;
+                    }
+                }
+            }
+        }
     }
 
     public void StartSingleplayer()
