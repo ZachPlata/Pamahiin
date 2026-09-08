@@ -24,6 +24,8 @@ public class ThermometerItem : EquipmentItem
 
     private float nextSampleTime = 0f;
     private float displayedTemperature = 20.0f;
+    
+    public float DisplayedTemperature => displayedTemperature;
 
     protected override void Awake()
     {

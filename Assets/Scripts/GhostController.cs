@@ -405,9 +405,12 @@ public class GhostController : NetworkBehaviour
             var propRb = col.GetComponent<Rigidbody2D>();
             if (propRb != null && col.gameObject != gameObject && !col.CompareTag("Player"))
             {
-                // Throw physical prop
+                // Throw physical prop with a much smaller force, and stop it after 0.1-0.3s
                 Vector2 throwDir = Random.insideUnitCircle.normalized;
-                propRb.AddForce(throwDir * 250f);
+                float throwForce = Random.Range(0.5f, 1.5f); // 10% of previous force
+                float slideDuration = Random.Range(0.1f, 0.3f);
+                StartCoroutine(ThrowPropRoutine(propRb, throwDir, throwForce, slideDuration));
+
                 if (ParanormalManager.Instance != null)
                 {
                     ParanormalManager.Instance.RegisterEvent(propRb.position, 3, 20f);
@@ -453,6 +456,21 @@ public class GhostController : NetworkBehaviour
         if (ParanormalManager.Instance != null)
         {
             ParanormalManager.Instance.RegisterEvent(transform.position, 4, 15f);
+        }
+    }
+
+    private IEnumerator ThrowPropRoutine(Rigidbody2D propRb, Vector2 throwDir, float force, float duration)
+    {
+        if (propRb == null) yield break;
+        
+        propRb.AddForce(throwDir * force, ForceMode2D.Impulse);
+        
+        yield return new WaitForSeconds(duration);
+        
+        if (propRb != null)
+        {
+            propRb.linearVelocity = Vector2.zero;
+            propRb.angularVelocity = 0f;
         }
     }
 

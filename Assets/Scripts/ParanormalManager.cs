@@ -20,9 +20,9 @@ public class ParanormalManager : MonoBehaviour
     }
 
     [Header("Temperature Settings")]
-    [SerializeField] private float baseHouseTemp = 20.0f;
-    [SerializeField] private float favoriteRoomTemp = 5.0f;
-    [SerializeField] private float freezingTemp = -4.0f;
+    [SerializeField] private float baseHouseTemp = 27.0f;
+    [SerializeField] private float favoriteRoomTemp = 1.0f;
+    [SerializeField] private float freezingTemp = -10.0f;
     [SerializeField] private float ghostCoolingRadius = 6.0f;
 
     private readonly List<ParanormalEvent> activeEvents = new List<ParanormalEvent>();
@@ -163,8 +163,17 @@ public class ParanormalManager : MonoBehaviour
             if (distToGhost < ghostCoolingRadius)
             {
                 float t = 1f - (distToGhost / ghostCoolingRadius);
-                float coldSpot = hasFreezingEvidence ? freezingTemp - 1f : favoriteRoomTemp - 2f;
-                temp = Mathf.Min(temp, Mathf.Lerp(temp, coldSpot, t));
+                float coldSpot = hasFreezingEvidence ? freezingTemp : favoriteRoomTemp;
+                float newTemp = Mathf.Lerp(temp, coldSpot, t);
+                if (!hasFreezingEvidence)
+                {
+                    newTemp = Mathf.Max(1.0f, newTemp);
+                }
+                else
+                {
+                    newTemp = Mathf.Max(-10.0f, newTemp);
+                }
+                temp = Mathf.Min(temp, newTemp);
             }
         }
 

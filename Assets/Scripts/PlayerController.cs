@@ -171,10 +171,23 @@ public class PlayerController : NetworkBehaviour
         if (currentDraggedInteractable != null)
         {
             Vector2 dragTarget = mousePosition;
-            if (Vector2.Distance(transform.position, dragTarget) > maxReachRadius)
+            Vector2 toTarget = dragTarget - (Vector2)transform.position;
+            
+            if (toTarget.magnitude > maxReachRadius)
             {
-                dragTarget = (Vector2)transform.position + ((dragTarget - (Vector2)transform.position).normalized * maxReachRadius);
+                dragTarget = (Vector2)transform.position + toTarget.normalized * maxReachRadius;
+                toTarget = dragTarget - (Vector2)transform.position;
             }
+
+            // Raycast to prevent dragging through walls
+            int wallMask = LayerMask.GetMask("Walls");
+            RaycastHit2D hit = Physics2D.Raycast(transform.position, toTarget.normalized, toTarget.magnitude, wallMask);
+            if (hit.collider != null)
+            {
+                // Stop slightly before the wall
+                dragTarget = hit.point - (toTarget.normalized * 0.2f);
+            }
+
             currentDraggedInteractable.OnDragUpdate(dragTarget);
         }
 

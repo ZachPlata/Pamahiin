@@ -236,13 +236,42 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     // --- IInteractable Dragging Methods ---
     public bool CanDrag() => IsOnGround; // Can only drag if it's dropped (not placed)
     
-    public void OnDragBegin(ulong clientId) { }
-    
+    private TargetJoint2D dragJoint;
+
+    public void OnDragBegin(ulong clientId)
+    {
+        if (IsServer) ApplyDragBegin();
+        else DragBeginRpc();
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void DragBeginRpc()
+    {
+        ApplyDragBegin();
+    }
+
+    private void ApplyDragBegin()
+    {
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            // Use TargetJoint2D to pull the item instead of forcing position
+            // This natively handles wall collisions without any clipping or jittering
+            dragJoint = gameObject.AddComponent<TargetJoint2D>();
+            dragJoint.anchor = Vector2.zero;
+            dragJoint.dampingRatio = 1f;
+            dragJoint.frequency = 10f;
+            dragJoint.maxForce = 1000f;
+            dragJoint.autoConfigureTarget = false;
+            dragJoint.target = rb.position;
+        }
+    }
+
     public void OnDragUpdate(Vector2 targetPos)
     {
         if (IsServer)
         {
-            transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+            ApplyDrag(targetPos);
         }
         else
         {
@@ -253,8 +282,52 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void DragUpdateRpc(Vector2 targetPos)
     {
-        transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+        ApplyDrag(targetPos);
+    }
+
+    private void ApplyDrag(Vector2 targetPos)
+    {
+        if (dragJoint != null)
+        {
+            dragJoint.target = targetPos;
+        }
+        else
+        {
+            transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
+        }
     }
     
-    public void OnDragEnd(ulong clientId) { }
+    public void OnDragEnd(ulong clientId)
+    {
+        if (IsServer)
+        {
+            ApplyDragEnd();
+        }
+        else
+        {
+            DragEndRpc();
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void DragEndRpc()
+    {
+        ApplyDragEnd();
+    }
+
+    private void ApplyDragEnd()
+    {
+        if (dragJoint != null)
+        {
+            Destroy(dragJoint);
+            dragJoint = null;
+        }
+
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
 }

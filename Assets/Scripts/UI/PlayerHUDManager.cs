@@ -8,6 +8,8 @@ public class PlayerHUDManager : MonoBehaviour
     private PlayerInventory localInventory; 
     private VisualElement[] slots = new VisualElement[PlayerInventory.MaxSlots];
     private Label[] slotLabels = new Label[PlayerInventory.MaxSlots];
+    private VisualElement temperatureContainer;
+    private Label temperatureText;
 
     private void OnEnable()
     {
@@ -21,6 +23,9 @@ public class PlayerHUDManager : MonoBehaviour
             slots[i] = root.Q<VisualElement>($"Slot{i}");
             slotLabels[i] = root.Q<Label>($"ItemText{i}");
         }
+
+        temperatureContainer = root.Q<VisualElement>("TemperatureContainer");
+        temperatureText = root.Q<Label>("TemperatureText");
 
         var pauseButton = root.Q<Button>("PauseButton");
         if (pauseButton != null)
@@ -49,6 +54,33 @@ public class PlayerHUDManager : MonoBehaviour
         if (localInventory == null)
         {
             FindLocalPlayer();
+        }
+
+        UpdateThermometerHUD();
+    }
+
+    private void UpdateThermometerHUD()
+    {
+        if (localInventory == null || temperatureContainer == null || temperatureText == null) return;
+
+        var currentItem = localInventory.CurrentItem;
+        if (currentItem != null && currentItem is ThermometerItem thermometer)
+        {
+            if (thermometer.IsPoweredOn)
+            {
+                temperatureContainer.style.display = DisplayStyle.Flex;
+                float temp = thermometer.DisplayedTemperature;
+                temperatureText.text = $"{temp:F1}°C";
+                temperatureText.style.color = temp < 0f ? new StyleColor(Color.cyan) : new StyleColor(Color.white);
+            }
+            else
+            {
+                temperatureContainer.style.display = DisplayStyle.None;
+            }
+        }
+        else
+        {
+            temperatureContainer.style.display = DisplayStyle.None;
         }
     }
 

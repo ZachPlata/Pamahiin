@@ -71,3 +71,18 @@
 .inventory-slot-active .inventory-slot-text {
     color: white;
 }
+
+.temperature-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: none;
+}
+
+.temperature-text {
+    font-size: 32px;
+    color: white;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+}

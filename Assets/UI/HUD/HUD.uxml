@@ -12,6 +12,10 @@
             <ui:Button name="PauseButton" text="||" class="pause-button" />
         </ui:VisualElement>
 
+        <ui:VisualElement name="TemperatureContainer" class="temperature-container">
+            <ui:Label name="TemperatureText" text="27.0°C" class="temperature-text" />
+        </ui:VisualElement>
+
         <ui:VisualElement class="inventory-container">
             <ui:VisualElement name="Slot0" class="inventory-slot inventory-slot-active">
                 <ui:Label name="ItemText0" text="Empty" class="inventory-slot-text" />
