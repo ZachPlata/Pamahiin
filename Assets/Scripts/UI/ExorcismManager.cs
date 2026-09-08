@@ -42,6 +42,7 @@ public class ExorcismManager : NetworkBehaviour
 
     private void OnEnable()
     {
+        uiDocument.sortingOrder = 4;
         var root = uiDocument.rootVisualElement;
         exorcismOverlay = root.Q<VisualElement>("exorcism-overlay");
         sweetSpot = root.Q<VisualElement>("sweet-spot");

@@ -28,6 +28,12 @@ public class FlashlightItem : EquipmentItem
         {
             spotlight = GetComponentInChildren<Light2D>();
         }
+
+        if (spotlight != null)
+        {
+            spotlight.shadowsEnabled = true;
+            spotlight.shadowIntensity = 1f;
+        }
     }
 
     public override void OnNetworkSpawn()

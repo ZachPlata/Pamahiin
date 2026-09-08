@@ -24,7 +24,11 @@
                 
                 <ui:Label text="Based on your findings, what is haunting this location?" class="instruction-text" />
                 
-                <ui:DropdownField name="dropdown-ghost-type" label="Entity Type" choices="Tikbalang, Manananggal, Kapre, White Lady, Tiyanak, Aswang" class="ghost-dropdown" />
+                <ui:VisualElement class="ghost-buttons-container">
+                    <ui:Button name="btn-ghost-tikbalang" text="Tikbalang" class="ghost-button" />
+                    <ui:Button name="btn-ghost-kapre" text="Kapre" class="ghost-button" />
+                    <ui:Button name="btn-ghost-manananggal" text="Manananggal" class="ghost-button" />
+                </ui:VisualElement>
                 
                 <ui:VisualElement class="button-container">
                     <ui:Button name="btn-lock-in" text="Lock In Deduction" class="lock-in-button" />

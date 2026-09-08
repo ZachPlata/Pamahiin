@@ -41,11 +41,17 @@ TagManager:
   - name: Floor
     uniqueID: 1587857259
     locked: 0
+  - name: Van
+    uniqueID: 3237701941
+    locked: 0
   - name: Default
     uniqueID: 0
     locked: 0
   - name: Item
     uniqueID: 534523435
+    locked: 0
+  - name: Wall
+    uniqueID: 3166007697
     locked: 0
   - name: Roof
     uniqueID: 786735217

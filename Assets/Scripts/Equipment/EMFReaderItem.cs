@@ -11,7 +11,10 @@ public class EMFReaderItem : EquipmentItem
     [Header("EMF Settings")]
     [SerializeField] private float scanRadius = 6.0f;
     [SerializeField] private AudioSource audioSource;
-    [SerializeField] private AudioClip beepSound;
+    [SerializeField] private AudioClip emf2Sound;
+    [SerializeField] private AudioClip emf3Sound;
+    [SerializeField] private AudioClip emf4Sound;
+    [SerializeField] private AudioClip emf5Sound;
 
     [Header("Visual Indicators")]
     [SerializeField] private SpriteRenderer[] ledRenderers = new SpriteRenderer[5];
@@ -28,7 +31,7 @@ public class EMFReaderItem : EquipmentItem
     };
 
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
-        true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public bool IsPoweredOn => isPoweredOn.Value;
     public int CurrentEmfLevel { get; private set; } = 1;
@@ -69,6 +72,7 @@ public class EMFReaderItem : EquipmentItem
             CurrentEmfLevel = 0;
             UpdateLeds(0);
             if (directionalPointer != null) directionalPointer.gameObject.SetActive(false);
+            if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
             return;
         }
 
@@ -135,7 +139,7 @@ public class EMFReaderItem : EquipmentItem
 
     private void HandleAudioFeedback()
     {
-        if (audioSource == null || beepSound == null) return;
+        if (audioSource == null) return;
         if (CurrentEmfLevel <= 1) return;
 
         // Higher EMF produces faster beeps
@@ -151,8 +155,23 @@ public class EMFReaderItem : EquipmentItem
         if (Time.time >= nextBeepTime)
         {
             nextBeepTime = Time.time + interval;
-            audioSource.pitch = 0.8f + (CurrentEmfLevel * 0.15f);
-            audioSource.PlayOneShot(beepSound, 0.4f);
+            
+            AudioClip clipToPlay = CurrentEmfLevel switch
+            {
+                2 => emf2Sound,
+                3 => emf3Sound,
+                4 => emf4Sound,
+                5 => emf5Sound,
+                _ => null
+            };
+
+            if (clipToPlay != null)
+            {
+                audioSource.pitch = 1.0f; // Reset pitch since we have dedicated clips
+                audioSource.clip = clipToPlay;
+                audioSource.volume = 0.4f;
+                audioSource.Play();
+            }
         }
     }
 

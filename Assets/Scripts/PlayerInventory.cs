@@ -1,3 +1,4 @@
+using System;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -6,6 +7,9 @@ public class PlayerInventory : NetworkBehaviour
     public const int MaxSlots = 3;
     public EquipmentItem[] slots = new EquipmentItem[MaxSlots];
     public int currentSlotIndex = 0;
+
+    public event Action<int> OnSlotChanged;
+    public event Action OnInventoryUpdated;
 
     public EquipmentItem CurrentItem => (currentSlotIndex >= 0 && currentSlotIndex < MaxSlots) ? slots[currentSlotIndex] : null;
 
@@ -46,19 +50,23 @@ public class PlayerInventory : NetworkBehaviour
         {
             CurrentItem.DropItemRpc(dropPosition);
             slots[currentSlotIndex] = null;
+            OnInventoryUpdated?.Invoke();
         }
     }
 
     public void DropAllItems(Vector3 dropPosition)
     {
+        bool droppedAny = false;
         for (int i = 0; i < MaxSlots; i++)
         {
             if (slots[i] != null)
             {
-                slots[i].DropItemRpc(dropPosition + (Vector3)(Random.insideUnitCircle * 0.5f));
+                slots[i].DropItemRpc(dropPosition + (Vector3)(UnityEngine.Random.insideUnitCircle * 0.5f));
                 slots[i] = null;
+                droppedAny = true;
             }
         }
+        if (droppedAny) OnInventoryUpdated?.Invoke();
     }
 
     public void PlaceCurrentItem(Vector3 placePosition, Quaternion placeRotation)
@@ -67,6 +75,7 @@ public class PlayerInventory : NetworkBehaviour
         {
             CurrentItem.PlaceItemRpc(placePosition, placeRotation);
             slots[currentSlotIndex] = null;
+            OnInventoryUpdated?.Invoke();
         }
     }
 
@@ -88,6 +97,8 @@ public class PlayerInventory : NetworkBehaviour
         {
             slots[currentSlotIndex].SetInHandRpc(true);
         }
+
+        OnSlotChanged?.Invoke(currentSlotIndex);
     }
 
     public bool HasEmptySlot()
@@ -110,6 +121,7 @@ public class PlayerInventory : NetworkBehaviour
                 slots[i] = item;
                 bool isInHand = (i == currentSlotIndex);
                 item.SetInHandRpc(isInHand);
+                OnInventoryUpdated?.Invoke();
                 return true;
             }
         }
@@ -124,6 +136,7 @@ public class PlayerInventory : NetworkBehaviour
             if (slots[i] == item)
             {
                 slots[i] = null;
+                OnInventoryUpdated?.Invoke();
                 return;
             }
         }

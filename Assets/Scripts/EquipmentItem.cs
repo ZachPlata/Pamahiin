@@ -96,6 +96,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     public void PickupItemRpc(ulong clientId)
     {
+        Debug.Log($"Player {clientId} picked up {itemName}");
         ownerClientId.Value = clientId;
         isInHand.Value = true;
         isPlaced.Value = false;
@@ -104,6 +105,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     public virtual void DropItemRpc(Vector3 dropPosition)
     {
+        Debug.Log($"Player dropped {itemName}");
         ownerClientId.Value = ulong.MaxValue;
         isPlaced.Value = false;
         isInHand.Value = true; // Dropped items on floor should be visible
@@ -115,6 +117,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     public virtual void PlaceItemRpc(Vector3 placePosition, Quaternion placeRotation)
     {
+        Debug.Log($"Player placed {itemName}");
         ownerClientId.Value = ulong.MaxValue;
         isPlaced.Value = true;
         isInHand.Value = true; // Placed items should be visible
@@ -134,6 +137,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     /// </summary>
     public virtual void UsePrimary()
     {
+        Debug.Log($"Player used primary action on {itemName}");
         UsePrimaryRpc();
     }
 
@@ -147,6 +151,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     /// </summary>
     public virtual void UseSecondary()
     {
+        Debug.Log($"Player used secondary action on {itemName}");
         UseSecondaryRpc();
     }
 

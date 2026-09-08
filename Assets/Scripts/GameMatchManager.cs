@@ -61,15 +61,30 @@ public class GameMatchManager : NetworkBehaviour
         // Simple condition: everyone connected has submitted a deduction
         if (playerDeductions.Count >= NetworkManager.Singleton.ConnectedClientsIds.Count)
         {
-            string actualGhostName = "Unknown Entity";
-            var ghost = UnityEngine.Object.FindAnyObjectByType<GhostController>();
-            if (ghost != null)
-            {
-                actualGhostName = ghost.ghostName;
-            }
-
-            EndMatchClientRpc(actualGhostName);
+            ForceEndMatch();
         }
+    }
+
+    public void ForceEndMatch()
+    {
+        string actualGhostName = "Unknown Entity";
+        var ghost = UnityEngine.Object.FindAnyObjectByType<GhostController>();
+        if (ghost != null)
+        {
+            actualGhostName = ghost.ghostName;
+        }
+
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+             // Offline fallback
+             var revealController = UnityEngine.Object.FindAnyObjectByType<EndGameRevealController>();
+             if (revealController != null) revealController.TriggerReveal(actualGhostName);
+             return;
+        }
+
+        if (!IsServer) return;
+
+        EndMatchClientRpc(actualGhostName);
     }
 
     [ClientRpc]

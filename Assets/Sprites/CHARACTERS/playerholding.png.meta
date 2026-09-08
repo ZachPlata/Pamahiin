@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 86e0b9a46e86f7541806498531280a5d
+guid: 2c48c5eaedbe6e24384aa74d8aceb8f3
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 5543232386210605152
-    second: Your paragraph text (4)_0
+      213: -6061239828177767155
+    second: playerholding_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Your paragraph text (4)_0
+      name: playerholding_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 315
-        height: 231
+        x: 7
+        y: 14
+        width: 40
+        height: 35
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 06826876c748dec40800000000000000
-      internalID: 5543232386210605152
+      spriteID: d05b3077d7622eba0800000000000000
+      internalID: -6061239828177767155
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Your paragraph text (4)_0: 5543232386210605152
+      playerholding_0: -6061239828177767155
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

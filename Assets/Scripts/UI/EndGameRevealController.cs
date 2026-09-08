@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UIElements;
+using Unity.Netcode;
 
 [RequireComponent(typeof(UIDocument))]
 public class EndGameRevealController : MonoBehaviour
@@ -18,6 +19,7 @@ public class EndGameRevealController : MonoBehaviour
 
     private void OnEnable()
     {
+        uiDocument.sortingOrder = 5;
         var root = uiDocument.rootVisualElement;
         
         endgameOverlay = root.Q<VisualElement>("endgame-overlay");
@@ -27,10 +29,17 @@ public class EndGameRevealController : MonoBehaviour
         lblResultStatus = root.Q<Label>("lbl-result-status");
 
         root.Q<Button>("btn-return-lobby").clicked += OnReturnClicked;
+    }
 
+    private void Start()
+    {
         if (GameMatchManager.Instance != null)
         {
             GameMatchManager.Instance.OnMatchEnded += TriggerReveal;
+        }
+        else
+        {
+            Debug.LogWarning("EndGameRevealController: GameMatchManager.Instance is null! Event not subscribed.");
         }
     }
 
@@ -70,9 +79,32 @@ public class EndGameRevealController : MonoBehaviour
 
     private void OnReturnClicked()
     {
-        if (NetworkController.Instance != null)
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
         {
-            NetworkController.Instance.DisconnectAndReturnToMenu();
+            // Offline fallback
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
+            return;
+        }
+
+        if (NetworkManager.Singleton.IsServer)
+        {
+            if (NetworkManager.Singleton.ConnectedClientsIds.Count <= 1)
+            {
+                // Singleplayer: Disconnect fully
+                if (NetworkController.Instance != null)
+                {
+                    NetworkController.Instance.DisconnectAndReturnToMenu();
+                }
+            }
+            else
+            {
+                // Multiplayer Host: Return to lobby (keep network alive)
+                NetworkManager.Singleton.SceneManager.LoadScene("MainMenuScene", UnityEngine.SceneManagement.LoadSceneMode.Single);
+            }
+        }
+        else if (NetworkManager.Singleton.IsClient)
+        {
+            lblResultStatus.text = "Waiting for Host...";
         }
     }
 }

@@ -12,6 +12,7 @@ public class FrontDoorKeyItem : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void PickupKeyRpc()
     {
+        Debug.Log("Player picked up Front Door Key");
         // Unlock all front doors
         var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);
         foreach (var door in doors)

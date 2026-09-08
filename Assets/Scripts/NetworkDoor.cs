@@ -393,6 +393,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     private void ToggleDoor()
     {
+        Debug.Log($"Player toggled door: {gameObject.name}");
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
             if (IsServer)

@@ -40,6 +40,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void OnEnable()
     {
+        uiDocument.sortingOrder = 2; // Explicitly put Dashboard above HUD
         var root = uiDocument.rootVisualElement;
 
         // Tabs
@@ -158,6 +159,8 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void Update()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene") return;
+
         if (isDashboardOpen && Input.GetKeyDown(KeyCode.Escape))
         {
             ToggleDashboard();

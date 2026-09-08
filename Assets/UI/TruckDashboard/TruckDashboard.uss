@@ -133,6 +133,7 @@
 
 .close-button {
     flex-grow: 0;
+    flex-shrink: 0;
     width: 40px;
     background-color: rgb(150, 40, 40);
     color: white;

@@ -19,6 +19,7 @@ public class PauseMenuController : MonoBehaviour
 
     private void OnEnable()
     {
+        uiDocument.sortingOrder = 6;
         var root = uiDocument.rootVisualElement;
         
         pauseOverlay = root.Q<VisualElement>("pause-overlay");
@@ -29,13 +30,15 @@ public class PauseMenuController : MonoBehaviour
 
     private void Update()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene") return;
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             TogglePause();
         }
     }
 
-    private void TogglePause()
+    public void TogglePause()
     {
         isPaused = !isPaused;
 

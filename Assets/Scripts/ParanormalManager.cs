@@ -32,6 +32,7 @@ public class ParanormalManager : MonoBehaviour
     private float favoriteRoomRadius = 8.0f;
     private bool hasFavoriteRoom = false;
     private bool hasFreezingEvidence = false;
+    private bool hasEmf5Evidence = false;
     private Transform activeGhostTransform;
 
     private void Awake()
@@ -61,6 +62,15 @@ public class ParanormalManager : MonoBehaviour
     /// </summary>
     public void RegisterEvent(Vector2 position, int emfLevel, float duration = 20f)
     {
+        // 25% chance to upgrade standard interactions to EMF 5 if the ghost has EMF 5 evidence
+        if (hasEmf5Evidence && (emfLevel == 2 || emfLevel == 3))
+        {
+            if (Random.value <= 0.25f)
+            {
+                emfLevel = 5;
+            }
+        }
+
         activeEvents.Add(new ParanormalEvent
         {
             position = position,
@@ -163,13 +173,14 @@ public class ParanormalManager : MonoBehaviour
         return temp + noise;
     }
 
-    public void SetGhostInfo(Transform ghostTransform, Vector2 favRoomCenter, float favRoomRadius, bool freezingEvidence)
+    public void SetGhostInfo(Transform ghostTransform, Vector2 favRoomCenter, float favRoomRadius, bool freezingEvidence, bool emf5Evidence)
     {
         activeGhostTransform = ghostTransform;
         favoriteRoomCenter = favRoomCenter;
         favoriteRoomRadius = favRoomRadius;
         hasFavoriteRoom = true;
         hasFreezingEvidence = freezingEvidence;
+        hasEmf5Evidence = emf5Evidence;
     }
 
     public void ClearGhostInfo()

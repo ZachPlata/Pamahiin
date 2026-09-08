@@ -47,9 +47,8 @@ public class NetworkController : MonoBehaviour
     {
         if (sceneName == "GameMapScene")
         {
-            // Optional: Handle dynamic spawning or repositioning here
-            // Find a spawn point (like the Van)
-            var spawnPoint = GameObject.Find("SpawnPoint");
+            // Find the PlayerSpawnPoint component
+            var spawnPoint = Object.FindAnyObjectByType<PlayerSpawnPoint>();
             Vector3 startPos = spawnPoint != null ? spawnPoint.transform.position : Vector3.zero;
 
             foreach (var clientId in clientsCompleted)

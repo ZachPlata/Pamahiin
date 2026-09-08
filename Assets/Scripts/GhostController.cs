@@ -106,6 +106,37 @@ public class GhostController : NetworkBehaviour
     {
         if (!IsServer || currentState.Value != GhostState.Dormant) return;
 
+        // Randomize Ghost Type and Evidence
+        int rand = Random.Range(0, 3);
+        evidenceEmf5 = false;
+        evidenceFreezingTemps = false;
+        evidenceGhostWriting = false;
+        evidenceDotsProjector = false;
+        evidenceSpiritBox = false;
+        evidenceGhostOrbs = false;
+
+        if (rand == 0)
+        {
+            ghostName = "Tikbalang";
+            evidenceEmf5 = true;
+            evidenceSpiritBox = true;
+            evidenceGhostOrbs = true;
+        }
+        else if (rand == 1)
+        {
+            ghostName = "Kapre";
+            evidenceEmf5 = true;
+            evidenceDotsProjector = true;
+            evidenceFreezingTemps = true;
+        }
+        else
+        {
+            ghostName = "Manananggal";
+            evidenceGhostOrbs = true;
+            evidenceGhostWriting = true;
+            evidenceFreezingTemps = true;
+        }
+
         GhostRoomMarker[] availableRooms = Object.FindObjectsByType<GhostRoomMarker>(FindObjectsInactive.Exclude);
         if (availableRooms != null && availableRooms.Length > 0)
         {
@@ -131,7 +162,7 @@ public class GhostController : NetworkBehaviour
 
         if (ParanormalManager.Instance != null)
         {
-            ParanormalManager.Instance.SetGhostInfo(transform, favoriteRoomCenter, roamRadius, evidenceFreezingTemps);
+            ParanormalManager.Instance.SetGhostInfo(transform, favoriteRoomCenter, roamRadius, evidenceFreezingTemps, evidenceEmf5);
         }
 
         SetState(GhostState.Wander);
@@ -267,11 +298,8 @@ public class GhostController : NetworkBehaviour
 
     private void UpdateEvidenceState()
     {
-        // Emit evidence (e.g. EMF 5 spike if ghost possesses that trait)
-        if (evidenceEmf5 && ParanormalManager.Instance != null)
-        {
-            ParanormalManager.Instance.RegisterEvent(transform.position, 5, 20f);
-        }
+        // Emit evidence (e.g. Freezing temps or Ghost Orbs if applicable)
+        // EMF 5 is handled automatically via a 25% chance during standard interactions
 
         SetState(GhostState.Wander);
     }
@@ -406,10 +434,25 @@ public class GhostController : NetworkBehaviour
             }
         }
 
-        // Fallback: register ghost presence event
+        // Light switch interaction: randomly pick an active light switch in the house and turn it off
+        var switches = Object.FindObjectsByType<HouseLightSwitch>(FindObjectsInactive.Exclude);
+        List<HouseLightSwitch> activeSwitches = new List<HouseLightSwitch>();
+        foreach (var sw in switches)
+        {
+            if (sw.IsOn) activeSwitches.Add(sw);
+        }
+
+        if (activeSwitches.Count > 0)
+        {
+            var chosenSwitch = activeSwitches[Random.Range(0, activeSwitches.Count)];
+            chosenSwitch.GhostTurnOff();
+            return;
+        }
+
+        // Fallback: register ghost presence event (EMF 4 for manifestations)
         if (ParanormalManager.Instance != null)
         {
-            ParanormalManager.Instance.RegisterEvent(transform.position, 2, 15f);
+            ParanormalManager.Instance.RegisterEvent(transform.position, 4, 15f);
         }
     }
 
@@ -451,6 +494,12 @@ public class GhostController : NetworkBehaviour
 
         // Lock all exit doors
         SetDoorsLocked(true);
+
+        // Register EMF 4 during Hunt Manifestation
+        if (ParanormalManager.Instance != null)
+        {
+            ParanormalManager.Instance.RegisterEvent(transform.position, 4, huntDuration);
+        }
 
         SetState(GhostState.HuntManifest);
     }

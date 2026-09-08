@@ -69,7 +69,15 @@ public class MainMenuController : MonoBehaviour
         // Help View
         root.Q<Button>("btn-back-from-help").clicked += ShowMainMenu;
 
-        ShowMainMenu();
+        // Auto-show lobby if returning from a networked game
+        if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer))
+        {
+            ShowLobbyMenu();
+        }
+        else
+        {
+            ShowMainMenu();
+        }
         
         // Listen to network manager events for joining as client
         if (NetworkManager.Singleton != null)

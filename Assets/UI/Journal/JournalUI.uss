@@ -103,3 +103,41 @@
 .close-button:hover {
     background-color: rgb(130, 120, 110);
 }
+
+.ghost-buttons-container {
+    flex-direction: row;
+    justify-content: space-around;
+    margin-bottom: 20px;
+}
+
+.ghost-button {
+    background-color: rgb(200, 190, 170);
+    color: rgb(50, 40, 30);
+    font-size: 16px;
+    padding: 8px 12px;
+    border-radius: 5px;
+    border-width: 1px;
+    border-color: rgb(100, 80, 50);
+    flex-grow: 1;
+    margin: 0 5px;
+    transition-duration: 0.1s;
+}
+
+.ghost-button:hover {
+    background-color: rgb(220, 210, 190);
+}
+
+.selected-ghost-btn {
+    background-color: rgb(150, 40, 40);
+    color: white;
+}
+
+.selected-ghost-btn:hover {
+    background-color: rgb(180, 50, 50);
+}
+
+.strikethrough > .unity-toggle__label {
+    text-decoration: line-through;
+    opacity: 0.5;
+}
+

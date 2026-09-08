@@ -1,0 +1,73 @@
+.hud-container {
+    width: 100%;
+    height: 100%;
+    justify-content: space-between;
+    padding: 20px;
+    picking-mode: ignore;
+}
+
+.pause-container {
+    align-self: flex-start;
+}
+
+.pause-button {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+    background-color: rgba(10, 10, 10, 0.7);
+    color: rgba(200, 200, 200, 0.8);
+    border-radius: 0;
+    border-width: 1px;
+    border-color: rgba(100, 0, 0, 0.5);
+    -unity-font-style: bold;
+    cursor: link;
+    transition-duration: 0.3s;
+}
+
+.pause-button:hover {
+    background-color: rgba(30, 0, 0, 0.8);
+    color: white;
+    border-color: rgba(200, 0, 0, 0.8);
+    scale: 1.05;
+}
+
+.inventory-container {
+    flex-direction: row;
+    align-self: center;
+    justify-content: center;
+    bottom: 20px;
+    position: absolute;
+    width: auto;
+}
+
+.inventory-slot {
+    width: 80px;
+    height: 80px;
+    margin: 0 10px;
+    background-color: rgba(10, 10, 10, 0.8);
+    border-radius: 2px;
+    border-width: 1px;
+    border-color: rgba(50, 50, 50, 0.9);
+    align-items: center;
+    justify-content: center;
+    transition-duration: 0.3s;
+}
+
+.inventory-slot-active {
+    border-color: rgba(150, 0, 0, 1);
+    background-color: rgba(30, 10, 10, 0.9);
+    border-width: 2px;
+    scale: 1.1;
+}
+
+.inventory-slot-text {
+    color: rgba(180, 180, 180, 0.8);
+    font-size: 14px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}
+
+.inventory-slot-active .inventory-slot-text {
+    color: white;
+}

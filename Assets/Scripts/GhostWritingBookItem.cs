@@ -14,7 +14,7 @@ public class GhostWritingBookItem : EquipmentItem
     public bool IsWritten => isWritten.Value;
     
     // The book is considered "opened" only when it's placed on the ground and hasn't been written in yet.
-    public bool IsOpened => IsOnGround && !isWritten.Value;
+    public bool IsOpened => IsPlaced && !isWritten.Value;
 
     protected override void Awake()
     {

@@ -36,6 +36,7 @@ public class PlayerController : NetworkBehaviour
     public float Sanity => sanity.Value;
     public bool IsInHideZone { get; private set; }
     public HideZone CurrentHideZone { get; private set; }
+    public bool IsInSafeZone { get; private set; }
 
     /// <summary>
     /// Player is hidden from ghost vision raycasts when crouched inside a designated HideZone.
@@ -51,6 +52,9 @@ public class PlayerController : NetworkBehaviour
 
     private Vector3 originalScale;
     private IInteractable currentDraggedInteractable = null;
+
+    private float hoverCheckTimer = 0f;
+    private IInteractable currentlyHoveredInteractable = null;
 
     private void Awake()
     {
@@ -89,9 +93,9 @@ public class PlayerController : NetworkBehaviour
                 if (flashlight.IsLightOn) inDark = false;
             }
 
-            if (inDark)
+            if (inDark && !IsInSafeZone)
             {
-                // Light-based sanity drain (only drain in the dark)
+                // Light-based sanity drain (only drain in the dark and outside safe zones)
                 sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * 0.5f);
             }
         }
@@ -120,6 +124,14 @@ public class PlayerController : NetworkBehaviour
         else
         {
             localCamera = Camera.main;
+        }
+
+        // Check for hovered interactable every 0.1 seconds
+        hoverCheckTimer -= Time.deltaTime;
+        if (hoverCheckTimer <= 0f)
+        {
+            currentlyHoveredInteractable = CalculateHoveredInteractable();
+            hoverCheckTimer = 0.1f;
         }
 
         // 4. Targeted Interact Input (E)
@@ -228,6 +240,11 @@ public class PlayerController : NetworkBehaviour
         CurrentHideZone = inZone ? zone : null;
     }
 
+    public void SetInSafeZone(bool isSafe)
+    {
+        IsInSafeZone = isSafe;
+    }
+
     private void OnCrouchStateChanged(bool crouched)
     {
         // Visual posture feedback: scale slightly down when crouching
@@ -270,16 +287,35 @@ public class PlayerController : NetworkBehaviour
 
     private IInteractable GetHoveredInteractable()
     {
+        return currentlyHoveredInteractable;
+    }
+
+    private IInteractable CalculateHoveredInteractable()
+    {
         if (Vector2.Distance(transform.position, mousePosition) > maxReachRadius) return null;
 
-        // Cast a small circle at the mouse cursor
-        Collider2D[] hits = Physics2D.OverlapCircleAll(mousePosition, 0.2f, interactLayer);
+        // Use a very small precise radius for accurate hit detection
+        Collider2D[] hits = Physics2D.OverlapCircleAll(mousePosition, 0.05f, interactLayer);
+        
+        IInteractable bestInteractable = null;
+        float bestDistance = float.MaxValue;
+
         foreach (var hit in hits)
         {
             var interactable = hit.GetComponent<IInteractable>();
-            if (interactable != null) return interactable;
+            if (interactable != null)
+            {
+                // Priority: The object whose center is closest to the mouse cursor.
+                // This ensures small items on top of large interactables (like monitors) get priority.
+                float dist = Vector2.Distance(mousePosition, hit.transform.position);
+                if (dist < bestDistance)
+                {
+                    bestDistance = dist;
+                    bestInteractable = interactable;
+                }
+            }
         }
-        return null;
+        return bestInteractable;
     }
 
     private void TryInteract()

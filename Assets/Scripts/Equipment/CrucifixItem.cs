@@ -30,7 +30,7 @@ public class CrucifixItem : EquipmentItem
     /// </summary>
     public bool TryBlockHunt()
     {
-        if (!IsServer || isBurned.Value) return false;
+        if (!IsServer || isBurned.Value || !IsPlaced) return false;
 
         // Burn the crucifix
         isBurned.Value = true;
