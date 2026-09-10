@@ -61,14 +61,19 @@ public class SpiritBoxItem : EquipmentItem
         if (ParanormalManager.Instance != null)
         {
             // Simple check: is a ghost near us with spirit box evidence?
-            var ghost = Object.FindAnyObjectByType<GhostController>();
-            if (ghost != null && ghost.EvidenceSpiritBox)
+            var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
+            if (ghostHandler != null && ghostHandler.HasEvidence(EvidenceType.SpiritBox))
             {
-                float dist = Vector2.Distance(transform.position, ghost.transform.position);
-                if (dist <= detectionRadius)
+                // Note: The actual distance check should ideally be from the ghost's physical location,
+                // but the event ghost or hunter ghost might be moving around. We'll use the active event ghost.
+                if (ghostHandler.ghostroomMarker != null)
                 {
-                    // Trigger response!
-                    TriggerResponseRpc();
+                    // Check if the Spirit Box is physically inside the ghost room
+                    if (ghostHandler.ghostroomMarker.OverlapPoint(transform.position))
+                    {
+                        // Trigger response!
+                        TriggerResponseRpc();
+                    }
                 }
             }
         }

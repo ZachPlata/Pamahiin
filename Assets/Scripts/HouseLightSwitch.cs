@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using System.Collections;
 
 [RequireComponent(typeof(Collider2D))]
 public class HouseLightSwitch : NetworkBehaviour, IInteractable
@@ -79,5 +80,36 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
         {
             litSafeZone.SetActive(state);
         }
+    }
+
+    private Coroutine currentFlickerRoutine;
+
+    public void FlickerEffect(float duration)
+    {
+        if (currentFlickerRoutine != null)
+        {
+            StopCoroutine(currentFlickerRoutine);
+        }
+        currentFlickerRoutine = StartCoroutine(FlickerRoutine(duration));
+    }
+
+    private System.Collections.IEnumerator FlickerRoutine(float duration)
+    {
+        float timer = 0f;
+        while (timer < duration)
+        {
+            // Rapidly toggle lights locally without affecting the networked state
+            bool randomState = Random.value > 0.5f;
+            foreach (var light in controlledLights)
+            {
+                if (light != null) light.enabled = randomState;
+            }
+            
+            yield return new WaitForSeconds(Random.Range(0.05f, 0.15f));
+            timer += 0.1f; // Rough estimation to save performance
+        }
+        
+        // Restore actual state
+        ApplyLightState(isLightOn.Value);
     }
 }

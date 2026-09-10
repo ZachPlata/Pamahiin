@@ -20,11 +20,13 @@ public class DeveloperConsoleManager : MonoBehaviour
         var stopHuntBtn = root.Q<Button>("StopHuntBtn");
         var forceEMF5Btn = root.Q<Button>("ForceEMF5Btn");
         var forceEventBtn = root.Q<Button>("ForceEventBtn");
+        var toggleGhostOutlineBtn = root.Q<Button>("ToggleGhostOutlineBtn");
 
         if (forceHuntBtn != null) forceHuntBtn.clicked += OnForceHunt;
         if (stopHuntBtn != null) stopHuntBtn.clicked += OnStopHunt;
         if (forceEMF5Btn != null) forceEMF5Btn.clicked += OnForceEMF5;
         if (forceEventBtn != null) forceEventBtn.clicked += OnForceGhostEvent;
+        if (toggleGhostOutlineBtn != null) toggleGhostOutlineBtn.clicked += OnToggleGhostOutline;
     }
 
     private void Update()
@@ -47,17 +49,17 @@ public class DeveloperConsoleManager : MonoBehaviour
 
     private void OnForceHunt()
     {
-        var ghost = FindAnyObjectByType<GhostController>();
+        var ghost = FindAnyObjectByType<GhostHandler>();
         if (ghost != null)
         {
-            ghost.ForceStartHunt();
+            ghost.StartHunt();
             Debug.Log("[DevConsole] Forced Hunt Started");
         }
     }
 
     private void OnStopHunt()
     {
-        var ghost = FindAnyObjectByType<GhostController>();
+        var ghost = FindAnyObjectByType<GhostHandler>();
         if (ghost != null)
         {
             ghost.EndHunt();
@@ -68,7 +70,7 @@ public class DeveloperConsoleManager : MonoBehaviour
     private void OnForceEMF5()
     {
         var paranormal = ParanormalManager.Instance;
-        var ghost = FindAnyObjectByType<GhostController>();
+        var ghost = FindAnyObjectByType<GhostHandler>();
         
         if (paranormal != null && ghost != null)
         {
@@ -80,13 +82,24 @@ public class DeveloperConsoleManager : MonoBehaviour
     private void OnForceGhostEvent()
     {
         var paranormal = ParanormalManager.Instance;
-        var ghost = FindAnyObjectByType<GhostController>();
+        var ghost = FindAnyObjectByType<GhostHandler>();
         
         if (paranormal != null && ghost != null)
         {
-            // Level 3 or 4 could be ghost presence/interaction
+            ghost.TriggerGhostEvent(); // New method to show the event ghost sprite
             paranormal.RegisterEvent(ghost.transform.position, 3, 20f);
             Debug.Log("[DevConsole] Forced Ghost Event at Ghost Location");
+        }
+    }
+
+    private void OnToggleGhostOutline()
+    {
+        var ghost = FindAnyObjectByType<GhostHandler>();
+        if (ghost != null)
+        {
+            // Outline toggle can just force the ghost to be permanently visible for debugging
+            ghost.ToggleDevVisibility();
+            Debug.Log("[DevConsole] Toggled Ghost Visibility for Debugging");
         }
     }
 }

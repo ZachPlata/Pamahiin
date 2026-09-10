@@ -179,15 +179,6 @@ public class PlayerController : NetworkBehaviour
                 toTarget = dragTarget - (Vector2)transform.position;
             }
 
-            // Raycast to prevent dragging through walls
-            int wallMask = LayerMask.GetMask("Walls");
-            RaycastHit2D hit = Physics2D.Raycast(transform.position, toTarget.normalized, toTarget.magnitude, wallMask);
-            if (hit.collider != null)
-            {
-                // Stop slightly before the wall
-                dragTarget = hit.point - (toTarget.normalized * 0.2f);
-            }
-
             currentDraggedInteractable.OnDragUpdate(dragTarget);
         }
 

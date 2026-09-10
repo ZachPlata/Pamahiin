@@ -401,9 +401,18 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                 isOpen.Value = !isOpen.Value;
                 if (isFrontDoor && isOpen.Value && !hasTriggeredGhostSpawn)
                 {
+                    Debug.Log("NetworkDoor: Front door opened! Searching for GhostHandler...");
                     hasTriggeredGhostSpawn = true;
-                    var ghost = Object.FindAnyObjectByType<GhostController>();
-                    if (ghost != null) ghost.ActivateGhost();
+                    var ghost = Object.FindAnyObjectByType<GhostHandler>();
+                    if (ghost != null)
+                    {
+                        Debug.Log("NetworkDoor: Found GhostHandler. Calling ActivateGhost().");
+                        ghost.ActivateGhost();
+                    }
+                    else
+                    {
+                        Debug.LogError("NetworkDoor: GhostHandler not found in the scene!");
+                    }
                 }
             }
         }
@@ -412,9 +421,18 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             localIsOpen = !localIsOpen;
             if (isFrontDoor && localIsOpen && !hasTriggeredGhostSpawn)
             {
+                Debug.Log("NetworkDoor: Local front door opened! Searching for GhostHandler...");
                 hasTriggeredGhostSpawn = true;
-                var ghost = Object.FindAnyObjectByType<GhostController>();
-                if (ghost != null) ghost.ActivateGhost();
+                var ghost = Object.FindAnyObjectByType<GhostHandler>();
+                if (ghost != null)
+                {
+                    Debug.Log("NetworkDoor: Found GhostHandler locally. Calling ActivateGhost().");
+                    ghost.ActivateGhost();
+                }
+                else
+                {
+                    Debug.LogError("NetworkDoor: GhostHandler not found locally in the scene!");
+                }
             }
         }
     }

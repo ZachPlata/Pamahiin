@@ -69,6 +69,9 @@ public class GhostController : NetworkBehaviour
         
     private NetworkVariable<bool> isDotsSilhouetteVisible = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        
+    private NetworkVariable<bool> isDevOutlineVisible = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public GhostState CurrentState => currentState.Value;
     public bool IsHunting => currentState.Value == GhostState.HuntManifest ||
@@ -84,6 +87,11 @@ public class GhostController : NetworkBehaviour
     private float huntTimer = 0f;
     private float nextHuntAllowedTime = 0f;
     private float lostTargetTimer = 0f;
+    private float huntItemFlingTimer = 0f;
+    private Vector2 lastStuckPos;
+    private float stuckTimer = 0f;
+    private float spriteFlickerTimer = 0f;
+    private bool spriteFlickerState = false;
 
     private void Awake()
     {
@@ -98,8 +106,17 @@ public class GhostController : NetworkBehaviour
         currentState.OnValueChanged += (oldVal, newVal) => OnStateChanged(newVal);
         isVisuallyManifested.OnValueChanged += (oldVal, newVal) => UpdateVisuals(newVal);
         isDotsSilhouetteVisible.OnValueChanged += (oldVal, newVal) => UpdateDotsVisuals(newVal);
+        isDevOutlineVisible.OnValueChanged += (oldVal, newVal) => UpdateVisuals(isVisuallyManifested.Value);
 
         UpdateVisuals(isVisuallyManifested.Value);
+    }
+
+    public void ToggleDevOutline()
+    {
+        if (IsServer)
+        {
+            isDevOutlineVisible.Value = !isDevOutlineVisible.Value;
+        }
     }
 
     public void ActivateGhost()
@@ -162,7 +179,7 @@ public class GhostController : NetworkBehaviour
 
         if (ParanormalManager.Instance != null)
         {
-            ParanormalManager.Instance.SetGhostInfo(transform, favoriteRoomCenter, roamRadius, evidenceFreezingTemps, evidenceEmf5);
+            // ParanormalManager.Instance.SetGhostInfo(transform, favoriteRoomCenter, roamRadius, evidenceFreezingTemps, evidenceEmf5);
         }
 
         SetState(GhostState.Wander);
@@ -182,16 +199,51 @@ public class GhostController : NetworkBehaviour
 
         stateTimer += Time.deltaTime;
 
+        // Ignore Player collisions dynamically
+        Collider2D myCol = GetComponent<Collider2D>();
+        if (myCol != null)
+        {
+            foreach (var p in PlayerController.AllPlayers)
+            {
+                if (p != null)
+                {
+                    Collider2D pCol = p.GetComponent<Collider2D>();
+                    if (pCol != null) Physics2D.IgnoreCollision(myCol, pCol, true);
+                }
+            }
+        }
+
+        // Hunt Sprite Flickering
+        if (IsHunting && ghostSprite != null)
+        {
+            spriteFlickerTimer += Time.deltaTime;
+            if (spriteFlickerTimer >= 0.15f)
+            {
+                spriteFlickerTimer = 0f;
+                spriteFlickerState = !spriteFlickerState;
+                ghostSprite.enabled = spriteFlickerState;
+            }
+        }
+
         if (evidenceDotsProjector)
         {
             bool inDots = false;
             var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsInactive.Exclude);
             foreach (var proj in projectors)
             {
-                if (proj.IsPoweredOn && Vector2.Distance(transform.position, proj.transform.position) <= proj.projectionRadius)
+                if (proj.IsPoweredOn)
                 {
-                    inDots = true;
-                    break;
+                    Vector2 dirToGhost = (Vector2)transform.position - (Vector2)proj.transform.position;
+                    if (dirToGhost.magnitude <= proj.projectionRadius)
+                    {
+                        // Check if the ghost is inside the cone angle relative to the projector's forward direction (up)
+                        float angle = Vector2.Angle(proj.transform.up, dirToGhost);
+                        if (angle <= proj.coneAngle / 2f)
+                        {
+                            inDots = true;
+                            break;
+                        }
+                    }
                 }
             }
             if (isDotsSilhouetteVisible.Value != inDots)
@@ -246,9 +298,31 @@ public class GhostController : NetworkBehaviour
             {
                 // Adjust direction slightly around normal
                 direction = Vector2.Perpendicular(hit.normal).normalized;
+                
+                // If obstacle is very close, we might be running face first into a wall
+                if (hit.distance < 0.2f && !IsHunting)
+                {
+                    currentDestination = rb.position + Random.insideUnitCircle * 5f;
+                }
             }
 
             rb.MovePosition(rb.position + direction * speed * Time.fixedDeltaTime);
+            
+            // Unstuck logic
+            if (Vector2.Distance(rb.position, lastStuckPos) < 0.05f)
+            {
+                stuckTimer += Time.fixedDeltaTime;
+                if (stuckTimer >= 0.5f)
+                {
+                    stuckTimer = 0f;
+                    currentDestination = rb.position + Random.insideUnitCircle * 5f;
+                }
+            }
+            else
+            {
+                stuckTimer = 0f;
+                lastStuckPos = rb.position;
+            }
 
             // Rotate smoothly towards movement direction
             if (direction.sqrMagnitude > 0.01f)
@@ -313,6 +387,41 @@ public class GhostController : NetworkBehaviour
         }
     }
 
+    private void HandleHuntEnvironment()
+    {
+        huntItemFlingTimer += Time.deltaTime;
+        if (huntItemFlingTimer >= 1f)
+        {
+            huntItemFlingTimer = 0f;
+            Collider2D[] colliders = Physics2D.OverlapCircleAll(transform.position, 6f);
+            
+            if (Random.value < 0.25f) // 25% chance every 1 second
+            {
+                foreach (var col in colliders)
+                {
+                    var propRb = col.GetComponent<Rigidbody2D>();
+                    if (propRb != null && col.gameObject != gameObject && !col.CompareTag("Player") && !col.CompareTag("Ghost"))
+                    {
+                        Vector2 throwDir = Random.insideUnitCircle.normalized;
+                        float throwForce = Random.Range(3f, 6f);
+                        StartCoroutine(ThrowPropRoutine(propRb, throwDir, throwForce, 0.5f));
+                        break; // Just fling one nearby item
+                    }
+                }
+            }
+            
+            // Light flickering
+            foreach (var col in colliders)
+            {
+                var lightSwitch = col.GetComponent<HouseLightSwitch>();
+                if (lightSwitch != null && lightSwitch.IsOn)
+                {
+                    lightSwitch.FlickerEffect(1.2f);
+                }
+            }
+        }
+    }
+
     private void UpdateHuntSearchState()
     {
         huntTimer += Time.deltaTime;
@@ -321,6 +430,8 @@ public class GhostController : NetworkBehaviour
             EndHunt();
             return;
         }
+
+        HandleHuntEnvironment();
 
         // Check if any player enters vision cone or proximity circle
         PlayerController detectedPlayer = ScanForPlayers();
@@ -356,6 +467,8 @@ public class GhostController : NetworkBehaviour
             return;
         }
 
+        HandleHuntEnvironment();
+
         // Check if target is hidden in a HideZone or broke line of sight
         bool canSee = CanSeePlayer(chaseTargetPlayer);
 
@@ -382,7 +495,7 @@ public class GhostController : NetworkBehaviour
 
         // Kill check
         float distToPlayer = Vector2.Distance(rb.position, chaseTargetPlayer.transform.position);
-        if (distToPlayer <= 0.9f)
+        if (distToPlayer <= 0.35f)
         {
             chaseTargetPlayer.KillPlayer();
             EndHunt();
@@ -405,17 +518,20 @@ public class GhostController : NetworkBehaviour
             var propRb = col.GetComponent<Rigidbody2D>();
             if (propRb != null && col.gameObject != gameObject && !col.CompareTag("Player"))
             {
-                // Throw physical prop with a much smaller force, and stop it after 0.1-0.3s
-                Vector2 throwDir = Random.insideUnitCircle.normalized;
-                float throwForce = Random.Range(0.5f, 1.5f); // 10% of previous force
-                float slideDuration = Random.Range(0.1f, 0.3f);
-                StartCoroutine(ThrowPropRoutine(propRb, throwDir, throwForce, slideDuration));
-
-                if (ParanormalManager.Instance != null)
+                if (Random.value < 0.15f) // 15% chance to throw item during normal interactions
                 {
-                    ParanormalManager.Instance.RegisterEvent(propRb.position, 3, 20f);
+                    // Throw physical prop with a much smaller force, and stop it after 0.1-0.3s
+                    Vector2 throwDir = Random.insideUnitCircle.normalized;
+                    float throwForce = Random.Range(0.5f, 1.5f); // 10% of previous force
+                    float slideDuration = Random.Range(0.1f, 0.3f);
+                    StartCoroutine(ThrowPropRoutine(propRb, throwDir, throwForce, slideDuration));
+
+                    if (ParanormalManager.Instance != null)
+                    {
+                        ParanormalManager.Instance.RegisterEvent(propRb.position, 3, 20f);
+                    }
+                    return;
                 }
-                return;
             }
         }
 
@@ -463,6 +579,7 @@ public class GhostController : NetworkBehaviour
     {
         if (propRb == null) yield break;
         
+        propRb.collisionDetectionMode = CollisionDetectionMode2D.Continuous; // Prevent tunneling when thrown
         propRb.AddForce(throwDir * force, ForceMode2D.Impulse);
         
         yield return new WaitForSeconds(duration);
@@ -471,6 +588,7 @@ public class GhostController : NetworkBehaviour
         {
             propRb.linearVelocity = Vector2.zero;
             propRb.angularVelocity = 0f;
+            propRb.collisionDetectionMode = CollisionDetectionMode2D.Discrete; // Reset for performance
         }
     }
 
@@ -631,7 +749,17 @@ public class GhostController : NetworkBehaviour
     {
         if (ghostSprite != null)
         {
-            ghostSprite.enabled = manifested;
+            bool devOutline = isDevOutlineVisible.Value;
+            ghostSprite.enabled = manifested || devOutline;
+            
+            if (manifested)
+            {
+                ghostSprite.color = Color.white;
+            }
+            else if (devOutline)
+            {
+                ghostSprite.color = new Color(1f, 0f, 0f, 0.4f); // Semi-transparent red outline
+            }
         }
 
         if (ghostAuraLight != null)
@@ -645,6 +773,29 @@ public class GhostController : NetworkBehaviour
         if (dotsSilhouetteSprite != null)
         {
             dotsSilhouetteSprite.enabled = visible;
+            
+            if (visible)
+            {
+                // Make the silhouette translucent
+                Color c = dotsSilhouetteSprite.color;
+                c.a = 0.5f;
+                dotsSilhouetteSprite.color = c;
+            }
+
+            // Ensure it has a ShadowCaster2D to cast a shadow when revealed by DOTS
+            var shadowCaster = dotsSilhouetteSprite.GetComponent<UnityEngine.Rendering.Universal.ShadowCaster2D>();
+            if (shadowCaster == null)
+            {
+                shadowCaster = dotsSilhouetteSprite.gameObject.AddComponent<UnityEngine.Rendering.Universal.ShadowCaster2D>();
+                shadowCaster.castsShadows = true;
+                // You can configure other shadow caster properties here if necessary (e.g. selfShadows)
+            }
+            
+            // Only cast shadows if the sprite is actually visible from the DOTS
+            if (shadowCaster != null)
+            {
+                shadowCaster.castsShadows = visible;
+            }
         }
     }
 

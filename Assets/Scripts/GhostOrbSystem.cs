@@ -24,8 +24,11 @@ public class GhostOrbSystem : NetworkBehaviour
         PickNewTarget();
     }
 
+    private SpriteRenderer sr;
+
     public override void OnNetworkSpawn()
     {
+        sr = GetComponent<SpriteRenderer>();
         if (!IsServer)
         {
             // The renderer is handled locally, but we need to ensure the layer is correct
@@ -35,16 +38,36 @@ public class GhostOrbSystem : NetworkBehaviour
 
     private void Update()
     {
-        if (!IsServer) return;
-
-        timer += Time.deltaTime;
-        if (timer >= changeDirectionInterval)
+        if (IsServer)
         {
-            PickNewTarget();
-            timer = 0f;
+            timer += Time.deltaTime;
+            if (timer >= changeDirectionInterval)
+            {
+                PickNewTarget();
+                timer = 0f;
+            }
+
+            transform.position = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
         }
 
-        transform.position = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+        // Client-side visual toggle
+        if (sr != null)
+        {
+            bool shouldBeVisible = false;
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                foreach (var cam in allCameras)
+                {
+                    if (cam.IsPoweredOn && cam.CurrentHolderClientId == NetworkManager.Singleton.LocalClientId && cam.IsInHand)
+                    {
+                        shouldBeVisible = true;
+                        break;
+                    }
+                }
+            }
+            sr.enabled = shouldBeVisible;
+        }
     }
 
     private void PickNewTarget()

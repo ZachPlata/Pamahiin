@@ -20,8 +20,7 @@ public class RitualChalkItem : EquipmentItem
             // Try to start the exorcism
             // In a full implementation, we'd check if we are in the Ghost's favorite room.
             // For now, if we are within range of the ghost or just anywhere, it triggers it!
-            
-            var ghost = Object.FindAnyObjectByType<GhostController>();
+            var ghost = Object.FindAnyObjectByType<GhostHandler>();
             if (ghost != null && Vector2.Distance(transform.position, ghost.transform.position) < 15f)
             {
                 Debug.Log("Ritual Chalk Used! Starting Exorcism...");

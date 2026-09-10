@@ -50,6 +50,9 @@ TagManager:
   - name: Item
     uniqueID: 534523435
     locked: 0
+  - name: DOTSLayer
+    uniqueID: 2403368689
+    locked: 0
   - name: Wall
     uniqueID: 3166007697
     locked: 0

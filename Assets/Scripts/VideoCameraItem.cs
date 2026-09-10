@@ -1,5 +1,7 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 public class VideoCameraItem : EquipmentItem
 {
@@ -14,12 +16,47 @@ public class VideoCameraItem : EquipmentItem
     private Camera localCamera;
     private Color originalCameraColor;
     private int originalCullingMask;
+    private float originalOrthoSize;
     private bool cameraSettingsStored = false;
+
+    private Volume nightVisionVolume;
+    private Light2D nightVisionLight;
 
     protected override void Awake()
     {
         base.Awake();
         itemName = "Video Camera";
+        SetupNightVisionEffects();
+    }
+
+    private void SetupNightVisionEffects()
+    {
+        // 1. Setup Volume for Black and White
+        GameObject volumeObj = new GameObject("NightVisionVolume");
+        volumeObj.transform.SetParent(transform);
+        nightVisionVolume = volumeObj.AddComponent<Volume>();
+        nightVisionVolume.isGlobal = true;
+        nightVisionVolume.priority = 100;
+        
+        VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
+        if (profile.Add<ColorAdjustments>(true))
+        {
+            if (profile.TryGet(out ColorAdjustments colorAdj))
+            {
+                colorAdj.saturation.Override(-100f);
+            }
+        }
+        nightVisionVolume.sharedProfile = profile;
+        nightVisionVolume.weight = 0f;
+
+        // 2. Setup Global Light2D to see in the dark
+        GameObject lightObj = new GameObject("NightVisionLight");
+        lightObj.transform.SetParent(transform);
+        nightVisionLight = lightObj.AddComponent<Light2D>();
+        nightVisionLight.lightType = Light2D.LightType.Global;
+        nightVisionLight.color = Color.white;
+        nightVisionLight.intensity = 1.0f; // Adjust this if you want it brighter
+        nightVisionLight.enabled = false;
     }
 
     public override void OnNetworkSpawn()
@@ -60,26 +97,29 @@ public class VideoCameraItem : EquipmentItem
             {
                 originalCameraColor = localCamera.backgroundColor;
                 originalCullingMask = localCamera.cullingMask;
+                originalOrthoSize = localCamera.orthographicSize;
                 cameraSettingsStored = true;
             }
         }
 
+        bool isHolding = (ownerClientId.Value != ulong.MaxValue && 
+                            NetworkManager.Singleton != null && 
+                            ownerClientId.Value == NetworkManager.Singleton.LocalClientId && 
+                            isInHand.Value);
+
+        bool nightVisionActive = isHolding && isPoweredOn.Value;
+
         if (localCamera != null)
         {
-            // Only active if we are holding it and it's powered on
-            bool isHolding = (ownerClientId.Value != ulong.MaxValue && 
-                              NetworkManager.Singleton != null && 
-                              ownerClientId.Value == NetworkManager.Singleton.LocalClientId && 
-                              isInHand.Value);
-
-            bool nightVisionActive = isHolding && isPoweredOn.Value;
-            
             if (nightVisionActive)
             {
-                // Reveal ghost orbs layer and change bg tint
                 localCamera.backgroundColor = nightVisionColor;
+                if (cameraSettingsStored)
+                {
+                    localCamera.orthographicSize = originalOrthoSize - 0.05f;
+                }
                 
-                int ghostOrbLayer = LayerMask.NameToLayer("GhostOrb");
+                int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
                 if (ghostOrbLayer != -1)
                 {
                     localCamera.cullingMask |= (1 << ghostOrbLayer);
@@ -87,11 +127,12 @@ public class VideoCameraItem : EquipmentItem
             }
             else
             {
-                // Restore settings
                 if (cameraSettingsStored)
                 {
                     localCamera.backgroundColor = originalCameraColor;
-                    int ghostOrbLayer = LayerMask.NameToLayer("GhostOrb");
+                    localCamera.orthographicSize = originalOrthoSize;
+                    
+                    int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
                     if (ghostOrbLayer != -1)
                     {
                         localCamera.cullingMask &= ~(1 << ghostOrbLayer);
@@ -99,15 +140,26 @@ public class VideoCameraItem : EquipmentItem
                 }
             }
         }
+
+        if (nightVisionVolume != null)
+        {
+            nightVisionVolume.weight = nightVisionActive ? 1f : 0f;
+        }
+
+        if (nightVisionLight != null)
+        {
+            nightVisionLight.enabled = nightVisionActive;
+        }
     }
 
     public override void OnDestroy()
     {
-        // Cleanup just in case we are destroyed while holding it
         if (localCamera != null && cameraSettingsStored)
         {
             localCamera.backgroundColor = originalCameraColor;
-            int ghostOrbLayer = LayerMask.NameToLayer("GhostOrb");
+            localCamera.orthographicSize = originalOrthoSize;
+            
+            int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
             if (ghostOrbLayer != -1)
             {
                 localCamera.cullingMask &= ~(1 << ghostOrbLayer);

@@ -68,7 +68,7 @@ public class GameMatchManager : NetworkBehaviour
     public void ForceEndMatch()
     {
         string actualGhostName = "Unknown Entity";
-        var ghost = UnityEngine.Object.FindAnyObjectByType<GhostController>();
+        var ghost = UnityEngine.Object.FindAnyObjectByType<GhostHandler>();
         if (ghost != null)
         {
             actualGhostName = ghost.ghostName;

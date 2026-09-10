@@ -28,12 +28,12 @@ public class ParanormalManager : MonoBehaviour
     private readonly List<ParanormalEvent> activeEvents = new List<ParanormalEvent>();
 
     // Ghost anchor/favorite room tracking
-    private Vector2 favoriteRoomCenter = Vector2.zero;
-    private float favoriteRoomRadius = 8.0f;
+    private Collider2D favoriteRoomCollider;
     private bool hasFavoriteRoom = false;
     private bool hasFreezingEvidence = false;
     private bool hasEmf5Evidence = false;
     private Transform activeGhostTransform;
+    private GhostHandler activeGhostHandler;
 
     private void Awake()
     {
@@ -105,30 +105,52 @@ public class ParanormalManager : MonoBehaviour
         distanceToSource = float.MaxValue;
         float minDistanceForHighest = float.MaxValue;
 
-        // Also check if ghost is currently actively manifesting near the player (EMF 4)
-        if (activeGhostTransform != null)
+        bool isHunting = activeGhostHandler != null && activeGhostHandler.CurrentState != GhostHandlerState.Dormant;
+        bool isInsideGhostRoom = favoriteRoomCollider != null && favoriteRoomCollider.OverlapPoint(checkPosition);
+
+        // Also check if ghost is currently actively hunting/manifesting near the player
+        if (activeGhostTransform != null && isHunting)
         {
             float distToGhost = Vector2.Distance(checkPosition, activeGhostTransform.position);
             if (distToGhost <= radius)
             {
-                highestLevel = 4;
+                highestLevel = hasEmf5Evidence ? 5 : 4;
                 closestSourceDirection = ((Vector2)activeGhostTransform.position - checkPosition).normalized;
                 distanceToSource = distToGhost;
                 minDistanceForHighest = distToGhost;
             }
         }
-
-        foreach (var ev in activeEvents)
+        else if (activeGhostTransform != null && !isHunting)
         {
-            float dist = Vector2.Distance(checkPosition, ev.position);
-            if (dist <= radius)
+            // Passive EMF 2 or 3 from the dormant ghost roaming the room
+            float distToGhost = Vector2.Distance(checkPosition, activeGhostTransform.position);
+            if (distToGhost <= radius)
             {
-                if (ev.emfLevel > highestLevel || (ev.emfLevel == highestLevel && dist < minDistanceForHighest))
+                if (2 > highestLevel)
                 {
-                    highestLevel = ev.emfLevel;
-                    minDistanceForHighest = dist;
-                    closestSourceDirection = (ev.position - checkPosition).normalized;
-                    distanceToSource = dist;
+                    highestLevel = 2; // Baseline EMF 2 for the ghost's presence
+                    closestSourceDirection = ((Vector2)activeGhostTransform.position - checkPosition).normalized;
+                    distanceToSource = distToGhost;
+                    minDistanceForHighest = distToGhost;
+                }
+            }
+        }
+
+        // Only scan active events if inside the ghost room OR hunting
+        if (isInsideGhostRoom || isHunting)
+        {
+            foreach (var ev in activeEvents)
+            {
+                float dist = Vector2.Distance(checkPosition, ev.position);
+                if (dist <= radius)
+                {
+                    if (ev.emfLevel > highestLevel || (ev.emfLevel == highestLevel && dist < minDistanceForHighest))
+                    {
+                        highestLevel = ev.emfLevel;
+                        minDistanceForHighest = dist;
+                        closestSourceDirection = (ev.position - checkPosition).normalized;
+                        distanceToSource = dist;
+                    }
                 }
             }
         }
@@ -143,21 +165,31 @@ public class ParanormalManager : MonoBehaviour
     public float GetTemperatureAt(Vector2 worldPosition)
     {
         float temp = baseHouseTemp;
+        bool isHunting = activeGhostHandler != null && activeGhostHandler.CurrentState != GhostHandlerState.Dormant;
+        bool isInsideFavoriteRoom = favoriteRoomCollider != null && favoriteRoomCollider.OverlapPoint(worldPosition);
 
         // Influence of ghost's favorite room
-        if (hasFavoriteRoom)
+        if (hasFavoriteRoom && isInsideFavoriteRoom)
         {
-            float distToRoom = Vector2.Distance(worldPosition, favoriteRoomCenter);
-            if (distToRoom < favoriteRoomRadius)
+            float targetRoomTemp = hasFreezingEvidence ? freezingTemp : favoriteRoomTemp;
+            temp = targetRoomTemp;
+        }
+        else
+        {
+            // Check if inside ANY other GhostRoomMarker
+            Collider2D[] cols = Physics2D.OverlapPointAll(worldPosition);
+            foreach (var col in cols)
             {
-                float t = 1f - (distToRoom / favoriteRoomRadius);
-                float targetRoomTemp = hasFreezingEvidence ? freezingTemp : favoriteRoomTemp;
-                temp = Mathf.Lerp(temp, targetRoomTemp, t);
+                if (col.GetComponent<GhostRoomMarker>() != null)
+                {
+                    temp = 14.0f; // Lower than 27C but above 10C
+                    break;
+                }
             }
         }
 
-        // Additional localized cold aura directly around the roaming ghost
-        if (activeGhostTransform != null)
+        // Additional localized cold aura directly around the roaming ghost during hunts
+        if (activeGhostTransform != null && isHunting)
         {
             float distToGhost = Vector2.Distance(worldPosition, activeGhostTransform.position);
             if (distToGhost < ghostCoolingRadius)
@@ -182,19 +214,20 @@ public class ParanormalManager : MonoBehaviour
         return temp + noise;
     }
 
-    public void SetGhostInfo(Transform ghostTransform, Vector2 favRoomCenter, float favRoomRadius, bool freezingEvidence, bool emf5Evidence)
+    public void SetGhostInfo(Transform ghostTransform, Collider2D roomCollider, bool freezingEvidence, bool emf5Evidence, GhostHandler handler)
     {
         activeGhostTransform = ghostTransform;
-        favoriteRoomCenter = favRoomCenter;
-        favoriteRoomRadius = favRoomRadius;
-        hasFavoriteRoom = true;
+        favoriteRoomCollider = roomCollider;
+        hasFavoriteRoom = roomCollider != null;
         hasFreezingEvidence = freezingEvidence;
         hasEmf5Evidence = emf5Evidence;
+        activeGhostHandler = handler;
     }
 
     public void ClearGhostInfo()
     {
         activeGhostTransform = null;
         hasFavoriteRoom = false;
+        activeGhostHandler = null;
     }
 }

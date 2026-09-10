@@ -140,7 +140,11 @@ public class EMFReaderItem : EquipmentItem
     private void HandleAudioFeedback()
     {
         if (audioSource == null) return;
-        if (CurrentEmfLevel <= 1) return;
+        if (CurrentEmfLevel <= 1)
+        {
+            if (audioSource.isPlaying) audioSource.Stop();
+            return;
+        }
 
         // Higher EMF produces faster beeps
         float interval = CurrentEmfLevel switch

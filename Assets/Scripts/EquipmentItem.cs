@@ -236,8 +236,6 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     // --- IInteractable Dragging Methods ---
     public bool CanDrag() => IsOnGround; // Can only drag if it's dropped (not placed)
     
-    private TargetJoint2D dragJoint;
-
     public void OnDragBegin(ulong clientId)
     {
         if (IsServer) ApplyDragBegin();
@@ -255,15 +253,10 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         Rigidbody2D rb = GetComponent<Rigidbody2D>();
         if (rb != null)
         {
-            // Use TargetJoint2D to pull the item instead of forcing position
-            // This natively handles wall collisions without any clipping or jittering
-            dragJoint = gameObject.AddComponent<TargetJoint2D>();
-            dragJoint.anchor = Vector2.zero;
-            dragJoint.dampingRatio = 1f;
-            dragJoint.frequency = 10f;
-            dragJoint.maxForce = 1000f;
-            dragJoint.autoConfigureTarget = false;
-            dragJoint.target = rb.position;
+            // Set to Kinematic while dragging so it passes through walls and doesn't bounce
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
         }
     }
 
@@ -287,14 +280,8 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
 
     private void ApplyDrag(Vector2 targetPos)
     {
-        if (dragJoint != null)
-        {
-            dragJoint.target = targetPos;
-        }
-        else
-        {
-            transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 10f);
-        }
+        // Smoothly follow the mouse position. Since it's kinematic, it will phase through walls.
+        transform.position = Vector2.Lerp(transform.position, targetPos, Time.deltaTime * 15f);
     }
     
     public void OnDragEnd(ulong clientId)
@@ -317,15 +304,11 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
 
     private void ApplyDragEnd()
     {
-        if (dragJoint != null)
-        {
-            Destroy(dragJoint);
-            dragJoint = null;
-        }
-
         Rigidbody2D rb = GetComponent<Rigidbody2D>();
         if (rb != null)
         {
+            // Return to dynamic physics when dropped
+            rb.bodyType = RigidbodyType2D.Dynamic;
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
         }

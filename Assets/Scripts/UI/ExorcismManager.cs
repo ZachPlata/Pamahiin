@@ -57,10 +57,10 @@ public class ExorcismManager : NetworkBehaviour
             StartExorcismClientRpc();
             
             // Force start the permanent hunt!
-            var ghost = Object.FindAnyObjectByType<GhostController>();
+            var ghost = Object.FindAnyObjectByType<GhostHandler>();
             if (ghost != null)
             {
-                ghost.ForceStartHunt();
+                ghost.StartHunt();
             }
         }
         else
@@ -153,7 +153,7 @@ public class ExorcismManager : NetworkBehaviour
 
         if (success && IsServer)
         {
-            var ghost = Object.FindAnyObjectByType<GhostController>();
+            var ghost = Object.FindAnyObjectByType<GhostHandler>();
             if (ghost != null)
             {
                 ghost.NetworkObject.Despawn(true); // Ghost is banished!

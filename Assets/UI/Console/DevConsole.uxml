@@ -13,6 +13,7 @@
         <ui:Button name="StopHuntBtn" text="Stop Hunt" class="dev-console-button" />
         <ui:Button name="ForceEMF5Btn" text="Force EMF 5" class="dev-console-button" />
         <ui:Button name="ForceEventBtn" text="Trigger Ghost Event" class="dev-console-button" />
+        <ui:Button name="ToggleGhostOutlineBtn" text="Toggle Ghost Outline" class="dev-console-button" />
         
         <ui:Label text="Press '~' to close" style="color: gray; margin-top: 20px; font-size: 14px;" />
     </ui:VisualElement>

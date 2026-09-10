@@ -71,7 +71,7 @@ public class ThermometerItem : EquipmentItem
             }
 
             // Smooth interpolation of display
-            displayedTemperature = Mathf.MoveTowards(displayedTemperature, CurrentTemperature, Time.deltaTime * 5f);
+            displayedTemperature = Mathf.MoveTowards(displayedTemperature, CurrentTemperature, Time.deltaTime * 2.5f);
             if (digitalDisplay != null)
             {
                 digitalDisplay.text = $"{displayedTemperature:F1}°C";
@@ -94,9 +94,8 @@ public class ThermometerItem : EquipmentItem
             return;
         }
 
-        // Project forward from the player's aim direction
-        Vector2 samplePoint = (Vector2)transform.position + ((Vector2)transform.up * sampleDistance);
-        CurrentTemperature = ParanormalManager.Instance.GetTemperatureAt(samplePoint);
+        // Sample temperature exactly where the thermometer is located
+        CurrentTemperature = ParanormalManager.Instance.GetTemperatureAt(transform.position);
     }
 
     private void HandleColdBreath(bool isFreezing)
