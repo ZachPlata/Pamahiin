@@ -174,7 +174,7 @@ public class GhostController : NetworkBehaviour
             if (netObj != null) netObj.Spawn();
             
             var orbSys = orb.GetComponent<GhostOrbSystem>();
-            if (orbSys != null) orbSys.Initialize(favoriteRoomCenter, roamRadius);
+            if (orbSys != null) orbSys.Initialize(new Bounds(favoriteRoomCenter, new Vector3(roamRadius * 2f, roamRadius * 2f, 0f)));
         }
 
         if (ParanormalManager.Instance != null)

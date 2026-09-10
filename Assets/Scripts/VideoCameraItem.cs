@@ -6,7 +6,7 @@ using UnityEngine.Rendering.Universal;
 public class VideoCameraItem : EquipmentItem
 {
     [Header("Video Camera Settings")]
-    [SerializeField] private Color nightVisionColor = new Color(0.2f, 0.2f, 0.2f); // Black and white/night vision tint
+    [SerializeField] private Color nightVisionColor = new Color(0.2f, 0.2f, 0.2f);
     
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -17,10 +17,14 @@ public class VideoCameraItem : EquipmentItem
     private Color originalCameraColor;
     private int originalCullingMask;
     private float originalOrthoSize;
+    private bool originalPostProcessing;
+    private UniversalAdditionalCameraData cameraData;
     private bool cameraSettingsStored = false;
 
     private Volume nightVisionVolume;
     private Light2D nightVisionLight;
+    
+    private Camera cctvCamera;
 
     protected override void Awake()
     {
@@ -55,14 +59,43 @@ public class VideoCameraItem : EquipmentItem
         nightVisionLight = lightObj.AddComponent<Light2D>();
         nightVisionLight.lightType = Light2D.LightType.Global;
         nightVisionLight.color = Color.white;
-        nightVisionLight.intensity = 1.0f; // Adjust this if you want it brighter
+        nightVisionLight.intensity = 1.0f;
         nightVisionLight.enabled = false;
+        
+        // 3. Setup CCTV Camera for the Truck Dashboard feed
+        GameObject cctvObj = new GameObject("CCTV_POV");
+        cctvObj.transform.SetParent(transform, false);
+        cctvObj.transform.localPosition = new Vector3(0, 0, -10f);
+        cctvCamera = cctvObj.AddComponent<Camera>();
+        cctvCamera.orthographic = true;
+        cctvCamera.orthographicSize = 5f;
+        cctvCamera.backgroundColor = Color.black;
+        cctvCamera.clearFlags = CameraClearFlags.SolidColor;
+        cctvCamera.depth = -10; // Lower depth so it doesn't interfere with main camera
+        cctvCamera.enabled = false; // Dashboard will manage enabling/disabling
+        
+        // Ensure CCTV can see Ghost Orbs layer
+        int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
+        if (ghostOrbLayer != -1)
+        {
+            cctvCamera.cullingMask |= (1 << ghostOrbLayer);
+        }
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
         isPoweredOn.OnValueChanged += (oldVal, newVal) => UpdateNightVisionVisuals();
+        
+        // Register the CCTV camera with the Truck Dashboard
+        if (cctvCamera != null)
+        {
+            var dashboard = FindAnyObjectByType<TruckDashboardController>();
+            if (dashboard != null)
+            {
+                dashboard.RegisterDynamicCamera(cctvCamera);
+            }
+        }
     }
 
     public override void UsePrimary()
@@ -98,6 +131,13 @@ public class VideoCameraItem : EquipmentItem
                 originalCameraColor = localCamera.backgroundColor;
                 originalCullingMask = localCamera.cullingMask;
                 originalOrthoSize = localCamera.orthographicSize;
+                
+                cameraData = localCamera.GetComponent<UniversalAdditionalCameraData>();
+                if (cameraData != null)
+                {
+                    originalPostProcessing = cameraData.renderPostProcessing;
+                }
+                
                 cameraSettingsStored = true;
             }
         }
@@ -116,7 +156,11 @@ public class VideoCameraItem : EquipmentItem
                 localCamera.backgroundColor = nightVisionColor;
                 if (cameraSettingsStored)
                 {
-                    localCamera.orthographicSize = originalOrthoSize - 0.05f;
+                    localCamera.orthographicSize = originalOrthoSize - 0.1f;
+                    if (cameraData != null)
+                    {
+                        cameraData.renderPostProcessing = true;
+                    }
                 }
                 
                 int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
@@ -131,6 +175,11 @@ public class VideoCameraItem : EquipmentItem
                 {
                     localCamera.backgroundColor = originalCameraColor;
                     localCamera.orthographicSize = originalOrthoSize;
+                    
+                    if (cameraData != null)
+                    {
+                        cameraData.renderPostProcessing = originalPostProcessing;
+                    }
                     
                     int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
                     if (ghostOrbLayer != -1)
@@ -154,10 +203,25 @@ public class VideoCameraItem : EquipmentItem
 
     public override void OnDestroy()
     {
+        // Unregister from dashboard
+        if (cctvCamera != null)
+        {
+            var dashboard = FindAnyObjectByType<TruckDashboardController>();
+            if (dashboard != null)
+            {
+                dashboard.UnregisterDynamicCamera(cctvCamera);
+            }
+        }
+
         if (localCamera != null && cameraSettingsStored)
         {
             localCamera.backgroundColor = originalCameraColor;
             localCamera.orthographicSize = originalOrthoSize;
+            
+            if (cameraData != null)
+            {
+                cameraData.renderPostProcessing = originalPostProcessing;
+            }
             
             int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
             if (ghostOrbLayer != -1)
@@ -167,3 +231,4 @@ public class VideoCameraItem : EquipmentItem
         }
     }
 }
+

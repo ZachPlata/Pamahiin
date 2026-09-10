@@ -156,13 +156,12 @@ public class GhostHandler : NetworkBehaviour
         // Spawn Ghost Orbs natively if applicable
         if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null && ghostroomMarker != null)
         {
-            float roomRadius = Mathf.Max(ghostroomMarker.bounds.extents.x, ghostroomMarker.bounds.extents.y);
             GameObject orb = Instantiate(ghostOrbPrefab, ghostroomMarker.bounds.center, Quaternion.identity);
             var orbNetwork = orb.GetComponent<NetworkObject>();
             if (orbNetwork != null) orbNetwork.Spawn();
             
             var orbSystem = orb.GetComponent<GhostOrbSystem>();
-            if (orbSystem != null) orbSystem.Initialize(ghostroomMarker.bounds.center, roomRadius * 0.8f);
+            if (orbSystem != null) orbSystem.Initialize(ghostroomMarker.bounds);
         }
     }
 

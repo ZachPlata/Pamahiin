@@ -10,6 +10,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     [Header("CCTV Settings")]
     [SerializeField] private RenderTexture cctvRenderTexture;
     [SerializeField] private Camera[] houseCameras;
+    private List<Camera> allCameras = new List<Camera>();
     private int currentCameraIndex = 0;
 
     private UIDocument uiDocument;
@@ -26,16 +27,59 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     // UI Elements
     private VisualElement cctvContainer;
+    private Label noSignalLabel;
     private ScrollView sanityList;
     private VisualElement activityBar;
     private Label activityLevelText;
 
     private float updateTimer = 0f;
     private bool isDashboardOpen = false;
+    public bool IsDashboardOpen => isDashboardOpen;
 
     private void Awake()
     {
         uiDocument = GetComponent<UIDocument>();
+        if (houseCameras != null)
+        {
+            allCameras.AddRange(houseCameras);
+        }
+    }
+
+    public void RegisterDynamicCamera(Camera cam)
+    {
+        if (cam != null && !allCameras.Contains(cam))
+        {
+            allCameras.Add(cam);
+            UpdateCameraSource();
+            UpdateNoSignalState();
+        }
+    }
+
+    public void UnregisterDynamicCamera(Camera cam)
+    {
+        if (cam != null && allCameras.Contains(cam))
+        {
+            allCameras.Remove(cam);
+            if (currentCameraIndex >= allCameras.Count) currentCameraIndex = 0;
+            UpdateCameraSource();
+            UpdateNoSignalState();
+        }
+    }
+
+    private void UpdateNoSignalState()
+    {
+        if (noSignalLabel == null || cctvContainer == null) return;
+        
+        if (allCameras.Count > 0 && cctvRenderTexture != null)
+        {
+            noSignalLabel.style.display = DisplayStyle.None;
+            cctvContainer.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(cctvRenderTexture));
+        }
+        else
+        {
+            noSignalLabel.style.display = DisplayStyle.Flex;
+            cctvContainer.style.backgroundImage = StyleKeyword.None;
+        }
     }
 
     private void OnEnable()
@@ -59,11 +103,17 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
         // CCTV
         cctvContainer = root.Q<VisualElement>("cctv-image-container");
-        if (cctvRenderTexture != null)
+        noSignalLabel = root.Q<Label>(className: "no-signal-text");
+        
+        // Auto-create a RenderTexture if one isn't assigned in the Inspector
+        if (cctvRenderTexture == null)
         {
-            cctvContainer.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(cctvRenderTexture));
-            root.Q<Label>(className: "no-signal-text").style.display = DisplayStyle.None;
+            cctvRenderTexture = new RenderTexture(640, 480, 16);
+            cctvRenderTexture.name = "CCTV_AutoRT";
         }
+        
+        // Set up the display and toggle no-signal based on available cameras
+        UpdateNoSignalState();
         
         root.Q<Button>("btn-next-camera").clicked += SwitchToNextCamera;
         
@@ -104,22 +154,22 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void SwitchToNextCamera()
     {
-        if (houseCameras == null || houseCameras.Length == 0) return;
+        if (allCameras.Count == 0) return;
         
-        currentCameraIndex = (currentCameraIndex + 1) % houseCameras.Length;
+        currentCameraIndex = (currentCameraIndex + 1) % allCameras.Count;
         UpdateCameraSource();
     }
 
     private void UpdateCameraSource()
     {
-        if (houseCameras == null || houseCameras.Length == 0) return;
+        if (allCameras.Count == 0) return;
 
-        for (int i = 0; i < houseCameras.Length; i++)
+        for (int i = 0; i < allCameras.Count; i++)
         {
-            if (houseCameras[i] != null)
+            if (allCameras[i] != null)
             {
-                houseCameras[i].targetTexture = (i == currentCameraIndex) ? cctvRenderTexture : null;
-                houseCameras[i].gameObject.SetActive(i == currentCameraIndex);
+                allCameras[i].targetTexture = (i == currentCameraIndex) ? cctvRenderTexture : null;
+                allCameras[i].gameObject.SetActive(i == currentCameraIndex);
             }
         }
     }
