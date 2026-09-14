@@ -74,15 +74,45 @@
 
 .temperature-container {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: -35px;
     display: none;
+    align-self: center;
 }
 
 .temperature-text {
-    font-size: 32px;
+    font-size: 24px;
     color: white;
     -unity-font-style: bold;
-    -unity-text-align: middle-right;
+    -unity-text-align: middle-center;
     text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+}
+
+.power-indicator {
+    position: absolute;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    background-color: red;
+    display: none;
+    border-width: 1px;
+    border-color: rgba(0,0,0,0.5);
+}
+
+.emf-container {
+    position: absolute;
+    top: 5px;
+    flex-direction: row;
+    display: none;
+    align-self: center;
+}
+
+.emf-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin: 0 2px;
+    background-color: gray;
+    border-width: 1px;
+    border-color: rgba(0,0,0,0.5);
 }

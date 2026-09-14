@@ -31,6 +31,9 @@ public class PlayerController : NetworkBehaviour
     private NetworkVariable<float> sanity = new NetworkVariable<float>(
         100f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    public NetworkVariable<bool> isGodMode = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     public bool IsAlive => isAlive.Value;
     public bool IsCrouching => isCrouching.Value;
     public float Sanity => sanity.Value;
@@ -283,10 +286,13 @@ public class PlayerController : NetworkBehaviour
     /// <summary>
     /// Server method to kill a player caught by the ghost.
     /// </summary>
-    public void KillPlayer()
+    public bool KillPlayer()
     {
-        if (!IsServer) return;
+        if (!IsServer) return false;
+        if (isGodMode.Value) return false; // God mode prevents death
+        if (!isAlive.Value) return false; // Already dead
         isAlive.Value = false;
+        return true;
     }
 
     private IInteractable GetHoveredInteractable()
@@ -306,6 +312,12 @@ public class PlayerController : NetworkBehaviour
 
         foreach (var hit in hits)
         {
+            var equipment = hit.GetComponent<EquipmentItem>();
+            if (equipment != null && equipment.InteractCollider != null && equipment.InteractCollider != hit)
+            {
+                continue; // Ignore any extra colliders on the item (like huge AoE triggers)
+            }
+
             var interactable = hit.GetComponent<IInteractable>();
             if (interactable != null)
             {

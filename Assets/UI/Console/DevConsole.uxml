@@ -9,11 +9,32 @@
     <ui:VisualElement name="DevConsoleContainer" class="dev-console-container">
         <ui:Label text="Developer Console" class="dev-console-title" />
         
-        <ui:Button name="ForceHuntBtn" text="Force Hunt" class="dev-console-button" />
-        <ui:Button name="StopHuntBtn" text="Stop Hunt" class="dev-console-button" />
-        <ui:Button name="ForceEMF5Btn" text="Force EMF 5" class="dev-console-button" />
-        <ui:Button name="ForceEventBtn" text="Trigger Ghost Event" class="dev-console-button" />
-        <ui:Button name="ToggleGhostOutlineBtn" text="Toggle Ghost Outline" class="dev-console-button" />
+        <ui:VisualElement class="columns-container">
+            <ui:VisualElement class="column">
+                <ui:Label text="--- Hunt Controls ---" style="color: white; margin-bottom: 5px; font-weight: bold;" />
+                <ui:Button name="ForceHuntBtn" text="Force Hunt" class="dev-console-button" />
+                <ui:Button name="StopHuntBtn" text="Stop Hunt" class="dev-console-button" />
+                
+                <ui:Label text="--- General Tools ---" style="color: white; margin-top: 10px; margin-bottom: 5px; font-weight: bold;" />
+                <ui:Button name="ForceEMF5Btn" text="Force EMF 5" class="dev-console-button" />
+                <ui:Button name="ToggleGhostOutlineBtn" text="Toggle Ghost Outline" class="dev-console-button" />
+                
+                <ui:Label text="--- Player Cheats ---" style="color: white; margin-top: 10px; margin-bottom: 5px; font-weight: bold;" />
+                <ui:Button name="ToggleGodModeBtn" text="Toggle God Mode" class="dev-console-button" />
+                <ui:Button name="ToggleBreadcrumbBtn" text="Toggle Breadcrumbs" class="dev-console-button" />
+            </ui:VisualElement>
+            
+            <ui:VisualElement class="column">
+                <ui:Label text="--- Ghost Events ---" style="color: white; margin-bottom: 5px; font-weight: bold;" />
+                <ui:Button name="ForceEventBtn" text="Trigger Ghost Event" class="dev-console-button" />
+                <ui:Button name="ForceThrowBtn" text="Ghost Throw Object" class="dev-console-button" />
+                <ui:Button name="ForceWriteBtn" text="Ghost Write in Book" class="dev-console-button" />
+                <ui:Button name="ForceDotsBtn" text="Ghost DOTS Manifest" class="dev-console-button" />
+                <ui:Button name="ForceOrbBtn" text="Ghost Orb Manifest" class="dev-console-button" />
+                <ui:Button name="ForceSpiritBoxBtn" text="Ghost Spirit Box Talk" class="dev-console-button" />
+                <ui:Button name="ForceLowSanityBtn" text="Low Sanity Manifest" class="dev-console-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
         
         <ui:Label text="Press '~' to close" style="color: gray; margin-top: 20px; font-size: 14px;" />
     </ui:VisualElement>

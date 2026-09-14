@@ -103,27 +103,19 @@ public class PlayerInventory : NetworkBehaviour
 
     public bool HasEmptySlot()
     {
-        for (int i = 0; i < MaxSlots; i++)
-        {
-            if (slots[i] == null) return true;
-        }
-        return false;
+        return slots[currentSlotIndex] == null;
     }
 
     public bool AddItem(EquipmentItem item)
     {
         if (item == null) return false;
 
-        for (int i = 0; i < MaxSlots; i++)
+        if (slots[currentSlotIndex] == null)
         {
-            if (slots[i] == null)
-            {
-                slots[i] = item;
-                bool isInHand = (i == currentSlotIndex);
-                item.SetInHandRpc(isInHand);
-                OnInventoryUpdated?.Invoke();
-                return true;
-            }
+            slots[currentSlotIndex] = item;
+            item.SetInHandRpc(true);
+            OnInventoryUpdated?.Invoke();
+            return true;
         }
 
         return false;

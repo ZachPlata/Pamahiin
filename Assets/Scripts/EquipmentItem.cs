@@ -12,6 +12,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     [SerializeField] protected string itemName = "Equipment";
 
     protected Collider2D interactCollider;
+    public Collider2D InteractCollider => interactCollider;
     protected SpriteRenderer spriteRenderer;
 
     // Network synchronization
@@ -27,10 +28,24 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     public ulong CurrentHolderClientId => ownerClientId.Value;
     public bool IsOnGround => ownerClientId.Value == ulong.MaxValue && !isPlaced.Value;
     public bool IsPlaced => ownerClientId.Value == ulong.MaxValue && isPlaced.Value;
+    public virtual bool IsPoweredOn => false;
 
     protected virtual void Awake()
     {
-        interactCollider = GetComponent<Collider2D>();
+        var colliders = GetComponents<Collider2D>();
+        foreach (var col in colliders)
+        {
+            if (!col.isTrigger)
+            {
+                interactCollider = col;
+                break;
+            }
+        }
+        if (interactCollider == null && colliders.Length > 0)
+        {
+            interactCollider = colliders[0];
+        }
+
         spriteRenderer = GetComponent<SpriteRenderer>();
     }
 
@@ -85,7 +100,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
                 var localInventory = localPlayer.GetComponent<PlayerInventory>();
                 if (localInventory != null && !localInventory.HasEmptySlot())
                 {
-                    return "Inventory Full";
+                    return "Slot Occupied";
                 }
             }
             return $"Pick Up {itemName}";

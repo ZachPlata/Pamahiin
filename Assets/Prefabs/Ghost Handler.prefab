@@ -79,6 +79,9 @@ MonoBehaviour:
   ghostroomMarker: {fileID: 0}
   huntDurationMin: 20
   huntDurationMax: 30
+  currentEvidence: 
+  ghostOrbPrefab: {fileID: 0}
+  ghostName: Unknown
 --- !u!1 &6091846552062427244
 GameObject:
   m_ObjectHideFlags: 0
@@ -217,6 +220,13 @@ MonoBehaviour:
   ghostHandler: {fileID: 1480699187170928030}
   wanderRadius: 3
   wanderSpeed: 1.5
+  interactionScanRadius: 5
+  interactionLayer:
+    serializedVersion: 2
+    m_Bits: 0
+  dotsDashSpeed: 10
+  eventIntervalMin: 8
+  eventIntervalMax: 15
 --- !u!114 &6623053403755870967
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -254,7 +264,6 @@ GameObject:
   - component: {fileID: 6491842908218980813}
   - component: {fileID: 791202663449881235}
   - component: {fileID: 283952010763732219}
-  - component: {fileID: 3721878071431442935}
   - component: {fileID: 9038509176415226943}
   m_Layer: 7
   m_Name: HuntGhost
@@ -365,52 +374,6 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 0
---- !u!61 &3721878071431442935
-BoxCollider2D:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8161978281664723133}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Density: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ForceSendLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ForceReceiveLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ContactCaptureLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_CallbackLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_IsTrigger: 1
-  m_UsedByEffector: 0
-  m_CompositeOperation: 0
-  m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_SpriteTilingProperty:
-    border: {x: 0.04, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 0.37, y: 0.41}
-    newSize: {x: 0.37, y: 0.41}
-    adaptiveTilingThreshold: 0.5
-    drawMode: 0
-    adaptiveTiling: 0
-  m_AutoTiling: 0
-  m_Size: {x: 0.37, y: 0.41}
-  m_EdgeRadius: 0
 --- !u!114 &9038509176415226943
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -424,7 +387,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HunterGhostBehavior
   ShowTopMostFoldoutHeaderGroup: 1
-  ghostHandler: {fileID: 1480699187170928030}
   moveSpeed: 0.5
   chaseSpeed: 0.6
   maxNodesBeforeReturn: 5

@@ -20,7 +20,10 @@
                 <ui:VisualElement name="cctv-image-container" class="cctv-screen">
                     <ui:Label text="NO SIGNAL" class="no-signal-text" />
                 </ui:VisualElement>
-                <ui:Button name="btn-next-camera" text="Next Camera" class="control-button" />
+                <ui:VisualElement name="cctv-controls" style="flex-direction: row; justify-content: center; margin-top: 10px;">
+                    <ui:Button name="btn-next-camera" text="Next Camera" class="control-button" />
+                    <ui:Button name="btn-toggle-nv" text="Toggle Night Vision" class="control-button" />
+                </ui:VisualElement>
             </ui:VisualElement>
 
             <!-- Sanity Monitor Screen -->

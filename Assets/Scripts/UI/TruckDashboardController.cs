@@ -117,6 +117,12 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         
         root.Q<Button>("btn-next-camera").clicked += SwitchToNextCamera;
         
+        var btnToggleNv = root.Q<Button>("btn-toggle-nv");
+        if (btnToggleNv != null)
+        {
+            btnToggleNv.clicked += ToggleCCTVNightVision;
+        }
+        
         root.Q<Button>("btn-close").clicked += ToggleDashboard;
 
         // Sanity & Activity
@@ -170,6 +176,28 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
             {
                 allCameras[i].targetTexture = (i == currentCameraIndex) ? cctvRenderTexture : null;
                 allCameras[i].gameObject.SetActive(i == currentCameraIndex);
+            }
+        }
+    }
+
+    private void ToggleCCTVNightVision()
+    {
+        if (allCameras.Count == 0) return;
+        
+        Camera currentCam = allCameras[currentCameraIndex];
+        if (currentCam != null)
+        {
+            // Attempt to find if this camera belongs to a VideoCameraItem
+            VideoCameraItem videoCam = currentCam.GetComponentInParent<VideoCameraItem>();
+            if (videoCam != null)
+            {
+                bool newState = !videoCam.IsCCTVNightVisionOn;
+                videoCam.SetCCTVNightVision(newState);
+                Debug.Log($"[TruckDashboard] Toggled CCTV Night Vision to: {newState} on {currentCam.name}");
+            }
+            else
+            {
+                Debug.LogWarning($"[TruckDashboard] Cannot toggle NV - no VideoCameraItem found on {currentCam.name}");
             }
         }
     }

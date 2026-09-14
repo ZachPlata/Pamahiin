@@ -33,7 +33,7 @@ public class EMFReaderItem : EquipmentItem
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public bool IsPoweredOn => isPoweredOn.Value;
+    public override bool IsPoweredOn => isPoweredOn.Value;
     public int CurrentEmfLevel { get; private set; } = 1;
 
     private float nextBeepTime = 0f;

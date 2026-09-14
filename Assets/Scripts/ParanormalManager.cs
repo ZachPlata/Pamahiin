@@ -108,6 +108,11 @@ public class ParanormalManager : MonoBehaviour
         bool isHunting = activeGhostHandler != null && activeGhostHandler.CurrentState != GhostHandlerState.Dormant;
         bool isInsideGhostRoom = favoriteRoomCollider != null && favoriteRoomCollider.OverlapPoint(checkPosition);
 
+        if (!isHunting && !isInsideGhostRoom)
+        {
+            return 1;
+        }
+
         // Also check if ghost is currently actively hunting/manifesting near the player
         if (activeGhostTransform != null && isHunting)
         {

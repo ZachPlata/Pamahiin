@@ -35,9 +35,22 @@ public class GhostOrbSystem : NetworkBehaviour
     {
         sr = GetComponent<SpriteRenderer>();
         // Ensure every client sets the layer correctly
-        gameObject.layer = LayerMask.NameToLayer("GhostOrbs");
-        // Start hidden
-        if (sr != null) sr.enabled = false;
+        int orbLayer = LayerMask.NameToLayer("GhostOrbs");
+        if (orbLayer >= 0)
+        {
+            gameObject.layer = orbLayer;
+        }
+        else
+        {
+            Debug.LogWarning("GhostOrbSystem: Layer 'GhostOrb' is not defined in the project. " +
+                "Please add it via Edit > Project Settings > Tags and Layers.");
+        }
+        // Make orb white and start hidden
+        if (sr != null)
+        {
+            sr.color = Color.white;
+            sr.enabled = false;
+        }
     }
 
     private void Update()

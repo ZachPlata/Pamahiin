@@ -18,7 +18,7 @@ public class ThermometerItem : EquipmentItem
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public bool IsPoweredOn => isPoweredOn.Value;
+    public override bool IsPoweredOn => isPoweredOn.Value;
     public float CurrentTemperature { get; private set; } = 20.0f;
     public bool IsFreezing => CurrentTemperature < 0.0f;
 

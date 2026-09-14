@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using UnityEngine.AI;
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class HunterGhostBehavior : NetworkBehaviour
@@ -7,55 +8,98 @@ public class HunterGhostBehavior : NetworkBehaviour
     [Header("Dependencies")]
     public GhostHandler ghostHandler; // The Group Leader
 
-    [Header("Node Settings")]
-    public float moveSpeed = 3f;
-    public float chaseSpeed = 4.5f;
-    public int maxNodesBeforeReturn = 5;
+    [Header("Hunt Settings")]
+    public float moveSpeed = 2.5f;
+    public float chaseSpeed = 3.8f;
+    public int maxNodesBeforeReturn = 8; // Kept for inspector compatibility
 
     [Header("LOS Settings")]
     public float lineOfSightDistance = 8f;
     public float lineOfSightAngle = 90f;
-    public LayerMask obstacleLayer;
+    public LayerMask obstacleLayer; // Kept for inspector compatibility
 
     private Rigidbody2D rb;
+    private NavMeshAgent agent;
     private GhostNode targetNode;
     private int nodesVisitedCount = 0;
-    
+
     private PlayerController chaseTarget;
     private Vector3 lastKnownPlayerPos;
+
+    private float activeEquipmentScanTimer = 0f;
 
     private System.Collections.Generic.Queue<GhostNode> recentNodes = new System.Collections.Generic.Queue<GhostNode>();
     private int historySize = 3;
 
+    // Breadcrumb cache for chasing (Kept for backwards compatibility with Dev Console)
+    public static bool ShowBreadcrumbs = false;
+    private LineRenderer breadcrumbLine;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        // Return to Kinematic so NavMeshAgent can move the transform natively without physics corner-snags
+        rb.bodyType = RigidbodyType2D.Kinematic;
+        rb.gravityScale = 0f;
+        rb.freezeRotation = true;
+
+        if (ghostHandler == null) ghostHandler = GetComponentInParent<GhostHandler>();
+
+        // Setup NavMeshAgent for 2D
+        agent = GetComponent<NavMeshAgent>();
+        if (agent == null) agent = gameObject.AddComponent<NavMeshAgent>();
+
+        agent.updatePosition = true; // Let NavMeshAgent perfectly move the transform
+        agent.updateRotation = false; // We handle rotation manually for vision cone accuracy
+        agent.updateUpAxis = false;   // Essential for 2D NavMesh (XY plane)
+        
+        // Setup dummy LineRenderer for backwards compatibility with Dev Console Button
+        breadcrumbLine = gameObject.AddComponent<LineRenderer>();
+        breadcrumbLine.enabled = false;
     }
 
     public void OnHuntStarted()
     {
         if (!IsServer) return;
-        Debug.Log("HunterGhost: OnHuntStarted called.");
+        Debug.Log("HunterGhost: OnHuntStarted called. NavMesh Activated.");
+
+        // Ensure the agent is snapped to the NavMesh
+        if (!agent.isOnNavMesh)
+        {
+            agent.Warp(transform.position);
+            if (!agent.isOnNavMesh) Debug.LogWarning("HunterGhost: FAILED to snap to NavMesh! Ensure the room marker is on a baked area.");
+        }
+
         nodesVisitedCount = 0;
         chaseTarget = null;
         recentNodes.Clear();
-        targetNode = FindNearestNode(rb.position);
-        Debug.Log($"HunterGhost: Found nearest node: {(targetNode != null ? targetNode.gameObject.name : "NULL")}");
+        targetNode = FindNearestNode(transform.position);
     }
 
     private void Update()
     {
-        if (!IsServer) return;
-        
-        // Check LOS only if actively searching or returning
-        if (ghostHandler != null && (ghostHandler.CurrentState == GhostHandlerState.Searching || ghostHandler.CurrentState == GhostHandlerState.Returning))
+        if (IsServer)
         {
-            CheckLineOfSight();
-        }
+            if (ghostHandler != null)
+            {
+                // Sync NavMeshAgent speed
+                agent.speed = (ghostHandler.CurrentState == GhostHandlerState.Chasing) ? chaseSpeed : moveSpeed;
 
-        if (ghostHandler != null && ghostHandler.CurrentState == GhostHandlerState.Chasing)
-        {
-            UpdateChasing();
+                if (ghostHandler.CurrentState == GhostHandlerState.Chasing)
+                {
+                    UpdateChasing();
+                }
+                else if (ghostHandler.CurrentState == GhostHandlerState.Searching || ghostHandler.CurrentState == GhostHandlerState.Returning)
+                {
+                    UpdateNodePathfinding();
+                }
+
+                // Scan for players
+                if (ghostHandler.CurrentState != GhostHandlerState.Dormant)
+                {
+                    CheckLineOfSight();
+                }
+            }
         }
     }
 
@@ -63,49 +107,11 @@ public class HunterGhostBehavior : NetworkBehaviour
     {
         if (!IsServer) return;
 
-        if (ghostHandler != null && ghostHandler.CurrentState == GhostHandlerState.Chasing)
+        // Manually rotate the ghost to face its velocity (NavMeshAgent velocity)
+        if (agent != null && agent.velocity.sqrMagnitude > 0.01f)
         {
-            if (chaseTarget != null)
-            {
-                MoveTowards(chaseTarget.transform.position, chaseSpeed);
-            }
-            else
-            {
-                MoveTowards(lastKnownPlayerPos, chaseSpeed);
-            }
-        }
-        else if (ghostHandler != null && ghostHandler.CurrentState != GhostHandlerState.Dormant)
-        {
-            // Node pathfinding runs when searching or returning
-            UpdateNodePathfinding();
-        }
-    }
-
-    private void CheckLineOfSight()
-    {
-        foreach (var player in PlayerController.AllPlayers)
-        {
-            if (player == null || !player.IsAlive) continue;
-            if (player.IsHiddenFromGhost) continue;
-
-            Vector2 dirToPlayer = player.transform.position - (Vector3)rb.position;
-            float distance = dirToPlayer.magnitude;
-
-            if (distance <= lineOfSightDistance)
-            {
-                float angle = Vector2.Angle(transform.up, dirToPlayer);
-                if (angle <= lineOfSightAngle / 2f)
-                {
-                    RaycastHit2D hit = Physics2D.Raycast(rb.position, dirToPlayer.normalized, distance, obstacleLayer);
-                    if (hit.collider == null)
-                    {
-                        chaseTarget = player;
-                        nodesVisitedCount = 0;
-                        ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
-                        return;
-                    }
-                }
-            }
+            float targetAngle = Mathf.Atan2(agent.velocity.y, agent.velocity.x) * Mathf.Rad2Deg - 90f;
+            rb.MoveRotation(Mathf.LerpAngle(rb.rotation, targetAngle, Time.fixedDeltaTime * 12f));
         }
     }
 
@@ -114,28 +120,40 @@ public class HunterGhostBehavior : NetworkBehaviour
         if (chaseTarget != null && chaseTarget.IsAlive && !chaseTarget.IsHiddenFromGhost)
         {
             lastKnownPlayerPos = chaseTarget.transform.position;
+            agent.SetDestination(chaseTarget.transform.position);
             
-            Vector2 dirToPlayer = chaseTarget.transform.position - (Vector3)rb.position;
+            Vector2 dirToPlayer = chaseTarget.transform.position - (Vector3)transform.position;
             float distance = dirToPlayer.magnitude;
-            RaycastHit2D hit = Physics2D.Raycast(rb.position, dirToPlayer.normalized, distance, obstacleLayer);
             
-            if (hit.collider != null || distance > lineOfSightDistance * 1.5f)
+            bool loseSight = distance > lineOfSightDistance * 1.5f;
+            if (!loseSight && distance > 0.5f)
             {
+                RaycastHit2D hit = Physics2D.Raycast(transform.position, dirToPlayer.normalized, distance, obstacleLayer);
+                if (hit.collider != null) loseSight = true;
+            }
+            
+            if (loseSight)
+            {
+                if (chaseTarget != null) Debug.Log("HunterGhost: Lost sight of player. Moving to last known position.");
                 chaseTarget = null;
             }
             
-            if (distance < 0.5f)
+            if (chaseTarget != null && distance < 0.125f) // Using your 0.125 tight kill range
             {
-                chaseTarget.KillPlayer();
-                ghostHandler.EndHunt();
+                if (chaseTarget.KillPlayer())
+                {
+                    ghostHandler.EndHunt();
+                }
             }
         }
         else
         {
-            if (Vector2.Distance(rb.position, lastKnownPlayerPos) < 0.5f)
+            agent.SetDestination(lastKnownPlayerPos);
+            if (Vector2.Distance(transform.position, lastKnownPlayerPos) < 0.5f)
             {
+                Debug.Log("HunterGhost: Reached last known position. Searching for nodes again.");
                 recentNodes.Clear();
-                targetNode = FindNearestNode(rb.position);
+                targetNode = FindNearestNode(transform.position);
                 ghostHandler.RequestStateChange(GhostHandlerState.Searching);
             }
         }
@@ -145,17 +163,13 @@ public class HunterGhostBehavior : NetworkBehaviour
     {
         if (targetNode == null)
         {
-            targetNode = FindNearestNode(rb.position);
-            if (targetNode == null) 
-            {
-                Debug.LogWarning("HunterGhost: Cannot pathfind, no nodes found in scene.");
-                return;
-            }
+            targetNode = FindNearestNode(transform.position);
+            if (targetNode == null) return;
         }
 
-        MoveTowards(targetNode.transform.position, moveSpeed);
+        agent.SetDestination(targetNode.transform.position);
 
-        if (Vector2.Distance(rb.position, targetNode.transform.position) < 0.3f)
+        if (Vector2.Distance(transform.position, targetNode.transform.position) < 0.3f || (agent.hasPath && agent.remainingDistance < 0.3f))
         {
             nodesVisitedCount++;
             
@@ -165,7 +179,7 @@ public class HunterGhostBehavior : NetworkBehaviour
                 if (recentNodes.Count > historySize) recentNodes.Dequeue();
             }
             
-            if (ghostHandler != null && ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.bounds.Contains(rb.position))
+            if (ghostHandler != null && ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.bounds.Contains(transform.position))
             {
                 nodesVisitedCount = 0;
                 if (ghostHandler.CurrentState == GhostHandlerState.Returning)
@@ -185,6 +199,69 @@ public class HunterGhostBehavior : NetworkBehaviour
             else
             {
                 targetNode = GetRandomNeighbor(targetNode);
+            }
+        }
+    }
+
+    private void CheckLineOfSight()
+    {
+        // Scan for active equipment first
+        activeEquipmentScanTimer -= Time.deltaTime;
+        if (activeEquipmentScanTimer <= 0f)
+        {
+            activeEquipmentScanTimer = 1f;
+            foreach (var player in PlayerController.AllPlayers)
+            {
+                if (player.IsAlive)
+                {
+                    var inventory = player.GetComponent<PlayerInventory>();
+                    if (inventory != null && inventory.CurrentItem != null && inventory.CurrentItem.IsPoweredOn)
+                    {
+                        if (chaseTarget == null) Debug.Log("HunterGhost: I SEE THE PLAYER! Chasing!");
+                        chaseTarget = player;
+                        ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
+                        return;
+                    }
+                }
+            }
+        }
+
+        foreach (var player in PlayerController.AllPlayers)
+        {
+            if (player == null || !player.IsAlive) continue;
+            if (player.IsHiddenFromGhost) continue;
+
+            Vector2 dirToPlayer = player.transform.position - (Vector3)transform.position;
+            float distance = dirToPlayer.magnitude;
+
+            float currentLOS = ghostHandler.CurrentState == GhostHandlerState.Chasing 
+                ? lineOfSightDistance * 1.5f 
+                : lineOfSightDistance;
+
+            if (distance <= currentLOS)
+            {
+                bool hasLOS = distance < 0.5f;
+                if (!hasLOS)
+                {
+                    RaycastHit2D hit = Physics2D.Raycast(transform.position, dirToPlayer.normalized, distance, obstacleLayer);
+                    if (hit.collider == null) hasLOS = true;
+                }
+
+                if (hasLOS)
+                {
+                    if (chaseTarget == null)
+                    {
+                        if (ghostHandler.CurrentState == GhostHandlerState.Chasing)
+                            Debug.Log("HunterGhost: Player peeked! Re-acquiring target instead of following breadcrumbs!");
+                        else
+                            Debug.Log("HunterGhost: I SEE THE PLAYER! Chasing!");
+                    }
+                    
+                    chaseTarget = player;
+                    nodesVisitedCount = 0;
+                    ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
+                    return;
+                }
             }
         }
     }
@@ -219,7 +296,6 @@ public class HunterGhostBehavior : NetworkBehaviour
             }
         }
 
-        // If all neighbors are in history (e.g. a dead end), allow turning back by clearing history
         if (validNeighbors.Count == 0)
         {
             foreach (var neighbor in current.neighbors)
@@ -231,20 +307,14 @@ public class HunterGhostBehavior : NetworkBehaviour
 
         if (validNeighbors.Count == 0) return current;
 
-        // Apply directional bias
         GhostNode bestNode = validNeighbors[0];
         float bestScore = -float.MaxValue;
-
-        Vector2 currentDir = transform.up; // The ghost's forward direction
+        Vector2 currentDir = transform.up; 
 
         foreach (var node in validNeighbors)
         {
             Vector2 dirToNode = (node.transform.position - transform.position).normalized;
-            // Dot product: 1 is straight ahead, 0 is perpendicular, -1 is directly behind
-            float score = Vector2.Dot(currentDir, dirToNode);
-            
-            // Add a small random factor so it's not strictly deterministic
-            score += Random.Range(-0.2f, 0.4f);
+            float score = Vector2.Dot(currentDir, dirToNode) + Random.Range(-0.2f, 0.4f);
             
             if (score > bestScore)
             {
@@ -294,16 +364,5 @@ public class HunterGhostBehavior : NetworkBehaviour
         }
         
         return bestNode;
-    }
-
-    private void MoveTowards(Vector3 targetPos, float speed)
-    {
-        Vector2 dir = (targetPos - (Vector3)rb.position).normalized;
-        if (dir.sqrMagnitude > 0.01f)
-        {
-            rb.MovePosition(rb.position + dir * speed * Time.fixedDeltaTime);
-            float targetAngle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f;
-            rb.MoveRotation(Mathf.LerpAngle(rb.rotation, targetAngle, Time.fixedDeltaTime * 6f));
-        }
     }
 }

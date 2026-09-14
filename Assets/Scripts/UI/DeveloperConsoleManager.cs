@@ -21,12 +21,38 @@ public class DeveloperConsoleManager : MonoBehaviour
         var forceEMF5Btn = root.Q<Button>("ForceEMF5Btn");
         var forceEventBtn = root.Q<Button>("ForceEventBtn");
         var toggleGhostOutlineBtn = root.Q<Button>("ToggleGhostOutlineBtn");
+        
+        var forceThrowBtn = root.Q<Button>("ForceThrowBtn");
+        var forceWriteBtn = root.Q<Button>("ForceWriteBtn");
+        var forceDotsBtn = root.Q<Button>("ForceDotsBtn");
+        var forceOrbBtn = root.Q<Button>("ForceOrbBtn");
+        var forceSpiritBoxBtn = root.Q<Button>("ForceSpiritBoxBtn");
+        var forceLowSanityBtn = root.Q<Button>("ForceLowSanityBtn");
+        var toggleGodModeBtn = root.Q<Button>("ToggleGodModeBtn");
 
         if (forceHuntBtn != null) forceHuntBtn.clicked += OnForceHunt;
         if (stopHuntBtn != null) stopHuntBtn.clicked += OnStopHunt;
         if (forceEMF5Btn != null) forceEMF5Btn.clicked += OnForceEMF5;
         if (forceEventBtn != null) forceEventBtn.clicked += OnForceGhostEvent;
         if (toggleGhostOutlineBtn != null) toggleGhostOutlineBtn.clicked += OnToggleGhostOutline;
+        
+        if (forceThrowBtn != null) forceThrowBtn.clicked += () => OnForceSpecificEvent(EventGhostBehavior.GhostEventType.ThrowObject);
+        if (forceWriteBtn != null) forceWriteBtn.clicked += () => OnForceSpecificEvent(EventGhostBehavior.GhostEventType.WriteInBook);
+        if (forceDotsBtn != null) forceDotsBtn.clicked += () => OnForceSpecificEvent(EventGhostBehavior.GhostEventType.DotsManifestation);
+        if (forceOrbBtn != null) forceOrbBtn.clicked += () => OnForceSpecificEvent(EventGhostBehavior.GhostEventType.GhostOrbsManifestation);
+        if (forceSpiritBoxBtn != null) forceSpiritBoxBtn.clicked += () => OnForceSpecificEvent(EventGhostBehavior.GhostEventType.SpiritBoxTalk);
+        if (forceLowSanityBtn != null) forceLowSanityBtn.clicked += () => OnForceSpecificEvent(EventGhostBehavior.GhostEventType.LowSanityManifestation);
+        
+        if (toggleGodModeBtn != null) toggleGodModeBtn.clicked += OnToggleGodMode;
+
+        var toggleBreadcrumbBtn = root.Q<Button>("ToggleBreadcrumbBtn");
+        if (toggleBreadcrumbBtn != null) toggleBreadcrumbBtn.clicked += OnToggleBreadcrumbs;
+    }
+
+    private void OnToggleBreadcrumbs()
+    {
+        HunterGhostBehavior.ShowBreadcrumbs = !HunterGhostBehavior.ShowBreadcrumbs;
+        Debug.Log($"[DevConsole] Breadcrumbs Visibility: {HunterGhostBehavior.ShowBreadcrumbs}");
     }
 
     private void Update()
@@ -39,12 +65,42 @@ public class DeveloperConsoleManager : MonoBehaviour
         }
     }
 
+    private void OnToggleGodMode()
+    {
+        var localPlayer = Unity.Netcode.NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerController>();
+        if (localPlayer != null)
+        {
+            // Normally needs a ServerRpc, but since it's dev console we might just assume Server authority for now
+            // Or if it requires a ServerRpc, we should add one. But let's check if the variable is writeable.
+            // I set it to WritePermission.Server, so we need Server authority. The host can use this.
+            if (localPlayer.IsServer)
+            {
+                localPlayer.isGodMode.Value = !localPlayer.isGodMode.Value;
+                Debug.Log($"[DevConsole] God Mode Toggled: {localPlayer.isGodMode.Value}");
+            }
+            else
+            {
+                Debug.LogWarning("[DevConsole] God Mode can only be toggled by the host!");
+            }
+        }
+    }
+
     private void ToggleConsole()
     {
         if (container == null) return;
         
         isConsoleOpen = !isConsoleOpen;
         container.style.display = isConsoleOpen ? DisplayStyle.Flex : DisplayStyle.None;
+    }
+
+    private void OnForceSpecificEvent(EventGhostBehavior.GhostEventType type)
+    {
+        var ghostHandler = FindAnyObjectByType<GhostHandler>();
+        if (ghostHandler != null && ghostHandler.eventGhost != null)
+        {
+            ghostHandler.eventGhost.ForceEvent(type);
+            Debug.Log($"[DevConsole] Forced Specific Ghost Event: {type}");
+        }
     }
 
     private void OnForceHunt()

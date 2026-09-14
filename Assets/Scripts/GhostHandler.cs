@@ -95,6 +95,18 @@ public class GhostHandler : NetworkBehaviour
             SetState(GhostHandlerState.Dormant);
         }
         
+        // Force sorting order to 10 so they NEVER render behind the floor
+        if (eventGhost != null)
+        {
+            var sr = eventGhost.GetComponentInChildren<SpriteRenderer>();
+            if (sr != null) sr.sortingOrder = 10;
+        }
+        if (hunterGhost != null)
+        {
+            var sr = hunterGhost.GetComponentInChildren<SpriteRenderer>();
+            if (sr != null) sr.sortingOrder = 10;
+        }
+        
         currentState.OnValueChanged += (oldState, newState) => UpdateVisibility(newState);
         UpdateVisibility(currentState.Value);
     }
@@ -170,31 +182,27 @@ public class GhostHandler : NetworkBehaviour
         if (eventGhost != null)
         {
             var eventRenderer = eventGhost.GetComponentInChildren<SpriteRenderer>();
-            if (eventRenderer != null)
-            {
-                // Event ghost is only visible during a ghost event (or dev forced)
-                eventRenderer.enabled = (state == GhostHandlerState.Dormant) && (ghostEventTimer > 0f || devVisibilityForced);
-            }
+            var eventCol = eventGhost.GetComponent<Collider2D>();
+            bool eventVisible = (state == GhostHandlerState.Dormant) && (ghostEventTimer > 0f || devVisibilityForced);
+            
+            if (eventRenderer != null) eventRenderer.enabled = eventVisible;
+            if (eventCol != null) eventCol.enabled = eventVisible; // Only collide if visible/active
         }
             
         if (hunterGhost != null)
         {
             var hunterRenderer = hunterGhost.GetComponentInChildren<SpriteRenderer>();
-            if (hunterRenderer != null)
+            var hunterCol = hunterGhost.GetComponent<Collider2D>();
+            
+            if (state == GhostHandlerState.Dormant)
             {
-                if (devVisibilityForced)
-                {
-                    hunterRenderer.enabled = true;
-                }
-                else if (state != GhostHandlerState.Dormant)
-                {
-                    // During a hunt, rely on the flicker state
-                    hunterRenderer.enabled = isHunterFlickerVisible;
-                }
-                else
-                {
-                    hunterRenderer.enabled = false;
-                }
+                if (hunterRenderer != null) hunterRenderer.enabled = devVisibilityForced;
+                if (hunterCol != null) hunterCol.enabled = false;
+            }
+            else
+            {
+                if (hunterRenderer != null) hunterRenderer.enabled = isHunterFlickerVisible || devVisibilityForced;
+                if (hunterCol != null) hunterCol.enabled = true;
             }
         }
     }
@@ -281,6 +289,14 @@ public class GhostHandler : NetworkBehaviour
     {
         if (!IsServer) return;
         
+        // Reset ghost to the center of the ghost room when hunt ends so it doesn't stay in the hallway
+        if (ghostroomMarker != null && hunterGhost != null)
+        {
+            var agent = hunterGhost.GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null && agent.isOnNavMesh) agent.Warp(ghostroomMarker.bounds.center);
+            else hunterGhost.transform.position = ghostroomMarker.bounds.center;
+        }
+
         SetDoorsLocked(false);
         SetState(GhostHandlerState.Dormant);
     }
@@ -299,8 +315,7 @@ public class GhostHandler : NetworkBehaviour
 
     private void Update()
     {
-        if (!IsServer) return;
-
+        // Visual logic should run on BOTH Server and Client!
         if (currentState.Value == GhostHandlerState.Dormant)
         {
             if (ghostEventTimer > 0f)
@@ -315,22 +330,22 @@ public class GhostHandler : NetworkBehaviour
         }
         else
         {
-            huntTimer += Time.deltaTime;
-            if (huntTimer >= currentHuntDuration)
+            if (IsServer)
             {
-                EndHunt();
-            }
-            else
-            {
-                // Flickering logic during hunt
-                flickerTimer -= Time.deltaTime;
-                if (flickerTimer <= 0f)
+                huntTimer += Time.deltaTime;
+                if (huntTimer >= currentHuntDuration)
                 {
-                    // Rapid flicker: 0.1s to 0.4s visible, 0.1s to 0.4s invisible
-                    isHunterFlickerVisible = !isHunterFlickerVisible;
-                    flickerTimer = Random.Range(0.1f, 0.4f);
-                    UpdateVisibility(currentState.Value);
+                    EndHunt();
                 }
+            }
+            
+            // Flickering logic during hunt (runs for everyone)
+            flickerTimer -= Time.deltaTime;
+            if (flickerTimer <= 0f)
+            {
+                isHunterFlickerVisible = !isHunterFlickerVisible;
+                flickerTimer = Random.Range(0.1f, 0.4f);
+                UpdateVisibility(currentState.Value);
             }
         }
     }

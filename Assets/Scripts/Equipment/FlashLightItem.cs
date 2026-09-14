@@ -18,6 +18,7 @@ public class FlashlightItem : EquipmentItem
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public bool IsLightOn => isLightOn.Value;
+    public override bool IsPoweredOn => isLightOn.Value;
 
     protected override void Awake()
     {

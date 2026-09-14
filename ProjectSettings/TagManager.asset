@@ -14,7 +14,7 @@ TagManager:
   - Ground
   - Walls
   - Interactable
-  - GhostOrb
+  - GhostOrbs
   - 
   - 
   - 
@@ -52,6 +52,9 @@ TagManager:
     locked: 0
   - name: DOTSLayer
     uniqueID: 2403368689
+    locked: 0
+  - name: GhostOrbs
+    uniqueID: 1254304241
     locked: 0
   - name: Wall
     uniqueID: 3166007697

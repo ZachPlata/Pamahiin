@@ -12,7 +12,7 @@ public class DotsProjectorItem : EquipmentItem
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public bool IsPoweredOn => isPoweredOn.Value;
+    public override bool IsPoweredOn => isPoweredOn.Value;
 
     private CircleCollider2D triggerCollider;
 

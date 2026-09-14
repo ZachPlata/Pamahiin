@@ -12,7 +12,7 @@ public class SpiritBoxItem : EquipmentItem
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public bool IsPoweredOn => isPoweredOn.Value;
+    public override bool IsPoweredOn => isPoweredOn.Value;
     private float nextQueryTime = 0f;
 
     protected override void Awake()

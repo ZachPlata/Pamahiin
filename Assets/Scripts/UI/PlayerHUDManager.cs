@@ -8,8 +8,11 @@ public class PlayerHUDManager : MonoBehaviour
     private PlayerInventory localInventory; 
     private VisualElement[] slots = new VisualElement[PlayerInventory.MaxSlots];
     private Label[] slotLabels = new Label[PlayerInventory.MaxSlots];
-    private VisualElement temperatureContainer;
-    private Label temperatureText;
+    private VisualElement[] powerIndicators = new VisualElement[PlayerInventory.MaxSlots];
+    private VisualElement[] emfContainers = new VisualElement[PlayerInventory.MaxSlots];
+    private VisualElement[,] emfDots = new VisualElement[PlayerInventory.MaxSlots, 5];
+    private VisualElement[] temperatureContainers = new VisualElement[PlayerInventory.MaxSlots];
+    private Label[] temperatureTexts = new Label[PlayerInventory.MaxSlots];
 
     private void OnEnable()
     {
@@ -22,10 +25,15 @@ public class PlayerHUDManager : MonoBehaviour
         {
             slots[i] = root.Q<VisualElement>($"Slot{i}");
             slotLabels[i] = root.Q<Label>($"ItemText{i}");
+            powerIndicators[i] = root.Q<VisualElement>($"PowerIndicator{i}");
+            emfContainers[i] = root.Q<VisualElement>($"EmfContainer{i}");
+            for (int j = 0; j < 5; j++)
+            {
+                emfDots[i, j] = root.Q<VisualElement>($"EmfDot{i}_{j}");
+            }
+            temperatureContainers[i] = root.Q<VisualElement>($"TemperatureContainer{i}");
+            temperatureTexts[i] = root.Q<Label>($"TemperatureText{i}");
         }
-
-        temperatureContainer = root.Q<VisualElement>("TemperatureContainer");
-        temperatureText = root.Q<Label>("TemperatureText");
 
         var pauseButton = root.Q<Button>("PauseButton");
         if (pauseButton != null)
@@ -56,31 +64,74 @@ public class PlayerHUDManager : MonoBehaviour
             FindLocalPlayer();
         }
 
-        UpdateThermometerHUD();
+        UpdateDynamicHUD();
     }
 
-    private void UpdateThermometerHUD()
+    private void UpdateDynamicHUD()
     {
-        if (localInventory == null || temperatureContainer == null || temperatureText == null) return;
+        if (localInventory == null) return;
 
-        var currentItem = localInventory.CurrentItem;
-        if (currentItem != null && currentItem is ThermometerItem thermometer)
+        for (int i = 0; i < PlayerInventory.MaxSlots; i++)
         {
-            if (thermometer.IsPoweredOn)
+            var item = localInventory.slots[i];
+            
+            // Power Indicator logic
+            if (item != null && (item is FlashlightItem || item is VideoCameraItem || item is DotsProjectorItem || item is SpiritBoxItem || item is ThermometerItem))
             {
-                temperatureContainer.style.display = DisplayStyle.Flex;
-                float temp = thermometer.DisplayedTemperature;
-                temperatureText.text = $"{temp:F1}°C";
-                temperatureText.style.color = temp < 0f ? new StyleColor(Color.cyan) : new StyleColor(Color.white);
+                if (powerIndicators[i] != null)
+                {
+                    powerIndicators[i].style.display = DisplayStyle.Flex;
+                    powerIndicators[i].style.backgroundColor = item.IsPoweredOn ? new StyleColor(Color.green) : new StyleColor(Color.red);
+                }
             }
             else
             {
-                temperatureContainer.style.display = DisplayStyle.None;
+                if (powerIndicators[i] != null) powerIndicators[i].style.display = DisplayStyle.None;
             }
-        }
-        else
-        {
-            temperatureContainer.style.display = DisplayStyle.None;
+
+            // EMF Reader logic
+            if (item != null && item is EMFReaderItem emfReader)
+            {
+                if (emfContainers[i] != null) emfContainers[i].style.display = DisplayStyle.Flex;
+                
+                int emfLevel = emfReader.CurrentEmfLevel;
+                Color[] colors = new Color[] { Color.green, Color.green, Color.yellow, new Color(1f, 0.5f, 0f), Color.red };
+                
+                for (int j = 0; j < 5; j++)
+                {
+                    if (emfDots[i, j] != null)
+                    {
+                        if (j < emfLevel)
+                        {
+                            emfDots[i, j].style.backgroundColor = new StyleColor(colors[j]);
+                        }
+                        else
+                        {
+                            emfDots[i, j].style.backgroundColor = new StyleColor(Color.gray);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                if (emfContainers[i] != null) emfContainers[i].style.display = DisplayStyle.None;
+            }
+
+            // Thermometer logic
+            if (item != null && item is ThermometerItem thermometer && thermometer.IsPoweredOn)
+            {
+                if (temperatureContainers[i] != null) temperatureContainers[i].style.display = DisplayStyle.Flex;
+                if (temperatureTexts[i] != null)
+                {
+                    float temp = thermometer.DisplayedTemperature;
+                    temperatureTexts[i].text = $"{temp:F1}°C";
+                    temperatureTexts[i].style.color = temp < 0f ? new StyleColor(Color.cyan) : new StyleColor(Color.white);
+                }
+            }
+            else
+            {
+                if (temperatureContainers[i] != null) temperatureContainers[i].style.display = DisplayStyle.None;
+            }
         }
     }
 

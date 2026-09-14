@@ -7,6 +7,7 @@ public class GhostWritingBookItem : EquipmentItem
     [SerializeField] private Sprite closedSprite;
     [SerializeField] private Sprite openedSprite;
     [SerializeField] private Sprite writtenClosedSprite;
+    [SerializeField] private AudioClip writingSound;
 
     private NetworkVariable<bool> isWritten = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -25,7 +26,14 @@ public class GhostWritingBookItem : EquipmentItem
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        isWritten.OnValueChanged += (oldVal, newVal) => UpdateVisuals();
+        isWritten.OnValueChanged += (oldVal, newVal) => 
+        {
+            UpdateVisuals();
+            if (newVal && !oldVal && writingSound != null)
+            {
+                AudioSource.PlayClipAtPoint(writingSound, transform.position, 1f);
+            }
+        };
     }
 
     protected override void UpdateEquipState(ulong newOwnerId)
