@@ -68,8 +68,17 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
             var playerObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(ownerClientId.Value);
             if (playerObj != null)
             {
-                transform.position = playerObj.transform.position;
-                transform.rotation = playerObj.transform.rotation;
+                Transform handPoint = playerObj.transform.Find("HandPoint");
+                if (handPoint != null)
+                {
+                    transform.position = handPoint.position;
+                    transform.rotation = handPoint.rotation;
+                }
+                else
+                {
+                    transform.position = playerObj.transform.position;
+                    transform.rotation = playerObj.transform.rotation;
+                }
             }
         }
     }

@@ -49,6 +49,7 @@ public class PlayerController : NetworkBehaviour
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
     private PlayerInventory inventory;
+    private Animator animator;
     private Vector2 moveInput;
     private Vector2 mousePosition;
     private Camera localCamera;
@@ -64,6 +65,7 @@ public class PlayerController : NetworkBehaviour
         rb = GetComponent<Rigidbody2D>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         inventory = GetComponent<PlayerInventory>();
+        animator = GetComponent<Animator>();
         originalScale = transform.localScale;
         currentStamina = maxStamina;
     }
@@ -204,6 +206,13 @@ public class PlayerController : NetworkBehaviour
         if (Input.GetKeyDown(KeyCode.J)) OpenJournal();
         if (Input.GetKeyDown(KeyCode.V)) ToggleLocalVoice();
         if (Input.GetKeyDown(KeyCode.B)) ToggleRadioVoice();
+
+        // 9. Update Animator
+        if (animator != null)
+        {
+            animator.SetBool("isWalking", moveInput.sqrMagnitude > 0.01f);
+            animator.SetBool("isHolding", inventory != null && inventory.CurrentItem != null);
+        }
     }
 
     private void OpenJournal() { /* Stub for Journal UI */ }
