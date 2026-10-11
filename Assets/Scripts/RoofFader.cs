@@ -99,7 +99,7 @@ public class RoofFader : MonoBehaviour
 
         Bounds bounds = triggerCollider.bounds;
 
-        var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
         foreach (var cam in allCameras)
         {
             if (cam == null) continue;

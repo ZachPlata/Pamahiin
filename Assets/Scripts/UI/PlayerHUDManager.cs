@@ -14,6 +14,14 @@ public class PlayerHUDManager : MonoBehaviour
     private VisualElement[] temperatureContainers = new VisualElement[PlayerInventory.MaxSlots];
     private Label[] temperatureTexts = new Label[PlayerInventory.MaxSlots];
 
+    // Camera Night Vision Viewfinder elements
+    private VisualElement nvOverlay;
+    private VisualElement nvRecDot;
+    private Label nvTimer;
+    private Label nvTimestamp;
+    private float nvRecBlinkTimer = 0f;
+    private bool nvRecBlinkState = true;
+
     private void OnEnable()
     {
         if (hudDocument == null || hudDocument.rootVisualElement == null) return;
@@ -34,6 +42,11 @@ public class PlayerHUDManager : MonoBehaviour
             temperatureContainers[i] = root.Q<VisualElement>($"TemperatureContainer{i}");
             temperatureTexts[i] = root.Q<Label>($"TemperatureText{i}");
         }
+
+        nvOverlay = root.Q<VisualElement>("NightVisionOverlay");
+        nvRecDot = root.Q<VisualElement>("NvRecDot");
+        nvTimer = root.Q<Label>("NvTimer");
+        nvTimestamp = root.Q<Label>("NvTimestamp");
 
         var pauseButton = root.Q<Button>("PauseButton");
         if (pauseButton != null)
@@ -131,6 +144,58 @@ public class PlayerHUDManager : MonoBehaviour
             else
             {
                 if (temperatureContainers[i] != null) temperatureContainers[i].style.display = DisplayStyle.None;
+            }
+        }
+
+        // Handheld Camera Night Vision Viewfinder logic
+        bool isHoldingCamWithNV = false;
+        if (localInventory.currentSlotIndex >= 0 && localInventory.currentSlotIndex < PlayerInventory.MaxSlots)
+        {
+            var heldItem = localInventory.slots[localInventory.currentSlotIndex];
+            if (heldItem is VideoCameraItem cam && cam.IsPoweredOn)
+            {
+                isHoldingCamWithNV = true;
+            }
+        }
+
+        if (nvOverlay != null)
+        {
+            if (isHoldingCamWithNV)
+            {
+                nvOverlay.RemoveFromClassList("nv-overlay-hidden");
+                
+                // Blink REC indicator
+                nvRecBlinkTimer += Time.deltaTime;
+                if (nvRecBlinkTimer >= 0.5f)
+                {
+                    nvRecBlinkTimer = 0f;
+                    nvRecBlinkState = !nvRecBlinkState;
+                    if (nvRecDot != null)
+                    {
+                        if (nvRecBlinkState) nvRecDot.RemoveFromClassList("nv-rec-dot-dim");
+                        else nvRecDot.AddToClassList("nv-rec-dot-dim");
+                    }
+                }
+
+                // Live timer (session time formatted as HH:mm:ss)
+                if (nvTimer != null)
+                {
+                    int totalSeconds = Mathf.FloorToInt(Time.timeSinceLevelLoad);
+                    int hours = totalSeconds / 3600;
+                    int minutes = (totalSeconds % 3600) / 60;
+                    int seconds = totalSeconds % 60;
+                    nvTimer.text = $"{hours:00}:{minutes:00}:{seconds:00}";
+                }
+
+                // Live timestamp
+                if (nvTimestamp != null)
+                {
+                    nvTimestamp.text = System.DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss");
+                }
+            }
+            else
+            {
+                nvOverlay.AddToClassList("nv-overlay-hidden");
             }
         }
     }

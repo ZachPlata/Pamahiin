@@ -3,47 +3,201 @@ using UnityEngine;
 
 public class RitualChalkItem : EquipmentItem
 {
-    [Header("Ritual Settings")]
-    [Tooltip("The radius required to start the ritual (must be in ghost room)")]
-    public float ritualRadius = 3f;
+    [Header("Chalk Visual Slots")]
+    [Tooltip("Sprite used when the chalk is held in hand or on the ground/table as an item (unplaced / dropped).")]
+    [SerializeField] private Sprite itemSprite;
+
+    [Tooltip("Sprite used when the chalk has been placed on the floor (the ritual diagram).")]
+    [SerializeField] private Sprite diagramSprite;
+
+    [Tooltip("Scale multiplier applied to the diagram when placed so the ritual circle looks properly sized on the floor.")]
+    [SerializeField, Range(0.5f, 10f)] private float diagramScaleMultiplier = 2.5f;
+
+    [Header("Exorcism Settings")]
+    [Tooltip("Whether placing the chalk diagram automatically triggers the exorcism ghost-selection popup.")]
+    [SerializeField] private bool autoStartOnPlace = true;
+
+    private Vector3 baseLocalScale = Vector3.one;
+    private bool hasBaseScale = false;
+    private bool originalIsTrigger = false;
+
+    public Sprite ItemSprite => itemSprite;
+    public Sprite DiagramSprite => diagramSprite;
+
+    // Disabling dragging ensures Left-Click immediately interacts (picks up into inventory) rather than physics-dragging.
+    public override bool CanDrag() => false;
 
     protected override void Awake()
     {
         base.Awake();
         itemName = "Ritual Chalk";
+
+        int interactableLayer = LayerMask.NameToLayer("Interactable");
+        if (interactableLayer != -1 && gameObject.layer != interactableLayer)
+        {
+            gameObject.layer = interactableLayer;
+        }
+
+        if (interactCollider != null)
+        {
+            originalIsTrigger = interactCollider.isTrigger;
+        }
+
+        if (!hasBaseScale)
+        {
+            baseLocalScale = transform.localScale;
+            hasBaseScale = true;
+        }
+
+        if (itemSprite == null && spriteRenderer != null && spriteRenderer.sprite != null)
+        {
+            itemSprite = spriteRenderer.sprite;
+        }
     }
 
-    public override void UsePrimary()
+#if UNITY_EDITOR
+    private void OnValidate()
     {
-        if (IsOwner)
+        // Automatically link the project's chalk sprites if empty, while allowing manual inspector assignment
+        if (itemSprite == null)
         {
-            // Try to start the exorcism
-            // In a full implementation, we'd check if we are in the Ghost's favorite room.
-            // For now, if we are within range of the ghost or just anywhere, it triggers it!
-            var ghost = Object.FindAnyObjectByType<GhostHandler>();
-            if (ghost != null && Vector2.Distance(transform.position, ghost.transform.position) < 15f)
-            {
-                Debug.Log("Ritual Chalk Used! Starting Exorcism...");
-                
-                // Trigger the minigame
-                if (ExorcismManager.Instance != null)
-                {
-                    ExorcismManager.Instance.StartExorcism();
-                }
+            itemSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/EQUIPMENTS/chalk.png");
+        }
+        if (diagramSprite == null)
+        {
+            diagramSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/EQUIPMENTS/chalk diagram.png");
+        }
+    }
+#endif
 
-                // Consume the item
-                DestroyItemServerRpc();
-            }
-            else
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        UpdateVisuals();
+    }
+
+    protected override void UpdateEquipState(ulong newOwnerId)
+    {
+        base.UpdateEquipState(newOwnerId);
+        UpdateVisuals();
+    }
+
+    protected override void OnPlacedChanged(bool placed)
+    {
+        base.OnPlacedChanged(placed);
+        UpdateVisuals();
+
+        if (placed && autoStartOnPlace)
+        {
+            TriggerRitualPopup();
+        }
+    }
+
+    protected override void UpdateVisuals()
+    {
+        base.UpdateVisuals();
+
+        if (spriteRenderer == null) return;
+
+        if (!hasBaseScale)
+        {
+            baseLocalScale = transform.localScale;
+            hasBaseScale = true;
+        }
+
+        if (IsPlaced)
+        {
+            // Placed State: show ritual diagram sprite and adjust scale
+            if (diagramSprite != null)
             {
-                Debug.Log("You must be closer to the ghost's domain to use the ritual chalk.");
+                spriteRenderer.sprite = diagramSprite;
+            }
+            else if (itemSprite != null)
+            {
+                spriteRenderer.sprite = itemSprite;
+            }
+
+            transform.localScale = baseLocalScale * Mathf.Max(0.1f, diagramScaleMultiplier);
+
+            // Change layer to the "Van" sorting layer so the sprite becomes clearly visible on the floor
+            spriteRenderer.sortingLayerName = "Van";
+            spriteRenderer.sortingOrder = 5;
+
+            // Allow walking smoothly across the chalk diagram on the floor
+            if (interactCollider != null)
+            {
+                interactCollider.isTrigger = true;
+            }
+        }
+        else
+        {
+            // Unplaced / Dropped State: show chalk item sprite and restore base scale
+            if (itemSprite != null)
+            {
+                spriteRenderer.sprite = itemSprite;
+            }
+
+            transform.localScale = baseLocalScale;
+            spriteRenderer.sortingLayerName = "Item";
+            spriteRenderer.sortingOrder = 0;
+
+            if (interactCollider != null)
+            {
+                interactCollider.isTrigger = originalIsTrigger;
             }
         }
     }
 
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void DestroyItemServerRpc()
+    public override void Interact()
     {
-        NetworkObject.Despawn(true);
+        if (IsPlaced)
+        {
+            // Interacting with the placed diagram triggers the exorcism ghost-selection popup if not already running
+            TriggerRitualPopup();
+        }
+        else
+        {
+            // Interacting with the item on the ground or shelf picks it up into inventory
+            base.Interact();
+        }
+    }
+
+    public override string GetInteractText()
+    {
+        if (IsPlaced)
+        {
+            var exorcismManager = GetExorcismManager();
+            if (exorcismManager != null && exorcismManager.IsMinigameActive)
+            {
+                return "Exorcism in Progress";
+            }
+            return "Begin Exorcism";
+        }
+
+        return base.GetInteractText();
+    }
+
+    public override void UsePrimary()
+    {
+        // When holding the chalk, notify the player to right click to place it on the floor
+        Debug.Log("[Ritual Chalk] Press Right Click to draw the ritual chalk diagram on the floor.");
+    }
+
+    public void TriggerRitualPopup()
+    {
+        var exorcismManager = GetExorcismManager();
+        if (exorcismManager != null)
+        {
+            exorcismManager.InitiateRitual(transform.position);
+        }
+        else
+        {
+            Debug.LogWarning("[Ritual Chalk] ExorcismManager not found in scene!");
+        }
+    }
+
+    private ExorcismManager GetExorcismManager()
+    {
+        return ExorcismManager.Instance != null ? ExorcismManager.Instance : Object.FindAnyObjectByType<ExorcismManager>();
     }
 }

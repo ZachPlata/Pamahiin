@@ -15,6 +15,7 @@
             <ui:VisualElement class="button-container">
                 <ui:Button name="btn-singleplayer" text="Singleplayer" class="menu-button" />
                 <ui:Button name="btn-multiplayer" text="Multiplayer" class="menu-button" />
+                <ui:Button name="btn-settings" text="Settings" class="menu-button" />
                 <ui:Button name="btn-help" text="Help &amp; Controls" class="menu-button" />
                 <ui:Button name="btn-quit" text="Quit Game" class="menu-button" />
             </ui:VisualElement>
@@ -51,6 +52,56 @@
                 <ui:Button name="btn-leave-lobby" text="Leave Lobby" class="menu-button back-button" />
             </ui:VisualElement>
         </ui:VisualElement>
+
+        <!-- Settings View -->
+        <ui:VisualElement name="settings-view" class="view hidden-view">
+            <ui:VisualElement class="settings-container">
+                <ui:Label text="Settings" class="title-label settings-title" />
+
+                <!-- AUDIO -->
+                <ui:Label text="AUDIO" class="section-label" />
+
+                <ui:VisualElement class="slider-row">
+                    <ui:Label text="Master" class="slider-label" />
+                    <ui:Slider name="slider-master" low-value="0" high-value="1" class="setting-slider" />
+                    <ui:Label name="lbl-master" text="100%" class="slider-value" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="slider-row">
+                    <ui:Label text="Music" class="slider-label" />
+                    <ui:Slider name="slider-music" low-value="0" high-value="1" class="setting-slider" />
+                    <ui:Label name="lbl-music" text="80%" class="slider-value" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="slider-row">
+                    <ui:Label text="SFX" class="slider-label" />
+                    <ui:Slider name="slider-sfx" low-value="0" high-value="1" class="setting-slider" />
+                    <ui:Label name="lbl-sfx" text="100%" class="slider-value" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="slider-row">
+                    <ui:Label text="Voice" class="slider-label" />
+                    <ui:Slider name="slider-voice" low-value="0" high-value="1" class="setting-slider" />
+                    <ui:Label name="lbl-voice" text="100%" class="slider-value" />
+                </ui:VisualElement>
+
+                <!-- GRAPHICS -->
+                <ui:Label text="GRAPHICS" class="section-label" />
+
+                <ui:VisualElement class="toggle-row">
+                    <ui:Label text="Fullscreen" class="slider-label" />
+                    <ui:Toggle name="toggle-fullscreen" class="setting-toggle" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="toggle-row">
+                    <ui:Label text="Show FPS" class="slider-label" />
+                    <ui:Toggle name="toggle-fps" class="setting-toggle" />
+                </ui:VisualElement>
+
+                <ui:Button name="btn-back-from-settings" text="Back to Menu" class="menu-button back-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <!-- Help / Keybinds View -->
         <ui:VisualElement name="help-view" class="view hidden-view">
             <ui:Label text="Controls &amp; Help" class="title-label" />

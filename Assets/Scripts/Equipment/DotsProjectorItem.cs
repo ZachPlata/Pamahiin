@@ -45,6 +45,18 @@ public class DotsProjectorItem : EquipmentItem
     protected override void Update()
     {
         base.Update();
+
+        // Rotate 90 degrees when held in hand so the projector lens and light beam point straight forward
+        if (ownerClientId.Value != ulong.MaxValue && NetworkManager.Singleton != null && NetworkManager.Singleton.SpawnManager != null)
+        {
+            var playerObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(ownerClientId.Value);
+            if (playerObj != null)
+            {
+                Transform handPoint = playerObj.transform.Find("HandPoint");
+                Quaternion baseRotation = handPoint != null ? handPoint.rotation : playerObj.transform.rotation;
+                transform.rotation = baseRotation * Quaternion.Euler(0f, 0f, 90f);
+            }
+        }
     }
 
     public override void UsePrimary()

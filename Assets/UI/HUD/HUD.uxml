@@ -59,6 +59,49 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <!-- Handheld Camera Night Vision Viewfinder Overlay -->
+        <ui:VisualElement name="NightVisionOverlay" class="nv-overlay nv-overlay-hidden" picking-mode="Ignore">
+            <ui:VisualElement class="nv-overlay-graphic" picking-mode="Ignore" />
+
+            <!-- Top Viewfinder Bar -->
+            <ui:VisualElement class="nv-top-bar" picking-mode="Ignore">
+                <ui:VisualElement class="nv-rec-cluster" picking-mode="Ignore">
+                    <ui:VisualElement name="NvRecDot" class="nv-rec-dot" picking-mode="Ignore" />
+                    <ui:Label text="REC" class="nv-hud-text nv-rec-label" />
+                    <ui:Label name="NvTimer" text="00:00:00" class="nv-hud-text nv-timer-label" />
+                </ui:VisualElement>
+                
+                <ui:VisualElement class="nv-badge-cluster" picking-mode="Ignore">
+                    <ui:Label text="IR NIGHT VISION [ON]" class="nv-hud-text nv-nvg-badge" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="nv-battery-cluster" picking-mode="Ignore">
+                    <ui:Label text="BAT" class="nv-hud-text" />
+                    <ui:VisualElement class="nv-battery-box" picking-mode="Ignore">
+                        <ui:VisualElement class="nv-battery-fill" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label text="94%" class="nv-hud-text" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <!-- Center Viewfinder Reticle -->
+            <ui:VisualElement class="nv-center-area" picking-mode="Ignore">
+                <ui:VisualElement class="nv-reticle-box" picking-mode="Ignore" />
+            </ui:VisualElement>
+
+            <!-- Bottom Viewfinder Bar -->
+            <ui:VisualElement class="nv-bottom-bar" picking-mode="Ignore">
+                <ui:VisualElement class="nv-bottom-left" picking-mode="Ignore">
+                    <ui:Label text="CAM-01 [HANDHELD OPTICAL]" class="nv-hud-text" />
+                    <ui:Label text="MODE: IR-NVG  |  AGC: AUTO" class="nv-hud-subtext" />
+                </ui:VisualElement>
+                <ui:VisualElement class="nv-bottom-right" picking-mode="Ignore">
+                    <ui:Label name="NvTimestamp" text="2026-10-11  02:44:19" class="nv-hud-text" />
+                    <ui:Label text="1080p 60FPS  |  ISO 3200" class="nv-hud-subtext" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
     </ui:VisualElement>
 
 </ui:UXML>

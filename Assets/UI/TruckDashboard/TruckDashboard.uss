@@ -65,11 +65,17 @@
 /* CCTV */
 .cctv-screen {
     flex-grow: 1;
-    background-color: rgb(30, 30, 30);
+    background-color: rgb(20, 20, 20);
     border-width: 2px;
     border-color: rgb(100, 100, 100);
     align-items: center;
     justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.cctv-screen-nv {
+    border-color: rgb(220, 220, 220);
 }
 
 .no-signal-text {
@@ -78,10 +84,133 @@
     -unity-font-style: bold;
 }
 
+.cctv-hud {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    justify-content: space-between;
+    padding: 12px 18px;
+}
+
+.cctv-hud-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.cctv-hud-bottom {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.cctv-hud-text {
+    color: rgb(140, 255, 160);
+    font-size: 13px;
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 0 4px rgba(40, 200, 80, 0.6);
+}
+
+.cctv-hud-sub {
+    color: rgba(140, 220, 150, 0.7);
+    font-size: 11px;
+}
+
+.cctv-rec-cluster {
+    flex-direction: row;
+    align-items: center;
+}
+
+.cctv-rec-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    background-color: rgb(255, 30, 30);
+    margin-right: 6px;
+}
+
+.cctv-rec-dot-dim {
+    opacity: 0.1;
+}
+
+.cctv-rec-label {
+    color: rgb(255, 60, 60);
+    margin-right: 10px;
+}
+
+.cctv-cam-badge {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 3px 12px;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: rgb(80, 180, 100);
+}
+
+.cctv-nv-badge {
+    padding: 3px 10px;
+    border-radius: 3px;
+    border-width: 1px;
+    font-size: 12px;
+}
+
+.cctv-nv-off {
+    background-color: rgba(30, 30, 30, 0.7);
+    border-color: rgb(100, 100, 100);
+    color: rgb(160, 160, 160);
+}
+
+.cctv-nv-on {
+    background-color: rgba(50, 50, 50, 0.9);
+    border-color: rgb(220, 220, 220);
+    color: rgb(255, 255, 255);
+}
+
+.cctv-center-view {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.cctv-scanline-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('project://database/Assets/UI/TruckDashboard/cctv_overlay.png');
+    -unity-background-scale-mode: stretch-to-fill;
+    opacity: 0.75;
+}
+
 .control-button {
     margin-top: 10px;
     background-color: rgb(50, 50, 50);
     color: white;
+    padding: 6px 14px;
+    font-size: 14px;
+    border-radius: 3px;
+}
+
+.btn-nv-active {
+    background-color: rgb(75, 75, 75);
+    border-color: rgb(220, 220, 220);
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
 }
 
 /* Sanity */

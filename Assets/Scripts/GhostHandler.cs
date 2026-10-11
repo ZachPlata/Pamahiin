@@ -77,7 +77,11 @@ public class GhostHandler : NetworkBehaviour
     private NetworkVariable<GhostHandlerState> currentState = new NetworkVariable<GhostHandlerState>(
         GhostHandlerState.Dormant, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    private NetworkVariable<bool> isExorcismFailedHunt = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     public GhostHandlerState CurrentState => currentState.Value;
+    public bool IsExorcismFailedHunt => isExorcismFailedHunt.Value;
 
     private float huntTimer = 0f;
     private float currentHuntDuration = 0f;
@@ -88,11 +92,16 @@ public class GhostHandler : NetworkBehaviour
     private bool isHunterFlickerVisible = false;
     private bool devVisibilityForced = false;
 
+    // Hunt environment effects
+    private float huntLightFlickerTimer = 0f;
+    private float huntFuseTripTimer = 0f;
+
     public override void OnNetworkSpawn()
     {
         if (IsServer)
         {
             SetState(GhostHandlerState.Dormant);
+            isExorcismFailedHunt.Value = false;
         }
         
         // Force sorting order to 10 so they NEVER render behind the floor
@@ -108,7 +117,19 @@ public class GhostHandler : NetworkBehaviour
         }
         
         currentState.OnValueChanged += (oldState, newState) => UpdateVisibility(newState);
+        isExorcismFailedHunt.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (ExorcismManager.Instance != null)
+            {
+                ExorcismManager.Instance.SetRedEnvironment(newVal);
+            }
+        };
+
         UpdateVisibility(currentState.Value);
+        if (ExorcismManager.Instance != null)
+        {
+            ExorcismManager.Instance.SetRedEnvironment(isExorcismFailedHunt.Value);
+        }
     }
 
     public void ActivateGhost()
@@ -122,7 +143,7 @@ public class GhostHandler : NetworkBehaviour
         // Auto-assign and randomly select a Ghost Room if one isn't manually set
         if (ghostroomMarker == null)
         {
-            GhostRoomMarker[] allRooms = FindObjectsByType<GhostRoomMarker>(FindObjectsSortMode.None);
+            GhostRoomMarker[] allRooms = FindObjectsByType<GhostRoomMarker>();
             Debug.Log($"GhostHandler: Found {allRooms.Length} GhostRoomMarkers in the scene.");
             if (allRooms.Length > 0)
             {
@@ -186,7 +207,7 @@ public class GhostHandler : NetworkBehaviour
             bool eventVisible = (state == GhostHandlerState.Dormant) && (ghostEventTimer > 0f || devVisibilityForced);
             
             if (eventRenderer != null) eventRenderer.enabled = eventVisible;
-            if (eventCol != null) eventCol.enabled = eventVisible; // Only collide if visible/active
+            if (eventCol != null) eventCol.enabled = true; // Always collide with walls/doors to prevent wandering through them
         }
             
         if (hunterGhost != null)
@@ -214,6 +235,16 @@ public class GhostHandler : NetworkBehaviour
         // Show the event ghost for 3 seconds
         ghostEventTimer = 3f;
         UpdateVisibility(currentState.Value);
+
+        // Notify atmosphere controller on ALL clients via ClientRpc
+        TriggerGhostEventEffectClientRpc();
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void TriggerGhostEventEffectClientRpc()
+    {
+        if (GhostAtmosphereController.Instance != null)
+            GhostAtmosphereController.Instance.TriggerGhostEventEffect();
     }
 
     public void ToggleDevVisibility()
@@ -238,56 +269,79 @@ public class GhostHandler : NetworkBehaviour
         currentState.Value = newState;
     }
 
-    public void StartHunt()
+    public void StartHunt(bool isFromFailedExorcism = false)
     {
         if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
 
-        // Check for nearby crucifixes that can block the hunt
-        var crucifixes = FindObjectsByType<CrucifixItem>(FindObjectsInactive.Exclude);
-        foreach (var crucifix in crucifixes)
+        isExorcismFailedHunt.Value = isFromFailedExorcism;
+
+        if (!isFromFailedExorcism)
         {
-            if (!crucifix.IsBurned && ghostroomMarker != null)
+            // Check for nearby crucifixes that can block normal hunts
+            var crucifixes = FindObjectsByType<CrucifixItem>(FindObjectsInactive.Exclude);
+            foreach (var crucifix in crucifixes)
             {
-                // If crucifix is inside the ghost room bounds, or near the center
-                if (ghostroomMarker.OverlapPoint(crucifix.transform.position) ||
-                    Vector2.Distance(ghostroomMarker.bounds.center, crucifix.transform.position) <= crucifix.blockRadius)
+                if (!crucifix.IsBurned && ghostroomMarker != null)
                 {
-                    if (crucifix.TryBlockHunt())
+                    // If crucifix is inside the ghost room bounds, or near the center
+                    if (ghostroomMarker.OverlapPoint(crucifix.transform.position) ||
+                        Vector2.Distance(ghostroomMarker.bounds.center, crucifix.transform.position) <= crucifix.blockRadius)
                     {
-                        // Hunt successfully blocked by crucifix
-                        Debug.Log("Hunt blocked by Crucifix!");
-                        return;
+                        if (crucifix.TryBlockHunt())
+                        {
+                            // Hunt successfully blocked by crucifix
+                            Debug.Log("Hunt blocked by Crucifix!");
+                            return;
+                        }
                     }
                 }
             }
+
+            // Teleport hunter to random valid position inside ghostroomMarker
+            if (ghostroomMarker != null && hunterGhost != null)
+            {
+                Bounds bounds = ghostroomMarker.bounds;
+                Vector2 randomPoint = new Vector2(
+                    Random.Range(bounds.min.x, bounds.max.x),
+                    Random.Range(bounds.min.y, bounds.max.y)
+                );
+                hunterGhost.transform.position = randomPoint;
+            }
         }
 
-        // Teleport hunter to random valid position inside ghostroomMarker
-        if (ghostroomMarker != null && hunterGhost != null)
-        {
-            Bounds bounds = ghostroomMarker.bounds;
-            Vector2 randomPoint = new Vector2(
-                Random.Range(bounds.min.x, bounds.max.x),
-                Random.Range(bounds.min.y, bounds.max.y)
-            );
-            hunterGhost.transform.position = randomPoint;
-        }
-
-        currentHuntDuration = Random.Range(huntDurationMin, huntDurationMax);
+        currentHuntDuration = isFromFailedExorcism ? (huntDurationMax * 1.5f) : Random.Range(huntDurationMin, huntDurationMax);
         huntTimer = 0f;
+        huntLightFlickerTimer = 0f;
+        huntFuseTripTimer = 0f;
         
         if (hunterGhost != null)
         {
+            hunterGhost.enabled = true;
             hunterGhost.OnHuntStarted();
+            if (isFromFailedExorcism)
+            {
+                hunterGhost.EnterAngeredState();
+            }
         }
         
         SetDoorsLocked(true);
         SetState(GhostHandlerState.Searching);
+
+        if (isFromFailedExorcism)
+        {
+            TriggerRedEnvironmentClientRpc(true);
+        }
     }
 
     public void EndHunt()
     {
         if (!IsServer) return;
+
+        if (isExorcismFailedHunt.Value)
+        {
+            isExorcismFailedHunt.Value = false;
+            TriggerRedEnvironmentClientRpc(false);
+        }
         
         // Reset ghost to the center of the ghost room when hunt ends so it doesn't stay in the hallway
         if (ghostroomMarker != null && hunterGhost != null)
@@ -299,6 +353,15 @@ public class GhostHandler : NetworkBehaviour
 
         SetDoorsLocked(false);
         SetState(GhostHandlerState.Dormant);
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void TriggerRedEnvironmentClientRpc(bool active)
+    {
+        if (ExorcismManager.Instance != null)
+        {
+            ExorcismManager.Instance.SetRedEnvironment(active);
+        }
     }
 
     private void SetDoorsLocked(bool locked)
@@ -336,6 +399,30 @@ public class GhostHandler : NetworkBehaviour
                 if (huntTimer >= currentHuntDuration)
                 {
                     EndHunt();
+                    return;
+                }
+
+                // Flicker all active lights every 2 seconds during a hunt
+                huntLightFlickerTimer += Time.deltaTime;
+                if (huntLightFlickerTimer >= 2f)
+                {
+                    huntLightFlickerTimer = 0f;
+                    var switches = Object.FindObjectsByType<HouseLightSwitch>(FindObjectsInactive.Exclude);
+                    foreach (var sw in switches)
+                    {
+                        sw.HuntFlicker();
+                    }
+                }
+
+                // 15% chance to trip the fuse box, checked every 3 seconds
+                huntFuseTripTimer += Time.deltaTime;
+                if (huntFuseTripTimer >= 3f)
+                {
+                    huntFuseTripTimer = 0f;
+                    if (FuseBox.Instance != null && FuseBox.Instance.IsEnabled && Random.value < 0.15f)
+                    {
+                        FuseBox.Instance.GhostTrip();
+                    }
                 }
             }
             

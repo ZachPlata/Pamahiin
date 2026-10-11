@@ -7,36 +7,68 @@
     <Style src="DevConsole.uss" />
 
     <ui:VisualElement name="DevConsoleContainer" class="dev-console-container">
-        <ui:Label text="Developer Console" class="dev-console-title" />
-        
-        <ui:VisualElement class="columns-container">
-            <ui:VisualElement class="column">
-                <ui:Label text="--- Hunt Controls ---" style="color: white; margin-bottom: 5px; font-weight: bold;" />
-                <ui:Button name="ForceHuntBtn" text="Force Hunt" class="dev-console-button" />
-                <ui:Button name="StopHuntBtn" text="Stop Hunt" class="dev-console-button" />
-                
-                <ui:Label text="--- General Tools ---" style="color: white; margin-top: 10px; margin-bottom: 5px; font-weight: bold;" />
-                <ui:Button name="ForceEMF5Btn" text="Force EMF 5" class="dev-console-button" />
-                <ui:Button name="ToggleGhostOutlineBtn" text="Toggle Ghost Outline" class="dev-console-button" />
-                
-                <ui:Label text="--- Player Cheats ---" style="color: white; margin-top: 10px; margin-bottom: 5px; font-weight: bold;" />
-                <ui:Button name="ToggleGodModeBtn" text="Toggle God Mode" class="dev-console-button" />
-                <ui:Button name="ToggleBreadcrumbBtn" text="Toggle Breadcrumbs" class="dev-console-button" />
+        <ui:VisualElement class="dev-console-panel">
+            <ui:VisualElement class="dev-console-header">
+                <ui:Label text="PAMAHIIN  DEVELOPER CONSOLE" class="dev-console-title" />
+                <ui:Label text="Press [ ~ ] or [ ESC ] to close" class="dev-console-subtitle" />
             </ui:VisualElement>
-            
-            <ui:VisualElement class="column">
-                <ui:Label text="--- Ghost Events ---" style="color: white; margin-bottom: 5px; font-weight: bold;" />
-                <ui:Button name="ForceEventBtn" text="Trigger Ghost Event" class="dev-console-button" />
-                <ui:Button name="ForceThrowBtn" text="Ghost Throw Object" class="dev-console-button" />
-                <ui:Button name="ForceWriteBtn" text="Ghost Write in Book" class="dev-console-button" />
-                <ui:Button name="ForceDotsBtn" text="Ghost DOTS Manifest" class="dev-console-button" />
-                <ui:Button name="ForceOrbBtn" text="Ghost Orb Manifest" class="dev-console-button" />
-                <ui:Button name="ForceSpiritBoxBtn" text="Ghost Spirit Box Talk" class="dev-console-button" />
-                <ui:Button name="ForceLowSanityBtn" text="Low Sanity Manifest" class="dev-console-button" />
+
+            <ui:ScrollView class="dev-console-scroll">
+                <ui:VisualElement class="columns-container">
+                    
+                    <!-- Column 1: Hunt & Ghost AI -->
+                    <ui:VisualElement class="column">
+                        <ui:Label text="--- Hunt &amp; Ghost AI ---" class="column-header" />
+                        <ui:Button name="ForceHuntBtn" text="Force Hunt" class="dev-console-button btn-danger" />
+                        <ui:Button name="StopHuntBtn" text="Stop Hunt" class="dev-console-button" />
+                        <ui:Button name="ToggleGhostOutlineBtn" text="Toggle Ghost Visibility" class="dev-console-button" />
+                        <ui:Button name="TpGhostToPlayerBtn" text="Teleport Ghost To Me" class="dev-console-button" />
+                        <ui:Button name="TpPlayerToGhostBtn" text="Teleport Me To Ghost" class="dev-console-button" />
+                        <ui:Button name="ToggleBreadcrumbBtn" text="Toggle Breadcrumbs" class="dev-console-button" />
+                    </ui:VisualElement>
+
+                    <!-- Column 2: Ghost Manifestations -->
+                    <ui:VisualElement class="column">
+                        <ui:Label text="--- Ghost Events ---" class="column-header" />
+                        <ui:Button name="ForceEventBtn" text="Random Ghost Event" class="dev-console-button btn-warning" />
+                        <ui:Button name="ForceThrowBtn" text="Throw Object" class="dev-console-button" />
+                        <ui:Button name="ForceWriteBtn" text="Write in Book" class="dev-console-button" />
+                        <ui:Button name="ForceDotsBtn" text="DOTS Manifestation" class="dev-console-button" />
+                        <ui:Button name="ForceOrbBtn" text="Ghost Orbs" class="dev-console-button" />
+                        <ui:Button name="ForceSpiritBoxBtn" text="Spirit Box Voice" class="dev-console-button" />
+                        <ui:Button name="ForceLowSanityBtn" text="Low Sanity Scare" class="dev-console-button" />
+                    </ui:VisualElement>
+
+                    <!-- Column 3: Player Cheats -->
+                    <ui:VisualElement class="column">
+                        <ui:Label text="--- Player Cheats ---" class="column-header" />
+                        <ui:Button name="ToggleGodModeBtn" text="Toggle God Mode" class="dev-console-button btn-primary" />
+                        <ui:Button name="RestoreSanityBtn" text="Restore 100% Sanity" class="dev-console-button" />
+                        <ui:Button name="DrainSanityBtn" text="Drain Sanity to 0%" class="dev-console-button" />
+                        <ui:Button name="RevivePlayerBtn" text="Revive Player" class="dev-console-button" />
+                        <ui:Button name="ToggleSpeedBoostBtn" text="Toggle 2x Speed" class="dev-console-button" />
+                        <ui:Button name="ForceEMF5Btn" text="Force EMF 5" class="dev-console-button" />
+                    </ui:VisualElement>
+
+                    <!-- Column 4: House & Environment -->
+                    <ui:VisualElement class="column">
+                        <ui:Label text="--- House &amp; System ---" class="column-header" />
+                        <ui:Button name="TurnAllLightsOnBtn" text="Turn Lights ON" class="dev-console-button" />
+                        <ui:Button name="TurnAllLightsOffBtn" text="Turn Lights OFF" class="dev-console-button" />
+                        <ui:Button name="TripFuseBoxBtn" text="Trip Fuse Box" class="dev-console-button" />
+                        <ui:Button name="RestoreFuseBoxBtn" text="Restore Fuse Box" class="dev-console-button" />
+                        <ui:Button name="ToggleFpsBtn" text="Toggle FPS Display" class="dev-console-button" />
+                        <ui:Button name="ToggleTimescaleBtn" text="Toggle Slow Motion" class="dev-console-button" />
+                    </ui:VisualElement>
+
+                </ui:VisualElement>
+            </ui:ScrollView>
+
+            <ui:VisualElement class="dev-console-footer">
+                <ui:Label name="DevStatusLabel" text="Ready" class="dev-console-status" />
+                <ui:Button name="CloseConsoleBtn" text="Close Console" class="dev-console-close-button" />
             </ui:VisualElement>
         </ui:VisualElement>
-        
-        <ui:Label text="Press '~' to close" style="color: gray; margin-top: 20px; font-size: 14px;" />
     </ui:VisualElement>
 
 </ui:UXML>

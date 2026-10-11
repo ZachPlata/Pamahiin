@@ -1,6 +1,10 @@
+/* ========================================================
+   PAMAHIIN - PARANORMAL FIELD JOURNAL STYLESHEET
+   ======================================================== */
+
 .overlay {
     flex-grow: 1;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(5, 5, 10, 0.75);
     align-items: center;
     justify-content: center;
     position: absolute;
@@ -12,65 +16,442 @@
     display: none;
 }
 
-.journal-container {
+.journal-wrapper {
+    align-items: center;
+    justify-content: center;
+}
+
+/* ================= BOOKMARK TABS ================= */
+.journal-tabs-bar {
     flex-direction: row;
-    background-color: rgb(240, 235, 220); /* Aged paper color */
-    width: 800px;
-    height: 500px;
-    border-radius: 10px;
-    border-width: 2px;
-    border-color: rgb(100, 80, 50);
+    align-self: flex-end;
+    margin-right: 20px;
+    margin-bottom: -4px;
+}
+
+.journal-tab {
+    background-color: rgb(75, 55, 35);
+    color: rgb(215, 195, 160);
+    font-size: 13px;
+    -unity-font-style: bold;
+    padding: 6px 14px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-width: 1px;
+    border-bottom-width: 0;
+    border-color: rgb(110, 85, 55);
+    margin-left: 4px;
+    transition-duration: 0.15s;
+}
+
+.journal-tab:hover {
+    background-color: rgb(110, 80, 50);
+    color: white;
+}
+
+.active-tab {
+    background-color: rgb(130, 95, 55);
+    color: rgb(255, 235, 180);
+    border-color: rgb(160, 120, 75);
+}
+
+.tab-close-btn {
+    background-color: rgb(120, 40, 40);
+    color: white;
+}
+
+.tab-close-btn:hover {
+    background-color: rgb(160, 40, 40);
+}
+
+/* ================= MAIN JOURNAL CONTAINER ================= */
+.journal-container {
+    background-color: rgb(244, 238, 222); /* Aged Parchment */
+    width: 960px;
+    height: 610px;
+    border-radius: 8px;
+    border-width: 3px;
+    border-color: rgb(70, 50, 30);
+    overflow: hidden;
+}
+
+.journal-spread {
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+}
+
+.hidden-spread {
+    display: none;
 }
 
 .journal-page {
     flex-grow: 1;
     width: 50%;
-    padding: 30px;
+    padding: 24px 28px;
+    justify-content: flex-start;
 }
 
 .left-page {
     border-right-width: 2px;
-    border-right-color: rgb(200, 190, 170);
+    border-right-color: rgb(205, 190, 165);
 }
 
+.right-page {
+    border-left-width: 1px;
+    border-left-color: rgb(235, 225, 205);
+}
+
+/* ================= TYPOGRAPHY ================= */
 .page-title {
-    font-size: 28px;
-    color: rgb(50, 40, 30);
+    font-size: 24px;
+    color: rgb(45, 35, 25);
     -unity-font-style: bold;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
     -unity-text-align: middle-center;
+    letter-spacing: 1px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgb(180, 160, 130);
+    padding-bottom: 6px;
 }
 
 .instruction-text {
-    font-size: 14px;
-    color: rgb(100, 90, 80);
+    font-size: 13px;
+    color: rgb(95, 80, 65);
     -unity-font-style: italic;
     white-space: normal;
-    margin-bottom: 20px;
-    margin-top: 10px;
+    margin-bottom: 14px;
+    -unity-text-align: middle-center;
 }
 
+/* ================= SPREAD 0: COVER ================= */
+.spread-cover {
+    width: 100%;
+    height: 100%;
+}
+
+.cover-art-container {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(34, 28, 24);
+    border-width: 4px;
+    border-color: rgb(150, 115, 65);
+    border-radius: 10px;
+    padding: 24px;
+}
+
+.cover-border-inner {
+    width: 100%;
+    height: 100%;
+    border-width: 2px;
+    border-color: rgba(175, 135, 75, 0.45);
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+}
+
+.cover-main-title {
+    font-size: 50px;
+    color: rgb(245, 210, 130);
+    -unity-font-style: bold;
+    letter-spacing: 8px;
+    text-shadow: 0 0 6px rgba(210, 160, 60, 0.4);
+}
+
+.cover-divider {
+    width: 160px;
+    height: 2px;
+    background-color: rgb(160, 125, 75);
+    margin-top: 10px;
+    margin-bottom: 14px;
+}
+
+.cover-sub-title {
+    font-size: 14px;
+    color: rgb(210, 185, 145);
+    -unity-font-style: bold;
+    letter-spacing: 3px;
+    margin-top: 2px;
+}
+
+.cover-edition-text {
+    font-size: 13px;
+    color: rgb(165, 140, 110);
+    -unity-font-style: italic;
+    margin-top: 4px;
+    margin-bottom: 35px;
+}
+
+.cover-open-btn {
+    background-color: rgb(125, 40, 30);
+    color: rgb(255, 240, 205);
+    font-size: 16px;
+    -unity-font-style: bold;
+    padding: 12px 36px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(210, 165, 80);
+    letter-spacing: 1px;
+    transition-duration: 0.15s;
+}
+
+.cover-open-btn:hover {
+    background-color: rgb(160, 50, 40);
+    scale: 1.03;
+}
+
+/* ================= SPREAD 1: TABLE OF CONTENTS ================= */
+.toc-list {
+    flex-grow: 1;
+    justify-content: space-around;
+    padding-top: 5px;
+    padding-bottom: 10px;
+}
+
+.toc-item-button {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(225, 215, 195, 0.45);
+    border-width: 1px;
+    border-color: rgb(190, 170, 145);
+    border-radius: 4px;
+    padding: 9px 14px;
+    margin-bottom: 8px;
+    transition-duration: 0.15s;
+}
+
+.toc-item-button:hover {
+    background-color: rgb(235, 215, 175);
+    border-color: rgb(140, 100, 60);
+    scale: 1.02;
+}
+
+.toc-item-text {
+    font-size: 14px;
+    color: rgb(45, 35, 25);
+    -unity-font-style: bold;
+}
+
+.toc-item-page {
+    font-size: 13px;
+    color: rgb(130, 60, 40);
+    -unity-font-style: bold;
+}
+
+.protocol-box {
+    background-color: rgba(230, 220, 200, 0.6);
+    border-width: 1px;
+    border-color: rgb(190, 175, 150);
+    border-radius: 6px;
+    padding: 14px;
+}
+
+.protocol-heading {
+    font-size: 14px;
+    color: rgb(140, 45, 35);
+    -unity-font-style: bold;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
+.protocol-body {
+    font-size: 12px;
+    color: rgb(60, 50, 40);
+    white-space: normal;
+    margin-bottom: 8px;
+}
+
+/* ================= SPREADS 2 & 3: EQUIPMENT MANUAL ================= */
+.equip-entry {
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(235, 225, 210, 0.6);
+    border-width: 1px;
+    border-color: rgb(200, 185, 160);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 12px;
+}
+
+.equip-icon {
+    width: 58px;
+    height: 58px;
+    margin-right: 12px;
+    border-width: 1px;
+    border-color: rgb(160, 140, 115);
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.4);
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.equip-icon-emf { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/EMF.png'); }
+.equip-icon-spiritbox { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/SpiritBox.png'); }
+.equip-icon-thermo { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/thermo.png'); }
+.equip-icon-book { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/Ghost Writing Book 1.png'); }
+.equip-icon-dots { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/dots_projector.png'); }
+.equip-icon-cam { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/VideoCamera.png'); }
+.equip-icon-crucifix { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/crucifixz.png'); }
+.equip-icon-pills { background-image: url('project://database/Assets/Sprites/EQUIPMENTS/sanity pillz.png'); }
+
+.equip-info {
+    flex-grow: 1;
+    width: 75%;
+}
+
+.equip-name {
+    font-size: 15px;
+    color: rgb(40, 30, 20);
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+}
+
+.equip-role {
+    font-size: 11px;
+    color: rgb(130, 50, 40);
+    -unity-font-style: bold;
+    margin-bottom: 3px;
+}
+
+.equip-desc {
+    font-size: 12px;
+    color: rgb(70, 60, 50);
+    white-space: normal;
+}
+
+/* ================= SPREADS 4, 5, 6: GHOST DOSSIERS ================= */
+.ghost-art-page {
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.ghost-art-frame {
+    width: 380px;
+    height: 380px;
+    border-width: 3px;
+    border-color: rgb(90, 65, 45);
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: rgb(20, 15, 10);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.ghost-art-image {
+    width: 100%;
+    height: 100%;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.ghost-art-tikbalang { background-image: url('project://database/Assets/UI/Journal/tikbalang_art.jpg'); }
+.ghost-art-kapre { background-image: url('project://database/Assets/UI/Journal/kapre_art.jpg'); }
+.ghost-art-manananggal { background-image: url('project://database/Assets/UI/Journal/manananggal_art.jpg'); }
+
+.ghost-caption-text {
+    font-size: 12px;
+    color: rgb(100, 85, 70);
+    -unity-font-style: italic;
+    margin-top: 10px;
+    -unity-text-align: middle-center;
+}
+
+.ghost-header-name {
+    font-size: 26px;
+    color: rgb(40, 30, 20);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    border-bottom-width: 2px;
+    border-bottom-color: rgb(140, 45, 35);
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+.ghost-sub-title {
+    font-size: 13px;
+    color: rgb(130, 50, 40);
+    -unity-font-style: italic;
+    margin-bottom: 12px;
+}
+
+.ghost-lore-paragraph {
+    font-size: 13px;
+    color: rgb(55, 45, 35);
+    white-space: normal;
+    margin-bottom: 14px;
+    line-height: 16px;
+}
+
+.ghost-traits-section {
+    background-color: rgba(230, 220, 205, 0.5);
+    border-left-width: 3px;
+    border-left-color: rgb(120, 80, 50);
+    padding: 8px 12px;
+    margin-bottom: 12px;
+}
+
+.ghost-section-label {
+    font-size: 12px;
+    color: rgb(90, 60, 40);
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.ghost-trait-bullet {
+    font-size: 12px;
+    color: rgb(60, 50, 40);
+    white-space: normal;
+    margin-bottom: 3px;
+}
+
+.ghost-evidence-tag-box {
+    margin-bottom: 12px;
+}
+
+.ghost-evidence-chips {
+    flex-direction: row;
+    margin-top: 4px;
+}
+
+.evidence-chip {
+    background-color: rgb(140, 45, 35);
+    color: white;
+    font-size: 12px;
+    -unity-font-style: bold;
+    padding: 4px 10px;
+    border-radius: 3px;
+    margin-right: 6px;
+}
+
+.ghost-tip-text {
+    font-size: 12px;
+    color: rgb(100, 75, 55);
+    -unity-font-style: italic;
+    background-color: rgba(240, 230, 205, 0.8);
+    border-width: 1px;
+    border-color: rgb(200, 180, 140);
+    border-radius: 4px;
+    padding: 6px 10px;
+    white-space: normal;
+}
+
+/* ================= SPREAD 7: EVIDENCE & DEDUCTION ================= */
 .evidence-list {
     flex-grow: 1;
 }
 
 .evidence-toggle {
-    margin-bottom: 15px;
-    font-size: 18px;
+    margin-bottom: 14px;
+    font-size: 17px;
     color: rgb(50, 40, 30);
 }
 
 .evidence-toggle > .unity-toggle__label {
     min-width: 200px;
-}
-
-.ghost-dropdown {
-    margin-bottom: 30px;
-}
-
-.ghost-dropdown > .unity-base-field__label {
-    color: rgb(50, 40, 30);
-    min-width: 100px;
 }
 
 .button-container {
@@ -81,22 +462,24 @@
 .lock-in-button {
     background-color: rgb(150, 40, 40);
     color: white;
-    font-size: 18px;
+    font-size: 17px;
+    -unity-font-style: bold;
     padding: 10px 20px;
     border-radius: 5px;
     margin-bottom: 10px;
-    width: 80%;
+    width: 85%;
+    transition-duration: 0.15s;
 }
 
 .lock-in-button:hover {
-    background-color: rgb(200, 50, 50);
+    background-color: rgb(190, 50, 50);
 }
 
 .close-button {
     background-color: rgb(100, 90, 80);
     color: white;
-    font-size: 16px;
-    padding: 5px 15px;
+    font-size: 15px;
+    padding: 6px 16px;
     border-radius: 5px;
 }
 
@@ -111,20 +494,21 @@
 }
 
 .ghost-button {
-    background-color: rgb(200, 190, 170);
+    background-color: rgb(210, 200, 180);
     color: rgb(50, 40, 30);
-    font-size: 16px;
-    padding: 8px 12px;
+    font-size: 15px;
+    -unity-font-style: bold;
+    padding: 8px 10px;
     border-radius: 5px;
     border-width: 1px;
     border-color: rgb(100, 80, 50);
     flex-grow: 1;
-    margin: 0 5px;
+    margin: 0 4px;
     transition-duration: 0.1s;
 }
 
 .ghost-button:hover {
-    background-color: rgb(220, 210, 190);
+    background-color: rgb(230, 220, 200);
 }
 
 .selected-ghost-btn {
@@ -138,6 +522,43 @@
 
 .strikethrough > .unity-toggle__label {
     text-decoration: line-through;
-    opacity: 0.5;
+    opacity: 0.45;
 }
 
+/* ================= BOTTOM NAVIGATION BAR ================= */
+.journal-nav-bar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgb(50, 35, 25);
+    border-width: 2px;
+    border-top-width: 0;
+    border-color: rgb(70, 50, 30);
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+    padding: 8px 18px;
+    width: 960px;
+}
+
+.nav-button {
+    background-color: rgb(90, 65, 45);
+    color: rgb(235, 220, 190);
+    font-size: 13px;
+    -unity-font-style: bold;
+    padding: 6px 14px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(130, 95, 65);
+    transition-duration: 0.15s;
+}
+
+.nav-button:hover {
+    background-color: rgb(125, 90, 60);
+    color: white;
+}
+
+.page-indicator-label {
+    font-size: 14px;
+    color: rgb(220, 195, 150);
+    -unity-font-style: bold;
+}

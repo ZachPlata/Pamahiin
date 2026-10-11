@@ -10,8 +10,8 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     [Tooltip("The Light2D components to toggle on and off.")]
     [SerializeField] private List<Light2D> controlledLights = new List<Light2D>();
 
-    [Tooltip("The GameObject with the SafeZone script and Trigger Collider. This prevents sanity drain when the light is on.")]
-    [SerializeField] private GameObject litSafeZone;
+    [Tooltip("The GameObject(s) with the SafeZone script and Trigger Collider. This prevents sanity drain when the light is on.")]
+    [SerializeField] private List<GameObject> litSafeZones = new List<GameObject>();
 
     private NetworkVariable<bool> isLightOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -31,6 +31,10 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     public string GetInteractText()
     {
+        if (FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
+        {
+            return "No Power (Fuse Box Off)";
+        }
         return isLightOn.Value ? "Turn Off Light" : "Turn On Light";
     }
 
@@ -42,12 +46,55 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void ToggleLightServerRpc()
     {
+        // Block turning ON lights if the fuse box is off
+        if (!isLightOn.Value && FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
+        {
+            Debug.Log($"Light switch {gameObject.name} blocked — fuse box is off!");
+            return;
+        }
+
         isLightOn.Value = !isLightOn.Value;
         Debug.Log($"Player toggled light switch {gameObject.name} to {isLightOn.Value}");
     }
 
     /// <summary>
-    /// Called by the GhostController to spook players by turning off the lights.
+    /// Force-turns off this light. Called by FuseBox when it gets tripped.
+    /// Must be called on the server.
+    /// </summary>
+    public void ForceOff()
+    {
+        if (!IsServer) return;
+        if (isLightOn.Value)
+        {
+            isLightOn.Value = false;
+        }
+    }
+
+    /// <summary>
+    /// Force-turns on this light (e.g. via dev console).
+    /// Must be called on the server.
+    /// </summary>
+    public void ForceOn()
+    {
+        if (!IsServer) return;
+        if (!isLightOn.Value)
+        {
+            isLightOn.Value = true;
+        }
+    }
+
+    /// <summary>
+    /// Triggers a flicker effect on this light during a ghost hunt.
+    /// Only flickers lights that are currently ON.
+    /// </summary>
+    public void HuntFlicker()
+    {
+        if (!isLightOn.Value) return;
+        FlickerEffect(0.5f);
+    }
+
+    /// <summary>
+    /// Called by the ghost to spook players by turning off the lights.
     /// Must be called on the server.
     /// </summary>
     public void GhostTurnOff()
@@ -76,9 +123,12 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
             }
         }
 
-        if (litSafeZone != null)
+        foreach (var safeZone in litSafeZones)
         {
-            litSafeZone.SetActive(state);
+            if (safeZone != null)
+            {
+                safeZone.SetActive(state);
+            }
         }
     }
 

@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: a00659a0f7f8a1649871804a770a75b2
+guid: 373a0387bbc3d2343b0d45857d9a9946
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 3714604012407003233
-    second: crucifix_nasunog_0
+      213: 792701828351416493
+    second: Crucifix_nasunog 1_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: crucifix_nasunog_0
+      name: Crucifix_nasunog 1_0
       rect:
         serializedVersion: 2
-        x: 4
-        y: 0
-        width: 32
-        height: 47
+        x: 100
+        y: 21
+        width: 825
+        height: 964
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 16892c02bacec8330800000000000000
-      internalID: 3714604012407003233
+      spriteID: da850bbec1e300b00800000000000000
+      internalID: 792701828351416493
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      crucifix_nasunog_0: 3714604012407003233
+      Crucifix_nasunog 1_0: 792701828351416493
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

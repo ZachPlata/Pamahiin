@@ -6,6 +6,7 @@ using UnityEngine;
 public class DoorInteractionProxy : MonoBehaviour, IInteractable
 {
     [SerializeField] private NetworkDoor targetDoor;
+    public NetworkDoor TargetDoor => targetDoor;
 
     public void Setup(NetworkDoor door)
     {

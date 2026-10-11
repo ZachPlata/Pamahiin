@@ -2,40 +2,341 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="JournalUI.uss" />
     <ui:VisualElement name="journal-overlay" class="overlay hidden">
-        <ui:VisualElement class="journal-container">
+        <ui:VisualElement class="journal-wrapper">
             
-            <ui:VisualElement class="journal-page left-page">
-                <ui:Label text="Evidence Collected" class="page-title" />
-                
-                <ui:VisualElement class="evidence-list">
-                    <ui:Toggle name="tgl-emf5" label="EMF Level 5" class="evidence-toggle" />
-                    <ui:Toggle name="tgl-freezing" label="Freezing Temperatures" class="evidence-toggle" />
-                    <ui:Toggle name="tgl-writing" label="Ghost Writing" class="evidence-toggle" />
-                    <ui:Toggle name="tgl-dots" label="D.O.T.S. Projector" class="evidence-toggle" />
-                    <ui:Toggle name="tgl-spiritbox" label="Spirit Box" class="evidence-toggle" />
-                    <ui:Toggle name="tgl-orbs" label="Ghost Orbs" class="evidence-toggle" />
-                </ui:VisualElement>
-                
-                <ui:Label text="Select 3 evidences to narrow down the entity type." class="instruction-text" />
+            <!-- Quick Bookmark Tabs -->
+            <ui:VisualElement class="journal-tabs-bar">
+                <ui:Button name="tab-cover" text="COVER" class="journal-tab" />
+                <ui:Button name="tab-toc" text="CONTENTS" class="journal-tab active-tab" />
+                <ui:Button name="tab-equip" text="EQUIPMENT" class="journal-tab" />
+                <ui:Button name="tab-ghosts" text="ENTITIES" class="journal-tab" />
+                <ui:Button name="tab-evidence" text="DEDUCTION" class="journal-tab" />
+                <ui:Button name="btn-close-top" text="✕" class="journal-tab tab-close-btn" />
             </ui:VisualElement>
 
-            <ui:VisualElement class="journal-page right-page">
-                <ui:Label text="Deduction" class="page-title" />
-                
-                <ui:Label text="Based on your findings, what is haunting this location?" class="instruction-text" />
-                
-                <ui:VisualElement class="ghost-buttons-container">
-                    <ui:Button name="btn-ghost-tikbalang" text="Tikbalang" class="ghost-button" />
-                    <ui:Button name="btn-ghost-kapre" text="Kapre" class="ghost-button" />
-                    <ui:Button name="btn-ghost-manananggal" text="Manananggal" class="ghost-button" />
+            <!-- Book Body Container -->
+            <ui:VisualElement class="journal-container">
+
+                <!-- ================= SPREAD 0: COVER PAGE ================= -->
+                <ui:VisualElement name="spread-0" class="journal-spread spread-cover">
+                    <ui:VisualElement class="cover-art-container">
+                        <ui:VisualElement class="cover-border-inner">
+                            <ui:Label text="PAMAHIIN" class="cover-main-title" />
+                            <ui:VisualElement class="cover-divider" />
+                            <ui:Label text="PHILIPPINE OCCULT RESEARCH ARCHIVE" class="cover-sub-title" />
+                            <ui:Label text="Paranormal Entity Dossier &amp; Field Guide" class="cover-edition-text" />
+                            <ui:Button name="btn-cover-open" text="OPEN JOURNAL / BUKSAN" class="cover-open-btn" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:VisualElement>
-                
-                <ui:VisualElement class="button-container">
-                    <ui:Button name="btn-lock-in" text="Lock In Deduction" class="lock-in-button" />
-                    <ui:Button name="btn-close" text="Close Journal" class="close-button" />
+
+                <!-- ================= SPREAD 1: TABLE OF CONTENTS & BRIEFING ================= -->
+                <ui:VisualElement name="spread-1" class="journal-spread hidden-spread">
+                    <!-- Left Page: Table of Contents -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Table of Contents" class="page-title" />
+                        <ui:Label text="Select any topic to jump directly to its page:" class="instruction-text" />
+
+                        <ui:VisualElement class="toc-list">
+                            <ui:Button name="btn-toc-equip1" class="toc-item-button">
+                                <ui:Label text="01. Primary Investigation Tools" class="toc-item-text" />
+                                <ui:Label text="Page 2  ▶" class="toc-item-page" />
+                            </ui:Button>
+                            <ui:Button name="btn-toc-equip2" class="toc-item-button">
+                                <ui:Label text="02. Optical &amp; Defensive Equipment" class="toc-item-text" />
+                                <ui:Label text="Page 3  ▶" class="toc-item-page" />
+                            </ui:Button>
+                            <ui:Button name="btn-toc-tikbalang" class="toc-item-button">
+                                <ui:Label text="03. Entity Dossier: Tikbalang" class="toc-item-text" />
+                                <ui:Label text="Page 4  ▶" class="toc-item-page" />
+                            </ui:Button>
+                            <ui:Button name="btn-toc-kapre" class="toc-item-button">
+                                <ui:Label text="04. Entity Dossier: Kapre" class="toc-item-text" />
+                                <ui:Label text="Page 5  ▶" class="toc-item-page" />
+                            </ui:Button>
+                            <ui:Button name="btn-toc-manananggal" class="toc-item-button">
+                                <ui:Label text="05. Entity Dossier: Manananggal" class="toc-item-text" />
+                                <ui:Label text="Page 6  ▶" class="toc-item-page" />
+                            </ui:Button>
+                            <ui:Button name="btn-toc-evidence" class="toc-item-button">
+                                <ui:Label text="06. Evidence Checklist &amp; Deduction" class="toc-item-text" />
+                                <ui:Label text="Page 7  ▶" class="toc-item-page" />
+                            </ui:Button>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Briefing -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="Field Protocol" class="page-title" />
+                        <ui:Label text="Standard Paranormal Research Directives" class="instruction-text" />
+                        <ui:VisualElement class="protocol-box">
+                            <ui:Label text="1. MONITOR SANITY" class="protocol-heading" />
+                            <ui:Label text="Low sanity triggers aggressive demonic hunts. Keep lights lit and take sanity pills when drained." class="protocol-body" />
+                            <ui:Label text="2. CONFIRM 3 EVIDENCES" class="protocol-heading" />
+                            <ui:Label text="Each folklore entity exhibits exactly 3 distinctive paranormal signs. Cross-reference before locking your deduction." class="protocol-body" />
+                            <ui:Label text="3. SURVIVE THE HUNT" class="protocol-heading" />
+                            <ui:Label text="When flickering begins: kill flashlights, break line of sight, and take cover inside wardrobes or behind doors." class="protocol-body" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:VisualElement>
+
+                <!-- ================= SPREAD 2: EQUIPMENT PART 1 ================= -->
+                <ui:VisualElement name="spread-2" class="journal-spread hidden-spread">
+                    <!-- Left Page: EMF & Spirit Box -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Equipment Manual" class="page-title" />
+                        
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-emf" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="EMF READER" class="equip-name" />
+                                <ui:Label text="Sensor: Electromagnetic Spikes" class="equip-role" />
+                                <ui:Label text="Detects localized paranormal electromagnetic disturbances. A reading of 5 lights is conclusive evidence." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-spiritbox" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="SPIRIT BOX" class="equip-name" />
+                                <ui:Label text="Receiver: EVP Radio Transceiver" class="equip-role" />
+                                <ui:Label text="Sweeps radio frequencies to channel spirit voices. Speak in total darkness within the ghost room." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Thermometer & Ghost Writing -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="Equipment Manual" class="page-title" />
+                        
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-thermo" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="THERMOMETER" class="equip-name" />
+                                <ui:Label text="Gauge: Ambient Temperature" class="equip-role" />
+                                <ui:Label text="Measures temperature drops. A digital reading at or below 0.0°C confirms Freezing Temperatures." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-book" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="GHOST WRITING BOOK" class="equip-name" />
+                                <ui:Label text="Medium: Supernatural Inscription" class="equip-role" />
+                                <ui:Label text="Place open in the active ghost room. Agitated spirits will scrawl occult symbols and demonic glyphs." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 3: EQUIPMENT PART 2 ================= -->
+                <ui:VisualElement name="spread-3" class="journal-spread hidden-spread">
+                    <!-- Left Page: DOTS & Video Camera -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Equipment Manual" class="page-title" />
+                        
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-dots" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="D.O.T.S. PROJECTOR" class="equip-name" />
+                                <ui:Label text="Optical: Matrix Laser Grid" class="equip-role" />
+                                <ui:Label text="Casts a luminous green laser matrix. Entities traversing the beam illuminate as spectral silhouettes." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-cam" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="VIDEO CAMERA" class="equip-name" />
+                                <ui:Label text="Surveillance: Infrared Night Vision" class="equip-role" />
+                                <ui:Label text="High-sensitivity IR camcorder. Crucial for detecting Ghost Orbs invisible to standard human vision." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Crucifix & Sanity Pills -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="Equipment Manual" class="page-title" />
+                        
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-crucifix" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="CRUCIFIX" class="equip-name" />
+                                <ui:Label text="Sanctified: Ward of Protection" class="equip-role" />
+                                <ui:Label text="Holy relic that repels evil. If an entity attempts to initiate a hunt nearby, the crucifix incinerates to save you." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="equip-entry">
+                            <ui:VisualElement class="equip-icon equip-icon-pills" />
+                            <ui:VisualElement class="equip-info">
+                                <ui:Label text="SANITY RESTORATIVE" class="equip-name" />
+                                <ui:Label text="Medical: Stabilizing Pills" class="equip-role" />
+                                <ui:Label text="Instantly restores 40% sanity to keep investigators lucid and delay lethal entity hunts." class="equip-desc" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 4: GHOST 1 - TIKBALANG ================= -->
+                <ui:VisualElement name="spread-4" class="journal-spread hidden-spread">
+                    <!-- Left Page: Illustration -->
+                    <ui:VisualElement class="journal-page left-page ghost-art-page">
+                        <ui:VisualElement class="ghost-art-frame">
+                            <ui:VisualElement class="ghost-art-image ghost-art-tikbalang" />
+                        </ui:VisualElement>
+                        <ui:Label text="Fig 1.0 — Tikbalang (Equus daemonium)" class="ghost-caption-text" />
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Lore & Evidence -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="TIKBALANG" class="ghost-header-name" />
+                        <ui:Label text="The Forest Trickster (Mapaglarong Nilalang)" class="ghost-sub-title" />
+                        
+                        <ui:Label text="A towering half-human, half-horse demon of Philippine folklore. Roams dense forests and secluded properties, delighting in disorienting wanderers and leading them into endless loops." class="ghost-lore-paragraph" />
+                        
+                        <ui:VisualElement class="ghost-traits-section">
+                            <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
+                            <ui:Label text="• Provoked heavily by running and rapid investigator movement." class="ghost-trait-bullet" />
+                            <ui:Label text="• Highly communicative; responds frequently through the Spirit Box." class="ghost-trait-bullet" />
+                            <ui:Label text="• Emits intense electromagnetic surges and luminous Ghost Orbs." class="ghost-trait-bullet" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="ghost-evidence-tag-box">
+                            <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
+                            <ui:VisualElement class="ghost-evidence-chips">
+                                <ui:Label text="EMF Level 5" class="evidence-chip" />
+                                <ui:Label text="Spirit Box" class="evidence-chip" />
+                                <ui:Label text="Ghost Orbs" class="evidence-chip" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:Label text="Tip: Invert your outerwear (baliktarin ang damit) if illusions cloud your path." class="ghost-tip-text" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 5: GHOST 2 - KAPRE ================= -->
+                <ui:VisualElement name="spread-5" class="journal-spread hidden-spread">
+                    <!-- Left Page: Illustration -->
+                    <ui:VisualElement class="journal-page left-page ghost-art-page">
+                        <ui:VisualElement class="ghost-art-frame">
+                            <ui:VisualElement class="ghost-art-image ghost-art-kapre" />
+                        </ui:VisualElement>
+                        <ui:Label text="Fig 2.0 — Kapre (Gigantus balete)" class="ghost-caption-text" />
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Lore & Evidence -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="KAPRE" class="ghost-header-name" />
+                        <ui:Label text="The Balete Giant (Higante sa Dilim)" class="ghost-sub-title" />
+                        
+                        <ui:Label text="A colossal, dark-furred tree titan standing over seven feet tall. The Kapre dwells in ancient Balete trees and ceilings, perpetually smoking an amber-lit cigar that fills rooms with eerie supernatural haze." class="ghost-lore-paragraph" />
+                        
+                        <ui:VisualElement class="ghost-traits-section">
+                            <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
+                            <ui:Label text="• Extremely territorial; drains investigator sanity rapidly when near." class="ghost-trait-bullet" />
+                            <ui:Label text="• Radiates severe supernatural cold, plunging temperatures below zero." class="ghost-trait-bullet" />
+                            <ui:Label text="• Towering spectral form easily reveals itself in D.O.T.S. laser beams." class="ghost-trait-bullet" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="ghost-evidence-tag-box">
+                            <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
+                            <ui:VisualElement class="ghost-evidence-chips">
+                                <ui:Label text="EMF Level 5" class="evidence-chip" />
+                                <ui:Label text="Freezing Temps" class="evidence-chip" />
+                                <ui:Label text="D.O.T.S. Projector" class="evidence-chip" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:Label text="Tip: A faint aroma of burning tobacco in the air signals its immediate presence." class="ghost-tip-text" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 6: GHOST 3 - MANANANGGAL ================= -->
+                <ui:VisualElement name="spread-6" class="journal-spread hidden-spread">
+                    <!-- Left Page: Illustration -->
+                    <ui:VisualElement class="journal-page left-page ghost-art-page">
+                        <ui:VisualElement class="ghost-art-frame">
+                            <ui:VisualElement class="ghost-art-image ghost-art-manananggal" />
+                        </ui:VisualElement>
+                        <ui:Label text="Fig 3.0 — Manananggal (Vampyrus volans)" class="ghost-caption-text" />
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Lore & Evidence -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="MANANANGGAL" class="ghost-header-name" />
+                        <ui:Label text="The Severed Predator (Lumilipad na Aswang)" class="ghost-sub-title" />
+                        
+                        <ui:Label text="The most feared vampiric demon of Philippine folklore. By night, it detaches its upper torso from its waist and takes flight with massive bat wings, descending from the rafters upon unsuspecting prey." class="ghost-lore-paragraph" />
+                        
+                        <ui:VisualElement class="ghost-traits-section">
+                            <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
+                            <ui:Label text="• Lethal hunter with rapid pursuit speed once a hunt commences." class="ghost-trait-bullet" />
+                            <ui:Label text="• Chills ambient room temperatures into sub-zero freezing ranges." class="ghost-trait-bullet" />
+                            <ui:Label text="• Obsessively scrawls demonic verses inside Ghost Writing Books." class="ghost-trait-bullet" />
+                            <ui:Label text="• Floats silently through hallways shedding luminous Ghost Orbs." class="ghost-trait-bullet" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="ghost-evidence-tag-box">
+                            <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
+                            <ui:VisualElement class="ghost-evidence-chips">
+                                <ui:Label text="Freezing Temps" class="evidence-chip" />
+                                <ui:Label text="Ghost Writing" class="evidence-chip" />
+                                <ui:Label text="Ghost Orbs" class="evidence-chip" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:Label text="Tip: Listen closely for leathery wing flaps and rooftop ticking noises." class="ghost-tip-text" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 7: EVIDENCE CHECKLIST & DEDUCTION ================= -->
+                <ui:VisualElement name="spread-7" class="journal-spread hidden-spread">
+                    <!-- Left Page: Evidence Checklist -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Evidence Collected" class="page-title" />
+                        
+                        <ui:VisualElement class="evidence-list">
+                            <ui:Toggle name="tgl-emf5" label="EMF Level 5" class="evidence-toggle" />
+                            <ui:Toggle name="tgl-freezing" label="Freezing Temperatures" class="evidence-toggle" />
+                            <ui:Toggle name="tgl-writing" label="Ghost Writing" class="evidence-toggle" />
+                            <ui:Toggle name="tgl-dots" label="D.O.T.S. Projector" class="evidence-toggle" />
+                            <ui:Toggle name="tgl-spiritbox" label="Spirit Box" class="evidence-toggle" />
+                            <ui:Toggle name="tgl-orbs" label="Ghost Orbs" class="evidence-toggle" />
+                        </ui:VisualElement>
+                        
+                        <ui:Label text="Select 3 evidences to narrow down the entity type." class="instruction-text" />
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Deduction -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="Deduction" class="page-title" />
+                        
+                        <ui:Label text="Based on your findings, what is haunting this location?" class="instruction-text" />
+                        
+                        <ui:VisualElement class="ghost-buttons-container">
+                            <ui:Button name="btn-ghost-tikbalang" text="Tikbalang" class="ghost-button" />
+                            <ui:Button name="btn-ghost-kapre" text="Kapre" class="ghost-button" />
+                            <ui:Button name="btn-ghost-manananggal" text="Manananggal" class="ghost-button" />
+                        </ui:VisualElement>
+                        
+                        <ui:VisualElement class="button-container">
+                            <ui:Button name="btn-lock-in" text="Lock In Deduction" class="lock-in-button" />
+                            <ui:Button name="btn-close" text="Close Journal" class="close-button" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
             </ui:VisualElement>
-            
+
+            <!-- Bottom Navigation Bar -->
+            <ui:VisualElement class="journal-nav-bar">
+                <ui:Button name="btn-prev-page" text="◀ Previous Page" class="nav-button" />
+                <ui:Label name="lbl-page-indicator" text="Page 1 of 7" class="page-indicator-label" />
+                <ui:Button name="btn-toc-jump" text="📖 Table of Contents" class="nav-button" />
+                <ui:Button name="btn-next-page" text="Next Page ▶" class="nav-button" />
+            </ui:VisualElement>
+
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

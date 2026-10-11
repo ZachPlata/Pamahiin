@@ -20,7 +20,6 @@
     border-width: 1px;
     border-color: rgba(100, 0, 0, 0.5);
     -unity-font-style: bold;
-    cursor: link;
     transition-duration: 0.3s;
 }
 
@@ -115,4 +114,143 @@
     background-color: gray;
     border-width: 1px;
     border-color: rgba(0,0,0,0.5);
+}
+
+/* ========================================================
+   HANDHELD CAMERA NIGHT VISION VIEW FINDER GUI
+   ======================================================== */
+.nv-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    justify-content: space-between;
+    padding: 35px 45px;
+    picking-mode: ignore;
+}
+
+.nv-overlay-hidden {
+    display: none;
+}
+
+.nv-overlay-graphic {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('project://database/Assets/UI/HUD/night_vision_overlay.png');
+    -unity-background-scale-mode: stretch-to-fill;
+    picking-mode: ignore;
+}
+
+.nv-top-bar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.nv-hud-text {
+    color: rgb(235, 235, 235);
+    font-size: 16px;
+    -unity-font-style: bold;
+    text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+    letter-spacing: 1px;
+}
+
+.nv-hud-subtext {
+    color: rgba(220, 220, 220, 0.85);
+    font-size: 13px;
+    -unity-font-style: normal;
+    letter-spacing: 1px;
+}
+
+.nv-rec-cluster {
+    flex-direction: row;
+    align-items: center;
+}
+
+.nv-rec-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    background-color: rgb(255, 30, 30);
+    margin-right: 8px;
+    border-width: 1px;
+    border-color: rgb(150, 0, 0);
+}
+
+.nv-rec-dot-dim {
+    opacity: 0.1;
+}
+
+.nv-rec-label {
+    color: rgb(255, 50, 50);
+    margin-right: 12px;
+    text-shadow: 0 0 6px rgba(255, 0, 0, 0.7);
+}
+
+.nv-timer-label {
+    color: rgb(235, 235, 235);
+}
+
+.nv-badge-cluster {
+    background-color: rgba(20, 20, 20, 0.75);
+    border-width: 1px;
+    border-color: rgb(200, 200, 200);
+    padding: 3px 12px;
+    border-radius: 3px;
+}
+
+.nv-nvg-badge {
+    font-size: 14px;
+}
+
+.nv-battery-cluster {
+    flex-direction: row;
+    align-items: center;
+}
+
+.nv-battery-box {
+    width: 28px;
+    height: 14px;
+    border-width: 2px;
+    border-color: rgb(220, 220, 220);
+    margin-left: 6px;
+    margin-right: 6px;
+    padding: 1px;
+    border-radius: 2px;
+}
+
+.nv-battery-fill {
+    width: 85%;
+    height: 100%;
+    background-color: rgb(220, 220, 220);
+}
+
+.nv-center-area {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.nv-bottom-bar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.nv-bottom-left {
+    align-items: flex-start;
+}
+
+.nv-bottom-right {
+    align-items: flex-end;
 }

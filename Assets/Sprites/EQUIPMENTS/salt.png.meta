@@ -3,8 +3,8 @@ guid: 9a28083e44b5adb41a77068fd047fe0d
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -1162442978445507191
-    second: salt_0
+      213: -673306825874429820
+    second: Salt_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: salt_0
+      name: Salt_0
       rect:
         serializedVersion: 2
-        x: 9
-        y: 0
-        width: 30
-        height: 47
+        x: 251
+        y: 23
+        width: 512
+        height: 978
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 985cb1e154c2edfe0800000000000000
-      internalID: -1162442978445507191
+      spriteID: 488a8ea520fe7a6f0800000000000000
+      internalID: -673306825874429820
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      salt_0: -1162442978445507191
+      Salt_0: -673306825874429820
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

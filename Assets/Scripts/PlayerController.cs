@@ -3,6 +3,7 @@ using Unity.Netcode;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D))]
+[DisallowMultipleComponent]
 public class PlayerController : NetworkBehaviour
 {
     public static readonly List<PlayerController> AllPlayers = new List<PlayerController>();
@@ -12,14 +13,24 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private float sprintSpeed = 5.5f;
     [SerializeField] private float crouchSpeed = 1.6f;
 
+    public float WalkSpeed { get => walkSpeed; set => walkSpeed = value; }
+    public float SprintSpeed { get => sprintSpeed; set => sprintSpeed = value; }
+
     [Header("Stamina Settings")]
     [SerializeField] private float maxStamina = 1.25f;
     [SerializeField] private float staminaRegenRate = 0.5f;
     private float currentStamina;
 
+    public float CurrentStamina { get => currentStamina; set => currentStamina = value; }
+    public float MaxStamina { get => maxStamina; set => maxStamina = value; }
+
     [Header("Interaction Settings")]
     [SerializeField] private float maxReachRadius = 2.5f;
     [SerializeField] private LayerMask interactLayer;
+
+    [Header("Rotation Settings")]
+    [Tooltip("Deadzone distance from the player center where mouse angle will not update (prevents jitter when hovering over the character pivot).")]
+    [SerializeField] private float rotationDeadzone = 0.03f;
 
     // Network states
     private NetworkVariable<bool> isAlive = new NetworkVariable<bool>(
@@ -39,7 +50,34 @@ public class PlayerController : NetworkBehaviour
     public float Sanity => sanity.Value;
     public bool IsInHideZone { get; private set; }
     public HideZone CurrentHideZone { get; private set; }
-    public bool IsInSafeZone { get; private set; }
+    private readonly System.Collections.Generic.HashSet<SafeZone> activeSafeZones = new System.Collections.Generic.HashSet<SafeZone>();
+
+    public bool IsInSafeZone
+    {
+        get
+        {
+            // 1. Clean up any inactive, disabled, or destroyed safe zones (e.g. lights turned off)
+            activeSafeZones.RemoveWhere(sz => sz == null || !sz.gameObject.activeInHierarchy || !sz.enabled);
+            if (activeSafeZones.Count > 0) return true;
+
+            // 2. Physics overlap fallback (handles spawning inside trigger or standing in room when light turns on)
+            Collider2D[] overlapping = Physics2D.OverlapCircleAll(transform.position, 0.25f);
+            foreach (var col in overlapping)
+            {
+                if (col != null && col.isTrigger)
+                {
+                    var sz = col.GetComponent<SafeZone>();
+                    if (sz != null && sz.isActiveAndEnabled)
+                    {
+                        activeSafeZones.Add(sz);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+    }
 
     /// <summary>
     /// Player is hidden from ghost vision raycasts when crouched inside a designated HideZone.
@@ -63,6 +101,12 @@ public class PlayerController : NetworkBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.freezeRotation = true;
+            rb.angularVelocity = 0f;
+            rb.constraints = RigidbodyConstraints2D.FreezeRotation;
+        }
         spriteRenderer = GetComponent<SpriteRenderer>();
         inventory = GetComponent<PlayerInventory>();
         animator = GetComponent<Animator>();
@@ -88,6 +132,25 @@ public class PlayerController : NetworkBehaviour
         AllPlayers.Remove(this);
     }
 
+    /// <summary>
+    /// Checks whether player movement and rotation should be blocked by open full-screen GUIs:
+    /// Dev Console, Pause Menu, Truck Dashboard, Spirit Box Dialogue.
+    /// (Note: Journal keeps movement functional, so it is not in this set).
+    /// </summary>
+    public static bool IsMovementBlocked =>
+        DeveloperConsoleManager.IsConsoleOpen ||
+        PauseMenuController.IsOpen ||
+        TruckDashboardController.IsOpen ||
+        SpiritBoxItem.IsLocalDialogueActive;
+
+    /// <summary>
+    /// Checks whether world interactions (clicks, item usage, dragging, E interact, drop, place, slot switching)
+    /// should be blocked by active GUIs (Journal, Pause Menu, Truck Dashboard, Dev Console, Spirit Box).
+    /// </summary>
+    public static bool IsInteractionBlocked =>
+        IsMovementBlocked ||
+        JournalController.IsOpen;
+
     private void Update()
     {
         if (IsServer && isAlive.Value)
@@ -107,7 +170,25 @@ public class PlayerController : NetworkBehaviour
 
         if (!IsOwner || !isAlive.Value) return;
 
-        // 1. Gather WASD input
+        // Block movement and world interactions while in locking GUIs (Pause Menu, Truck Dashboard, Dev Console, Spirit Box)
+        if (IsMovementBlocked)
+        {
+            moveInput = Vector2.zero;
+            if (currentDraggedInteractable != null)
+            {
+                currentDraggedInteractable.OnDragEnd(NetworkManager.Singleton.LocalClientId);
+                currentDraggedInteractable = null;
+            }
+            currentlyHoveredInteractable = null;
+            if (animator != null)
+            {
+                animator.SetBool("isWalking", false);
+                animator.SetBool("isHolding", inventory != null && inventory.CurrentItem != null);
+            }
+            return;
+        }
+
+        // 1. Gather WASD input (functional during normal gameplay and while Journal is open)
         float moveX = Input.GetAxisRaw("Horizontal");
         float moveY = Input.GetAxisRaw("Vertical");
         moveInput = new Vector2(moveX, moveY).normalized;
@@ -117,6 +198,25 @@ public class PlayerController : NetworkBehaviour
         if (crouchHeld != isCrouching.Value)
         {
             isCrouching.Value = crouchHeld;
+        }
+
+        // If interaction is blocked (e.g. inside Journal), disable world interactions and clicks while keeping movement active
+        if (IsInteractionBlocked)
+        {
+            if (currentDraggedInteractable != null)
+            {
+                currentDraggedInteractable.OnDragEnd(NetworkManager.Singleton.LocalClientId);
+                currentDraggedInteractable = null;
+            }
+            currentlyHoveredInteractable = null;
+
+            // Maintain walking animation state for WASD movement in Journal
+            if (animator != null)
+            {
+                animator.SetBool("isWalking", moveInput.sqrMagnitude > 0.01f);
+                animator.SetBool("isHolding", inventory != null && inventory.CurrentItem != null);
+            }
+            return;
         }
 
         // 3. Mouse Position
@@ -222,6 +322,7 @@ public class PlayerController : NetworkBehaviour
     private void FixedUpdate()
     {
         if (!IsOwner || !isAlive.Value) return;
+        if (IsMovementBlocked) return;
 
         // 1. Determine current speed
         float currentSpeed = walkSpeed;
@@ -241,12 +342,39 @@ public class PlayerController : NetworkBehaviour
 
         rb.MovePosition(rb.position + moveInput * currentSpeed * Time.fixedDeltaTime);
 
+        // While Journal is open, rotate along movement direction so mouse UI interaction doesn't rotate character
+        if (JournalController.IsOpen)
+        {
+            if (moveInput.sqrMagnitude > 0.01f)
+            {
+                float moveAngle = Mathf.Atan2(moveInput.y, moveInput.x) * Mathf.Rad2Deg - 90f;
+                rb.MoveRotation(moveAngle);
+            }
+            else
+            {
+                rb.angularVelocity = 0f;
+            }
+            return;
+        }
+
+        // Update mouse position synchronously with physics step
+        if (localCamera != null)
+        {
+            Vector3 mouseScreen = Input.mousePosition;
+            mouseScreen.z = Mathf.Abs(localCamera.transform.position.z);
+            mousePosition = localCamera.ScreenToWorldPoint(mouseScreen);
+        }
+
         // 2. Apply Rotation (Look at Mouse)
         Vector2 lookDirection = mousePosition - rb.position;
-        if (lookDirection.sqrMagnitude > 0.001f)
+        if (lookDirection.sqrMagnitude > rotationDeadzone * rotationDeadzone)
         {
             float angle = Mathf.Atan2(lookDirection.y, lookDirection.x) * Mathf.Rad2Deg - 90f;
             rb.MoveRotation(angle);
+        }
+        else
+        {
+            rb.angularVelocity = 0f;
         }
     }
 
@@ -256,9 +384,28 @@ public class PlayerController : NetworkBehaviour
         CurrentHideZone = inZone ? zone : null;
     }
 
+    public void AddSafeZone(SafeZone zone)
+    {
+        if (zone != null)
+        {
+            activeSafeZones.Add(zone);
+        }
+    }
+
+    public void RemoveSafeZone(SafeZone zone)
+    {
+        if (zone != null)
+        {
+            activeSafeZones.Remove(zone);
+        }
+    }
+
     public void SetInSafeZone(bool isSafe)
     {
-        IsInSafeZone = isSafe;
+        if (!isSafe)
+        {
+            activeSafeZones.Clear();
+        }
     }
 
     private void OnCrouchStateChanged(bool crouched)
@@ -290,6 +437,30 @@ public class PlayerController : NetworkBehaviour
             if (col != null) col.enabled = false;
             rb.linearVelocity = Vector2.zero;
         }
+        else
+        {
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.color = Color.white;
+            }
+
+            gameObject.layer = LayerMask.NameToLayer("Player");
+
+            var col = GetComponent<Collider2D>();
+            if (col != null) col.enabled = true;
+        }
+    }
+
+    /// <summary>
+    /// Server method to revive a dead player.
+    /// </summary>
+    public bool RevivePlayer()
+    {
+        if (!IsServer) return false;
+        if (isAlive.Value) return false;
+        isAlive.Value = true;
+        sanity.Value = 100f;
+        return true;
     }
 
     /// <summary>

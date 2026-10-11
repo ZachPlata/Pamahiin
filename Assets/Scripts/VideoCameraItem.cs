@@ -7,7 +7,7 @@ public class VideoCameraItem : EquipmentItem
 {
     [Header("Video Camera Settings")]
     [SerializeField] private Color nightVisionColor = new Color(0.2f, 0.2f, 0.2f);
-    [SerializeField] private float nightVisionRadius = 15f;
+    [SerializeField] private float nightVisionRadius = 22f;
     
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -44,9 +44,13 @@ public class VideoCameraItem : EquipmentItem
 
     private void SetupNightVisionEffects()
     {
+        int[] allSortingLayerIds = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
+
         // 1. Setup Volume for Black and White (player night vision)
         GameObject volumeObj = new GameObject("NightVisionVolume");
-        volumeObj.transform.SetParent(transform);
+        volumeObj.hideFlags = HideFlags.HideInHierarchy;
+        volumeObj.transform.SetParent(null);
+        volumeObj.transform.localScale = Vector3.one;
         nightVisionVolume = volumeObj.AddComponent<Volume>();
         nightVisionVolume.isGlobal = true;
         nightVisionVolume.priority = 100;
@@ -57,26 +61,30 @@ public class VideoCameraItem : EquipmentItem
             if (profile.TryGet(out ColorAdjustments colorAdj))
             {
                 colorAdj.saturation.Override(-100f);
+                colorAdj.postExposure.Override(1.3f);
+                colorAdj.contrast.Override(20f);
             }
         }
         nightVisionVolume.sharedProfile = profile;
         nightVisionVolume.weight = 0f;
 
         // 2. Setup Point Light2D to see in the dark (player hand-held night vision)
-        // Uses shadow casting so the light is blocked by walls (requires ShadowCaster2D on walls).
-        // Only the local holder enables it (client-sided), so other players won't see it.
+        // Kept unscaled from the weapon/item transform so it maintains true 22m radius in world space.
         GameObject lightObj = new GameObject("NightVisionLight");
-        lightObj.transform.SetParent(transform);
+        lightObj.hideFlags = HideFlags.HideInHierarchy;
+        lightObj.transform.SetParent(null);
+        lightObj.transform.localScale = Vector3.one;
         nightVisionLight = lightObj.AddComponent<Light2D>();
         nightVisionLight.lightType = Light2D.LightType.Point;
         nightVisionLight.color = Color.white;
-        nightVisionLight.intensity = 1.0f;
+        nightVisionLight.intensity = 2.0f;
         nightVisionLight.pointLightOuterRadius = nightVisionRadius;
         nightVisionLight.pointLightInnerRadius = 0f;
         nightVisionLight.pointLightInnerAngle = 360f;
         nightVisionLight.pointLightOuterAngle = 360f;
         nightVisionLight.shadowsEnabled = true;
-        nightVisionLight.shadowIntensity = 1f;
+        nightVisionLight.shadowIntensity = 0.6f;
+        nightVisionLight.targetSortingLayers = allSortingLayerIds;
         nightVisionLight.enabled = false;
         
         // 3. Setup CCTV Camera for the Truck Dashboard feed
@@ -101,12 +109,13 @@ public class VideoCameraItem : EquipmentItem
         // Enable post-processing on the CCTV camera
         var cctvCamData = cctvObj.AddComponent<UniversalAdditionalCameraData>();
         cctvCamData.renderPostProcessing = true;
+        cctvCamData.volumeLayerMask = ~0;
         
         // 4. Setup B&W Volume for CCTV feed
-        // Toggled via camera rendering events so it only applies during CCTV camera rendering.
-        // Only active when CCTV night vision is enabled from the dashboard.
         GameObject cctvVolumeObj = new GameObject("CCTV_BW_Volume");
-        cctvVolumeObj.transform.SetParent(cctvObj.transform);
+        cctvVolumeObj.hideFlags = HideFlags.HideInHierarchy;
+        cctvVolumeObj.transform.SetParent(null);
+        cctvVolumeObj.transform.localScale = Vector3.one;
         
         cctvBWVolume = cctvVolumeObj.AddComponent<Volume>();
         cctvBWVolume.isGlobal = true;
@@ -119,26 +128,27 @@ public class VideoCameraItem : EquipmentItem
             if (cctvProfile.TryGet(out ColorAdjustments cctvColorAdj))
             {
                 cctvColorAdj.saturation.Override(-100f);
+                cctvColorAdj.postExposure.Override(1.5f);
+                cctvColorAdj.contrast.Override(25f);
             }
         }
         cctvBWVolume.sharedProfile = cctvProfile;
 
-        // 5. Setup CCTV Night Vision Light
-        // This light is toggled via rendering events (begin/end camera rendering)
-        // so it only illuminates during the CCTV camera's render — invisible to main camera.
+        // 5. Setup CCTV Night Vision Light (unscaled so placed cameras illuminate fully)
         GameObject cctvLightObj = new GameObject("CCTV_NightVisionLight");
-        cctvLightObj.transform.SetParent(cctvObj.transform);
-        cctvLightObj.transform.localPosition = Vector3.zero;
+        cctvLightObj.hideFlags = HideFlags.HideInHierarchy;
+        cctvLightObj.transform.SetParent(null);
+        cctvLightObj.transform.localScale = Vector3.one;
         cctvNightVisionLight = cctvLightObj.AddComponent<Light2D>();
         cctvNightVisionLight.lightType = Light2D.LightType.Point;
         cctvNightVisionLight.color = Color.white;
-        cctvNightVisionLight.intensity = 1.0f;
-        cctvNightVisionLight.pointLightOuterRadius = nightVisionRadius;
+        cctvNightVisionLight.intensity = 2.0f;
+        cctvNightVisionLight.pointLightOuterRadius = 35f;
         cctvNightVisionLight.pointLightInnerRadius = 0f;
         cctvNightVisionLight.pointLightInnerAngle = 360f;
         cctvNightVisionLight.pointLightOuterAngle = 360f;
-        cctvNightVisionLight.shadowsEnabled = true;
-        cctvNightVisionLight.shadowIntensity = 1f;
+        cctvNightVisionLight.shadowsEnabled = false;
+        cctvNightVisionLight.targetSortingLayers = allSortingLayerIds;
         cctvNightVisionLight.enabled = false;
     }
 
@@ -168,7 +178,11 @@ public class VideoCameraItem : EquipmentItem
         if (cam == cctvCamera && cctvNightVisionEnabled)
         {
             if (cctvBWVolume != null) cctvBWVolume.weight = 1f;
-            if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = true;
+            if (cctvNightVisionLight != null)
+            {
+                cctvNightVisionLight.transform.position = new Vector3(cam.transform.position.x, cam.transform.position.y, 0f);
+                cctvNightVisionLight.enabled = true;
+            }
         }
     }
 
@@ -247,6 +261,10 @@ public class VideoCameraItem : EquipmentItem
             if (transform.root != null)
             {
                 nightVisionLight.transform.position = transform.root.position;
+            }
+            else
+            {
+                nightVisionLight.transform.position = transform.position;
             }
         }
     }
@@ -347,6 +365,11 @@ public class VideoCameraItem : EquipmentItem
                 dashboard.UnregisterDynamicCamera(cctvCamera);
             }
         }
+
+        if (nightVisionVolume != null) Destroy(nightVisionVolume.gameObject);
+        if (nightVisionLight != null) Destroy(nightVisionLight.gameObject);
+        if (cctvBWVolume != null) Destroy(cctvBWVolume.gameObject);
+        if (cctvNightVisionLight != null) Destroy(cctvNightVisionLight.gameObject);
 
         if (localCamera != null && cameraSettingsStored)
         {

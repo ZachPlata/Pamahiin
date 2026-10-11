@@ -47,6 +47,7 @@ public class EventGhostBehavior : NetworkBehaviour
     private Vector3 initialSpawnLocation;
     private Vector3 currentDestination;
     private float waitTimer = 0f;
+    private float wanderStuckTimer = 0f;
     private bool isInitialized = false;
 
     // Network synced state for visibility
@@ -56,6 +57,19 @@ public class EventGhostBehavior : NetworkBehaviour
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.gravityScale = 0f;
+            rb.freezeRotation = true;
+        }
+
+        var col = GetComponent<Collider2D>();
+        if (col == null)
+        {
+            var circle = gameObject.AddComponent<CircleCollider2D>();
+            circle.radius = 0.2f;
+        }
+
         ghostSprite = GetComponentInChildren<SpriteRenderer>();
     }
 
@@ -168,8 +182,10 @@ public class EventGhostBehavior : NetworkBehaviour
 
         MoveTowards(currentDestination, wanderSpeed);
 
-        if (Vector2.Distance(rb.position, currentDestination) < 0.2f)
+        wanderStuckTimer += Time.fixedDeltaTime;
+        if (Vector2.Distance(rb.position, currentDestination) < 0.2f || wanderStuckTimer > 5.0f)
         {
+            wanderStuckTimer = 0f;
             waitTimer -= Time.fixedDeltaTime;
             if (waitTimer <= 0f)
             {
@@ -188,6 +204,19 @@ public class EventGhostBehavior : NetworkBehaviour
                     currentDestination = initialSpawnLocation + (Vector3)randomOffset;
                 }
                 waitTimer = Random.Range(2f, 5f);
+            }
+        }
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        // Don't physically block players when wandering invisibly
+        if (collision.gameObject.GetComponent<PlayerController>() != null)
+        {
+            var myCol = GetComponent<Collider2D>();
+            if (myCol != null && collision.collider != null)
+            {
+                Physics2D.IgnoreCollision(myCol, collision.collider, true);
             }
         }
     }

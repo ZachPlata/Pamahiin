@@ -15,7 +15,7 @@ public class GameMatchManager : NetworkBehaviour
 
     private Dictionary<ulong, string> playerDeductions = new Dictionary<ulong, string>();
 
-    // We dynamically fetch the ghost name from GhostController instead.
+    // We dynamically fetch the ghost name from GhostHandler instead.
 
     private void Awake()
     {

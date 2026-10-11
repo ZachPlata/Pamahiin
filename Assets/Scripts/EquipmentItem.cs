@@ -60,6 +60,21 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         OnPlacedChanged(isPlaced.Value);
     }
 
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+
+        // If this item was held in local inventory, clean up the slot
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient?.PlayerObject != null)
+        {
+            var localInventory = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerInventory>();
+            if (localInventory != null)
+            {
+                localInventory.RemoveItem(this);
+            }
+        }
+    }
+
     protected virtual void Update()
     {
         // Follow the owner's hand/position smoothly
@@ -258,7 +273,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     }
 
     // --- IInteractable Dragging Methods ---
-    public bool CanDrag() => IsOnGround; // Can only drag if it's dropped (not placed)
+    public virtual bool CanDrag() => IsOnGround; // Can only drag if it's dropped (not placed)
     
     public void OnDragBegin(ulong clientId)
     {

@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Netcode;
 using UnityEngine.AI;
+using System.Collections.Generic;
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class HunterGhostBehavior : NetworkBehaviour
@@ -9,14 +10,24 @@ public class HunterGhostBehavior : NetworkBehaviour
     public GhostHandler ghostHandler; // The Group Leader
 
     [Header("Hunt Settings")]
-    public float moveSpeed = 2.5f;
-    public float chaseSpeed = 3.8f;
+    public float moveSpeed = 0.5f;
+    public float chaseSpeed = 0.6f;
     public int maxNodesBeforeReturn = 8; // Kept for inspector compatibility
+    [SerializeField] private float agentAcceleration = 6.0f;
+    [SerializeField] private float agentStoppingDistance = 0.15f;
 
     [Header("LOS Settings")]
     public float lineOfSightDistance = 8f;
     public float lineOfSightAngle = 90f;
     public LayerMask obstacleLayer; // Kept for inspector compatibility
+
+    [Header("Door & Cabinet Interaction")]
+    [Tooltip("Distance at which the ghost reaches and forces open a target cabinet door.")]
+    [SerializeField] private float doorOpenReach = 2.0f;
+
+    [Header("Combat & Kill")]
+    [Tooltip("Range within which the ghost can kill the player (sufficient to reach players inside cabinets/cover).")]
+    [SerializeField] private float killDistance = 0.3f;
 
     private Rigidbody2D rb;
     private NavMeshAgent agent;
@@ -26,14 +37,32 @@ public class HunterGhostBehavior : NetworkBehaviour
     private PlayerController chaseTarget;
     private Vector3 lastKnownPlayerPos;
 
+    // Targeted hiding spot tracking:
+    // Only set when the ghost has UNBROKEN LOS and sees the player close the cabinet door,
+    // OR when the player has active equipment powered on inside the cabinet.
+    private NetworkDoor targetedHidingDoor = null;
+
+    [Header("Chase Memory & Tracking")]
+    [Tooltip("How long the ghost remembers and pursues the player's last known location after losing direct sight.")]
+    [SerializeField] private float chaseMemoryDuration = 3.0f;
+    private float chaseLostTimer = 0f;
+    private bool isTrackingEquipment = false;
+
     private float activeEquipmentScanTimer = 0f;
 
-    private System.Collections.Generic.Queue<GhostNode> recentNodes = new System.Collections.Generic.Queue<GhostNode>();
+    private Queue<GhostNode> recentNodes = new Queue<GhostNode>();
     private int historySize = 3;
 
     // Breadcrumb cache for chasing (Kept for backwards compatibility with Dev Console)
     public static bool ShowBreadcrumbs = false;
     private LineRenderer breadcrumbLine;
+
+    [Header("Exorcism & Angered State")]
+    private bool isAngeredState = false;
+    private bool isRepelled = false;
+    private float repelTimer = 0f;
+    public bool IsAngeredState => isAngeredState;
+    public bool IsRepelled => isRepelled;
 
     private void Awake()
     {
@@ -52,7 +81,10 @@ public class HunterGhostBehavior : NetworkBehaviour
         agent.updatePosition = true; // Let NavMeshAgent perfectly move the transform
         agent.updateRotation = false; // We handle rotation manually for vision cone accuracy
         agent.updateUpAxis = false;   // Essential for 2D NavMesh (XY plane)
-        
+        agent.acceleration = agentAcceleration;
+        agent.stoppingDistance = agentStoppingDistance;
+        agent.autoBraking = false;
+
         // Setup dummy LineRenderer for backwards compatibility with Dev Console Button
         breadcrumbLine = gameObject.AddComponent<LineRenderer>();
         breadcrumbLine.enabled = false;
@@ -63,27 +95,52 @@ public class HunterGhostBehavior : NetworkBehaviour
         if (!IsServer) return;
         Debug.Log("HunterGhost: OnHuntStarted called. NavMesh Activated.");
 
-        // Ensure the agent is snapped to the NavMesh
+        // Ensure the agent is snapped to the nearest valid NavMesh position
         if (!agent.isOnNavMesh)
         {
-            agent.Warp(transform.position);
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 3.0f, NavMesh.AllAreas))
+            {
+                agent.Warp(hit.position);
+            }
+            else
+            {
+                agent.Warp(transform.position);
+            }
             if (!agent.isOnNavMesh) Debug.LogWarning("HunterGhost: FAILED to snap to NavMesh! Ensure the room marker is on a baked area.");
         }
 
         nodesVisitedCount = 0;
         chaseTarget = null;
+        targetedHidingDoor = null;
+        isTrackingEquipment = false;
+        chaseLostTimer = 0f;
         recentNodes.Clear();
         targetNode = FindNearestNode(transform.position);
     }
 
     private void Update()
     {
+        if (isRepelled)
+        {
+            repelTimer -= Time.deltaTime;
+            if (repelTimer <= 0f)
+            {
+                isRepelled = false;
+                Debug.Log("HunterGhost: Crucifix repel effect has expired!");
+            }
+        }
+
         if (IsServer)
         {
             if (ghostHandler != null)
             {
-                // Sync NavMeshAgent speed
-                agent.speed = (ghostHandler.CurrentState == GhostHandlerState.Chasing) ? chaseSpeed : moveSpeed;
+                // Sync NavMeshAgent speed (Angered state moves much faster!)
+                float currentBaseSpeed = (ghostHandler.CurrentState == GhostHandlerState.Chasing) ? chaseSpeed : moveSpeed;
+                if (isAngeredState)
+                {
+                    currentBaseSpeed *= 2.2f;
+                }
+                agent.speed = isRepelled ? (moveSpeed * 0.5f) : currentBaseSpeed;
 
                 if (ghostHandler.CurrentState == GhostHandlerState.Chasing)
                 {
@@ -94,10 +151,11 @@ public class HunterGhostBehavior : NetworkBehaviour
                     UpdateNodePathfinding();
                 }
 
-                // Scan for players
+                // Scan for players & check door obstructions
                 if (ghostHandler.CurrentState != GhostHandlerState.Dormant)
                 {
                     CheckLineOfSight();
+                    CheckDoorObstructions();
                 }
             }
         }
@@ -117,41 +175,81 @@ public class HunterGhostBehavior : NetworkBehaviour
 
     private void UpdateChasing()
     {
-        if (chaseTarget != null && chaseTarget.IsAlive && !chaseTarget.IsHiddenFromGhost)
+        LayerMask combinedMask = GetCombinedObstacleMask();
+
+        // Always check if the ghost has reached a cabinet door concealing a player
+        CheckCabinetDoorInteractions();
+
+        if (chaseTarget != null && chaseTarget.IsAlive)
         {
-            lastKnownPlayerPos = chaseTarget.transform.position;
-            agent.SetDestination(chaseTarget.transform.position);
-            
             Vector2 dirToPlayer = chaseTarget.transform.position - (Vector3)transform.position;
             float distance = dirToPlayer.magnitude;
-            
-            bool loseSight = distance > lineOfSightDistance * 1.5f;
-            if (!loseSight && distance > 0.5f)
+
+            bool playerHasActiveEquip = IsPlayerEquipmentActive(chaseTarget);
+            bool hasVisualLOS = CheckHasVisualLOS(chaseTarget, distance, combinedMask);
+
+            if (hasVisualLOS || playerHasActiveEquip)
             {
-                RaycastHit2D hit = Physics2D.Raycast(transform.position, dirToPlayer.normalized, distance, obstacleLayer);
-                if (hit.collider != null) loseSight = true;
+                isTrackingEquipment = playerHasActiveEquip;
+                lastKnownPlayerPos = chaseTarget.transform.position;
+                chaseLostTimer = chaseMemoryDuration;
+                SetAgentDestination(chaseTarget.transform.position);
             }
-            
-            if (loseSight)
+            else
             {
-                if (chaseTarget != null) Debug.Log("HunterGhost: Lost sight of player. Moving to last known position.");
-                chaseTarget = null;
-            }
-            
-            if (chaseTarget != null && distance < 0.125f) // Using your 0.125 tight kill range
-            {
-                if (chaseTarget.KillPlayer())
+                // Visual LOS broken & no active equipment -> follow to last known position with grace timer
+                chaseLostTimer -= Time.deltaTime;
+                SetAgentDestination(lastKnownPlayerPos);
+
+                if (chaseLostTimer <= 0f)
                 {
-                    ghostHandler.EndHunt();
+                    Debug.Log("HunterGhost: Lost sight of player and memory expired. Returning to last known position.");
+                    chaseTarget = null;
+                    targetedHidingDoor = null;
+                    isTrackingEquipment = false;
+                }
+            }
+
+            // Kill check (reaches players in open rooms as well as players inside opened cabinets)
+            if (isRepelled)
+            {
+                // Cannot kill during crucifix repel window!
+                return;
+            }
+
+            if (chaseTarget != null && distance <= killDistance)
+            {
+                RaycastHit2D killCheck = Physics2D.Raycast(transform.position, dirToPlayer.normalized, distance, combinedMask);
+                bool canKill = (killCheck.collider == null);
+                if (!canKill)
+                {
+                    var door = GetDoorFromCollider(killCheck.collider);
+                    if (door != null && door.IsOpen)
+                    {
+                        canKill = true;
+                    }
+                }
+
+                if (canKill)
+                {
+                    if (chaseTarget.KillPlayer())
+                    {
+                        NotifyPlayerCaughtClientRpc(chaseTarget.OwnerClientId);
+                        ghostHandler.EndHunt();
+                        return;
+                    }
                 }
             }
         }
         else
         {
-            agent.SetDestination(lastKnownPlayerPos);
-            if (Vector2.Distance(transform.position, lastKnownPlayerPos) < 0.5f)
+            // ChaseTarget is null: Navigate to last known player position
+            SetAgentDestination(lastKnownPlayerPos);
+
+            float distToLastKnown = Vector2.Distance(transform.position, lastKnownPlayerPos);
+            if (distToLastKnown < 0.5f)
             {
-                Debug.Log("HunterGhost: Reached last known position. Searching for nodes again.");
+                Debug.Log("HunterGhost: Reached last known position. Returning to search.");
                 recentNodes.Clear();
                 targetNode = FindNearestNode(transform.position);
                 ghostHandler.RequestStateChange(GhostHandlerState.Searching);
@@ -167,18 +265,18 @@ public class HunterGhostBehavior : NetworkBehaviour
             if (targetNode == null) return;
         }
 
-        agent.SetDestination(targetNode.transform.position);
+        SetAgentDestination(targetNode.transform.position);
 
-        if (Vector2.Distance(transform.position, targetNode.transform.position) < 0.3f || (agent.hasPath && agent.remainingDistance < 0.3f))
+        if (Vector2.Distance(transform.position, targetNode.transform.position) < 0.5f || (agent.hasPath && agent.remainingDistance < 0.5f))
         {
             nodesVisitedCount++;
-            
+
             if (!recentNodes.Contains(targetNode))
             {
                 recentNodes.Enqueue(targetNode);
                 if (recentNodes.Count > historySize) recentNodes.Dequeue();
             }
-            
+
             if (ghostHandler != null && ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.bounds.Contains(transform.position))
             {
                 nodesVisitedCount = 0;
@@ -205,20 +303,40 @@ public class HunterGhostBehavior : NetworkBehaviour
 
     private void CheckLineOfSight()
     {
-        // Scan for active equipment first
+        LayerMask combinedMask = GetCombinedObstacleMask();
+
+        // 1. Scan for ACTIVE GHOST EQUIPMENT in hand
         activeEquipmentScanTimer -= Time.deltaTime;
         if (activeEquipmentScanTimer <= 0f)
         {
-            activeEquipmentScanTimer = 1f;
+            activeEquipmentScanTimer = 0.5f;
             foreach (var player in PlayerController.AllPlayers)
             {
-                if (player.IsAlive)
+                if (player != null && player.IsAlive && IsPlayerEquipmentActive(player))
                 {
-                    var inventory = player.GetComponent<PlayerInventory>();
-                    if (inventory != null && inventory.CurrentItem != null && inventory.CurrentItem.IsPoweredOn)
+                    float dist = Vector2.Distance(transform.position, player.transform.position);
+                    if (dist <= lineOfSightDistance * 1.5f)
                     {
-                        if (chaseTarget == null) Debug.Log("HunterGhost: I SEE THE PLAYER! Chasing!");
+                        // Check if player is hiding inside or near a closed cabinet/closet
+                        var allDoors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);
+                        foreach (var d in allDoors)
+                        {
+                            if (d != null && !d.IsFrontDoor && d.IsHidingSpot && !d.IsOpen)
+                            {
+                                if (Vector2.Distance(player.transform.position, d.transform.position) <= 1.5f)
+                                {
+                                    targetedHidingDoor = d;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (chaseTarget == null) Debug.Log($"HunterGhost: Detected active equipment on player '{player.name}'! Chasing!");
                         chaseTarget = player;
+                        lastKnownPlayerPos = player.transform.position;
+                        chaseLostTimer = chaseMemoryDuration;
+                        isTrackingEquipment = true;
+                        nodesVisitedCount = 0;
                         ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
                         return;
                     }
@@ -226,49 +344,233 @@ public class HunterGhostBehavior : NetworkBehaviour
             }
         }
 
+        // 2. Visual Line of Sight scan
         foreach (var player in PlayerController.AllPlayers)
         {
             if (player == null || !player.IsAlive) continue;
-            if (player.IsHiddenFromGhost) continue;
 
-            Vector2 dirToPlayer = player.transform.position - (Vector3)transform.position;
-            float distance = dirToPlayer.magnitude;
-
-            float currentLOS = ghostHandler.CurrentState == GhostHandlerState.Chasing 
-                ? lineOfSightDistance * 1.5f 
+            float distance = Vector2.Distance(transform.position, player.transform.position);
+            float currentLOS = (ghostHandler.CurrentState == GhostHandlerState.Chasing)
+                ? lineOfSightDistance * 1.5f
                 : lineOfSightDistance;
 
-            if (distance <= currentLOS)
+            if (distance <= currentLOS && CheckHasVisualLOS(player, distance, combinedMask))
             {
-                bool hasLOS = distance < 0.5f;
-                if (!hasLOS)
+                if (chaseTarget == null)
                 {
-                    RaycastHit2D hit = Physics2D.Raycast(transform.position, dirToPlayer.normalized, distance, obstacleLayer);
-                    if (hit.collider == null) hasLOS = true;
+                    if (ghostHandler.CurrentState == GhostHandlerState.Chasing)
+                        Debug.Log("HunterGhost: Player spotted! Re-acquiring target!");
+                    else
+                        Debug.Log("HunterGhost: I SEE THE PLAYER! Chasing!");
                 }
 
-                if (hasLOS)
+                chaseTarget = player;
+                lastKnownPlayerPos = player.transform.position;
+                chaseLostTimer = chaseMemoryDuration;
+                nodesVisitedCount = 0;
+                ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
+                return;
+            }
+        }
+    }
+
+    private bool CheckHasVisualLOS(PlayerController player, float distance, LayerMask combinedMask)
+    {
+        if (player == null || !player.IsAlive) return false;
+        if (distance > lineOfSightDistance * 1.5f) return false;
+        if (distance < 0.05f) return true;
+
+        Vector2 dir = (player.transform.position - transform.position).normalized;
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, dir, distance, combinedMask);
+        if (hit.collider == null) return true;
+
+        var door = GetDoorFromCollider(hit.collider);
+        if (door != null && door.IsOpen)
+        {
+            return true;
+        }
+
+        // Check if the obstruction is a closed cabinet/closet door that conceals the player
+        if (door != null && !door.IsFrontDoor && door.IsHidingSpot && !door.IsOpen)
+        {
+            if (Vector2.Distance(player.transform.position, door.transform.position) <= 1.5f)
+            {
+                targetedHidingDoor = door;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsPlayerEquipmentActive(PlayerController player)
+    {
+        if (player == null || !player.IsAlive) return false;
+        var inventory = player.GetComponent<PlayerInventory>();
+        return inventory != null && inventory.CurrentItem != null && inventory.CurrentItem.IsPoweredOn;
+    }
+
+    private void SetAgentDestination(Vector3 targetPos)
+    {
+        if (agent == null || !agent.isOnNavMesh) return;
+        if (NavMesh.SamplePosition(targetPos, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
+        {
+            agent.SetDestination(hit.position);
+        }
+        else
+        {
+            agent.SetDestination(targetPos);
+        }
+    }
+
+    // ── Door & Cabinet Handling ────────────────────────────────────────────
+
+    /// <summary>
+    /// Forces a door open, and also opens any adjacent partner doors (such as double cabinet/closet doors).
+    /// Only called when the ghost is SURE a player is inside (unbroken LOS or active equipment).
+    /// </summary>
+    public void OpenDoorAndConnected(NetworkDoor targetDoor)
+    {
+        if (targetDoor == null || targetDoor.IsFrontDoor) return;
+
+        Debug.Log($"HunterGhost: Ghost forcing open cabinet door '{targetDoor.name}'!");
+        targetDoor.GhostInteract(forceOpen: true);
+
+        // If this door is part of a double cabinet (e.g. Cabinet 1 Door 1 & Door 2), open the partner door as well
+        var allDoors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);
+        foreach (var other in allDoors)
+        {
+            if (other != null && other != targetDoor && !other.IsFrontDoor && !other.IsLocked)
+            {
+                // Double cabinet doors are located within ~1.2m of each other
+                if (Vector2.Distance(targetDoor.transform.position, other.transform.position) <= 1.2f)
                 {
-                    if (chaseTarget == null)
+                    Debug.Log($"HunterGhost: Opening partner cabinet door '{other.name}'!");
+                    other.GhostInteract(forceOpen: true);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks if the ghost is in reach of a closed cabinet door concealing a player during a chase.
+    /// If the ghost tracked the player to this cabinet, sees them enter, or detects active electronics inside,
+    /// it rips the cabinet door open.
+    /// </summary>
+    private void CheckCabinetDoorInteractions()
+    {
+        // 1. If we have a targeted hiding door, force it open as soon as the ghost is in reach
+        if (targetedHidingDoor != null)
+        {
+            float distToTargetDoor = Vector2.Distance(transform.position, targetedHidingDoor.transform.position);
+            if (distToTargetDoor <= doorOpenReach)
+            {
+                Debug.Log($"HunterGhost: Arrived at targeted cabinet door '{targetedHidingDoor.name}'! Forcing it open!");
+                OpenDoorAndConnected(targetedHidingDoor);
+                targetedHidingDoor = null;
+                return;
+            }
+        }
+
+        // 2. Scan all doors in reach of the ghost to see if a player is hiding behind one
+        LayerMask combinedMask = GetCombinedObstacleMask();
+        Collider2D[] nearbyCols = Physics2D.OverlapCircleAll(transform.position, doorOpenReach, combinedMask);
+        foreach (var col in nearbyCols)
+        {
+            var door = GetDoorFromCollider(col);
+            if (door != null && !door.IsFrontDoor && door.IsHidingSpot && !door.IsOpen)
+            {
+                bool playerHidingBehindDoor = false;
+
+                // Check living players near this cabinet door
+                foreach (var p in PlayerController.AllPlayers)
+                {
+                    if (p != null && p.IsAlive)
                     {
-                        if (ghostHandler.CurrentState == GhostHandlerState.Chasing)
-                            Debug.Log("HunterGhost: Player peeked! Re-acquiring target instead of following breadcrumbs!");
-                        else
-                            Debug.Log("HunterGhost: I SEE THE PLAYER! Chasing!");
+                        float distPlayerToDoor = Vector2.Distance(p.transform.position, door.transform.position);
+                        if (distPlayerToDoor <= 1.5f)
+                        {
+                            // A) Player has active equipment powered on inside the cabinet:
+                            if (IsPlayerEquipmentActive(p))
+                            {
+                                playerHidingBehindDoor = true;
+                                chaseTarget = p;
+                                lastKnownPlayerPos = p.transform.position;
+                                break;
+                            }
+
+                            // B) Ghost was actively chasing this player or memory timer is active:
+                            if (chaseTarget == p || chaseLostTimer > 0f)
+                            {
+                                playerHidingBehindDoor = true;
+                                chaseTarget = p;
+                                lastKnownPlayerPos = p.transform.position;
+                                break;
+                            }
+                        }
                     }
-                    
-                    chaseTarget = player;
-                    nodesVisitedCount = 0;
-                    ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
+                }
+
+                // C) Check if last known position was inside / right at this cabinet door
+                if (!playerHidingBehindDoor && Vector2.Distance(lastKnownPlayerPos, door.transform.position) <= 1.5f)
+                {
+                    if (chaseTarget != null || chaseLostTimer > 0f)
+                    {
+                        playerHidingBehindDoor = true;
+                    }
+                }
+
+                if (playerHidingBehindDoor)
+                {
+                    Debug.Log($"HunterGhost: Ghost caught player hiding behind cabinet door '{door.name}'! Forcing it open!");
+                    OpenDoorAndConnected(door);
+                    targetedHidingDoor = null;
                     return;
                 }
             }
         }
     }
 
+    private void CheckDoorObstructions()
+    {
+        // If a hunting ghost encounters an unlocked non-hiding interior door blocking its path, push it open
+        LayerMask combinedMask = GetCombinedObstacleMask();
+        Collider2D[] nearbyDoors = Physics2D.OverlapCircleAll(transform.position, 1.5f, combinedMask);
+        foreach (var col in nearbyDoors)
+        {
+            var door = GetDoorFromCollider(col);
+            if (door != null && !door.IsFrontDoor && !door.IsHidingSpot && !door.IsOpen && !door.IsLocked)
+            {
+                Debug.Log($"HunterGhost: Ghost pushed open interior door '{door.name}'!");
+                door.GhostInteract(forceOpen: true);
+            }
+        }
+    }
+
+    private NetworkDoor GetDoorFromCollider(Collider2D col)
+    {
+        if (col == null) return null;
+        var proxy = col.GetComponent<DoorInteractionProxy>() ?? col.GetComponentInParent<DoorInteractionProxy>();
+        if (proxy != null && proxy.TargetDoor != null) return proxy.TargetDoor;
+        return col.GetComponentInParent<NetworkDoor>() ?? col.GetComponent<NetworkDoor>();
+    }
+
+    private LayerMask GetCombinedObstacleMask()
+    {
+        LayerMask mask = obstacleLayer;
+        int interactableLayer = LayerMask.NameToLayer("Interactable");
+        if (interactableLayer >= 0)
+        {
+            mask |= (1 << interactableLayer);
+        }
+        return mask;
+    }
+
+    // ── Pathfinding Helpers ────────────────────────────────────────────────
+
     private GhostNode FindNearestNode(Vector3 position)
     {
-        GhostNode[] allNodes = FindObjectsByType<GhostNode>(FindObjectsSortMode.None);
+        GhostNode[] allNodes = FindObjectsByType<GhostNode>();
         GhostNode nearest = null;
         float minDist = float.MaxValue;
         foreach (var node in allNodes)
@@ -287,7 +589,7 @@ public class HunterGhostBehavior : NetworkBehaviour
     {
         if (current.neighbors == null || current.neighbors.Count == 0) return current;
 
-        System.Collections.Generic.List<GhostNode> validNeighbors = new System.Collections.Generic.List<GhostNode>();
+        List<GhostNode> validNeighbors = new List<GhostNode>();
         foreach (var neighbor in current.neighbors)
         {
             if (neighbor != null && !recentNodes.Contains(neighbor))
@@ -309,13 +611,13 @@ public class HunterGhostBehavior : NetworkBehaviour
 
         GhostNode bestNode = validNeighbors[0];
         float bestScore = -float.MaxValue;
-        Vector2 currentDir = transform.up; 
+        Vector2 currentDir = transform.up;
 
         foreach (var node in validNeighbors)
         {
             Vector2 dirToNode = (node.transform.position - transform.position).normalized;
             float score = Vector2.Dot(currentDir, dirToNode) + Random.Range(-0.2f, 0.4f);
-            
+
             if (score > bestScore)
             {
                 bestScore = score;
@@ -330,7 +632,7 @@ public class HunterGhostBehavior : NetworkBehaviour
     {
         if (current.neighbors == null || current.neighbors.Count == 0) return current;
 
-        System.Collections.Generic.List<GhostNode> validNeighbors = new System.Collections.Generic.List<GhostNode>();
+        List<GhostNode> validNeighbors = new List<GhostNode>();
         foreach (var neighbor in current.neighbors)
         {
             if (neighbor != null && !recentNodes.Contains(neighbor))
@@ -362,7 +664,161 @@ public class HunterGhostBehavior : NetworkBehaviour
                 bestNode = neighbor;
             }
         }
-        
+
         return bestNode;
+    }
+
+    /// <summary>
+    /// Sent to all clients; only the caught player's client will act on it.
+    /// </summary>
+    [Rpc(SendTo.ClientsAndHost)]
+    private void NotifyPlayerCaughtClientRpc(ulong caughtClientId)
+    {
+        // Only the local client that owns the caught player reacts
+        if (NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.LocalClientId == caughtClientId)
+        {
+            if (GhostAtmosphereController.Instance != null)
+                GhostAtmosphereController.Instance.OnPlayerCaught();
+        }
+    }
+
+    // ── Exorcism Mechanics ──────────────────────────────────────────
+
+    public void EnterAngeredState()
+    {
+        if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+        {
+            EnterAngeredStateRpc();
+        }
+        else
+        {
+            EnterAngeredStateLocal();
+        }
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void EnterAngeredStateRpc()
+    {
+        EnterAngeredStateLocal();
+    }
+
+    private void EnterAngeredStateLocal()
+    {
+        isAngeredState = true;
+        isRepelled = false;
+        repelTimer = 0f;
+        enabled = true;
+
+        if (agent != null)
+        {
+            agent.isStopped = false;
+            agent.speed = chaseSpeed * 2.2f;
+        }
+
+        var sr = GetComponentInChildren<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.enabled = true;
+            sr.color = new Color(1f, 0.2f, 0.2f, 1f); // Fiery red
+            sr.sortingLayerName = "Van";
+            sr.sortingOrder = 15;
+        }
+
+        if (IsServer && ghostHandler != null)
+        {
+            ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
+        }
+    }
+
+    public void ApplyCrucifixRepel(float duration, Vector3 repelSource)
+    {
+        if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+        {
+            ApplyCrucifixRepelRpc(duration, repelSource);
+        }
+        else
+        {
+            ApplyCrucifixRepelLocal(duration, repelSource);
+        }
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void ApplyCrucifixRepelRpc(float duration, Vector3 repelSource)
+    {
+        ApplyCrucifixRepelLocal(duration, repelSource);
+    }
+
+    private void ApplyCrucifixRepelLocal(float duration, Vector3 repelSource)
+    {
+        isRepelled = true;
+        repelTimer = duration;
+
+        if (agent != null)
+        {
+            // Flee away from repel source
+            Vector3 fleeDir = (transform.position - repelSource).normalized;
+            if (fleeDir.sqrMagnitude < 0.01f) fleeDir = Random.insideUnitCircle.normalized;
+            Vector3 fleeTarget = transform.position + fleeDir * 6f;
+            agent.SetDestination(fleeTarget);
+        }
+
+        if (ExorcismManager.Instance != null)
+        {
+            ExorcismManager.Instance.ShowRepelBanner(duration);
+        }
+    }
+
+    public void StartDyingSequence(AudioClip dyingClip)
+    {
+        StartCoroutine(DyingRoutine(dyingClip));
+    }
+
+    private System.Collections.IEnumerator DyingRoutine(AudioClip dyingClip)
+    {
+        enabled = false;
+        if (agent != null) agent.isStopped = true;
+
+        if (dyingClip != null)
+        {
+            AudioSource.PlayClipAtPoint(dyingClip, transform.position, 1f);
+        }
+
+        Vector3 originalPos = transform.position;
+        Vector3 originalScale = transform.localScale;
+        var sr = GetComponentInChildren<SpriteRenderer>();
+
+        float duration = 2.8f;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = elapsed / duration;
+
+            // Violently shake
+            float shakeMagnitude = Mathf.Lerp(0.18f, 0.02f, progress);
+            transform.position = originalPos + (Vector3)(Random.insideUnitCircle * shakeMagnitude);
+
+            // Shrink and fade
+            transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, progress);
+            if (sr != null)
+            {
+                Color c = sr.color;
+                c.a = Mathf.Lerp(1f, 0f, progress);
+                sr.color = c;
+            }
+
+            yield return null;
+        }
+
+        if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+        {
+            NetworkObject.Despawn(true);
+        }
+        else
+        {
+            gameObject.SetActive(false);
+        }
     }
 }

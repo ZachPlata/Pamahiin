@@ -11,11 +11,28 @@ public class PlayerInventory : NetworkBehaviour
     public event Action<int> OnSlotChanged;
     public event Action OnInventoryUpdated;
 
-    public EquipmentItem CurrentItem => (currentSlotIndex >= 0 && currentSlotIndex < MaxSlots) ? slots[currentSlotIndex] : null;
+    public EquipmentItem CurrentItem
+    {
+        get
+        {
+            if (currentSlotIndex >= 0 && currentSlotIndex < MaxSlots)
+            {
+                var item = slots[currentSlotIndex];
+                if (item == null)
+                {
+                    slots[currentSlotIndex] = null;
+                    return null;
+                }
+                return item;
+            }
+            return null;
+        }
+    }
 
     private void Update()
     {
         if (!IsOwner) return;
+        if (PlayerController.IsInteractionBlocked) return;
 
         // Slot selection via numeric hotkeys (1, 2, 3)
         if (Input.GetKeyDown(KeyCode.Alpha1)) SwitchSlot(0);
@@ -123,9 +140,11 @@ public class PlayerInventory : NetworkBehaviour
 
     public void RemoveItem(EquipmentItem item)
     {
+        if (item == null) return;
+
         for (int i = 0; i < MaxSlots; i++)
         {
-            if (slots[i] == item)
+            if (slots[i] == item || (object)slots[i] == (object)item)
             {
                 slots[i] = null;
                 OnInventoryUpdated?.Invoke();

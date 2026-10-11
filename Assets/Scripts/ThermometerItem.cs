@@ -15,6 +15,8 @@ public class ThermometerItem : EquipmentItem
     [SerializeField] private TMP_Text digitalDisplay;
     [SerializeField] private ParticleSystem freezingBreathEffect;
 
+    public float SampleDistance => sampleDistance;
+
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 

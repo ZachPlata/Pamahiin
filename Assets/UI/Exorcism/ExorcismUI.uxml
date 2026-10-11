@@ -1,20 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="ExorcismUI.uss" />
-    <ui:VisualElement name="exorcism-overlay" class="overlay hidden">
-        <ui:VisualElement class="minigame-container">
-            <ui:Label text="EXORCISM IN PROGRESS" class="title-label" />
-            
-            <ui:VisualElement class="progress-bar-bg">
-                <ui:VisualElement name="sweet-spot" class="sweet-spot" />
-                <ui:VisualElement name="cursor" class="cursor" />
+
+    <!-- 1. GHOST IDENTIFICATION POPUP -->
+    <ui:VisualElement name="ghost-select-popup" class="modal-overlay hidden">
+        <ui:VisualElement class="popup-panel">
+            <ui:Label text="CHALK RITUAL OF EXORCISM" class="popup-title" />
+            <ui:Label text="Finalize the entity identity to bind the ritual circle:" class="popup-subtitle" />
+
+            <ui:VisualElement class="ghost-buttons-row">
+                <ui:Button name="btn-ghost-tikbalang" text="TIKBALANG" class="ghost-btn" />
+                <ui:Button name="btn-ghost-kapre" text="KAPRE" class="ghost-btn" />
+                <ui:Button name="btn-ghost-manananggal" text="MANANANGGAL" class="ghost-btn" />
             </ui:VisualElement>
 
-            <ui:Label text="Press SPACE when the cursor is in the red zone!" class="instruction-label" />
-            
-            <ui:VisualElement class="score-container">
-                <ui:Label name="lbl-score" text="0 / 3 Successful Chants" class="score-label" />
+            <ui:Label text="Warning: Selecting the wrong ghost will anger the entity upon ritual completion!" class="popup-warning" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- 2. CIRCULAR SKILL CHECK MINIGAME OVERLAY -->
+    <ui:VisualElement name="exorcism-overlay" class="overlay hidden">
+        <ui:VisualElement class="circular-minigame-container">
+            <ui:Label text="EXORCISM IN PROGRESS" class="title-label" />
+
+            <!-- Circular Skill Check Dial -->
+            <ui:VisualElement name="circle-dial" class="circle-dial">
+                <!-- Target Hit Line / Bar (positioned at target angle via script) -->
+                <ui:VisualElement name="target-bar-container" class="target-bar-container" picking-mode="Ignore">
+                    <ui:VisualElement name="target-hit-line" class="target-hit-line" picking-mode="Ignore" />
+                </ui:VisualElement>
+
+                <!-- Rotating Needle Container (rotated in script) -->
+                <ui:VisualElement name="needle-container" class="needle-container" picking-mode="Ignore">
+                    <ui:VisualElement class="needle-pointer" picking-mode="Ignore" />
+                </ui:VisualElement>
+
+                <!-- Center Rune Displaying the Required Key (A, E, R, G, B) -->
+                <ui:VisualElement class="center-rune" picking-mode="Ignore">
+                    <ui:Label name="prompt-key-label" text="A" class="prompt-key-label" />
+                    <ui:Label text="HIT TARGET" class="prompt-subtext" />
+                </ui:VisualElement>
             </ui:VisualElement>
+
+            <!-- Minigame Status Information -->
+            <ui:VisualElement class="stats-row">
+                <ui:Label name="lbl-chants" text="Chants: 0 / 5" class="stat-badge chants-badge" />
+                <ui:Label name="lbl-loop" text="Loop: 1 / 2" class="stat-badge loop-badge" />
+                <ui:Label name="lbl-mistakes" text="Mistakes: 0 / 3" class="stat-badge mistakes-badge" />
+            </ui:VisualElement>
+
+            <ui:Label name="lbl-feedback" text="Press key ONLY when the needle overlaps the golden target bar!" class="instruction-label" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- 3. DIALOGUE / BANNER POPUP -->
+    <ui:VisualElement name="dialogue-banner" class="banner-overlay hidden" picking-mode="Ignore">
+        <ui:VisualElement class="banner-box" picking-mode="Ignore">
+            <ui:Label name="banner-title" text="EXORCISM COMPLETE" class="banner-title-text" />
+            <ui:Label name="banner-text" text="Ghost has been exorcised. Correct ghost identified." class="banner-body-text" />
+            <ui:Label name="banner-subtext" text="Return to the van and click 'End Game' to finish." class="banner-hint-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- 4. CRUCIFIX REPEL COUNTDOWN BANNER (POST-FAILURE SURVIVAL) -->
+    <ui:VisualElement name="repel-banner" class="repel-overlay hidden" picking-mode="Ignore">
+        <ui:VisualElement class="repel-box" picking-mode="Ignore">
+            <ui:Label text="⚠ CRUCIFIX REPEL ACTIVE ⚠" class="repel-title" />
+            <ui:Label name="repel-timer-label" text="10s REMAINING" class="repel-countdown" />
+            <ui:Label text="Hide in a cabinet or escape the house immediately!" class="repel-instruction" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

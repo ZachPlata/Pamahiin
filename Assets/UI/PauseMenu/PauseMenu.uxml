@@ -1,14 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements"
+         xsi="http://www.w3.org/2001/XMLSchema-instance"
+         engine="UnityEngine.UIElements" editor="UnityEditor.UIElements"
+         noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd"
+         editor-extension-mode="False">
     <Style src="PauseMenu.uss" />
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  ROOT OVERLAY                                                       -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
     <ui:VisualElement name="pause-overlay" class="overlay hidden">
-        <ui:VisualElement class="menu-container">
+
+        <!-- ── MAIN PAUSE PANEL ─────────────────────────────────────── -->
+        <ui:VisualElement name="panel-main" class="menu-container">
             <ui:Label text="PAUSED" class="title-label" />
-            
             <ui:VisualElement class="button-container">
-                <ui:Button name="btn-resume" text="Resume" class="menu-button" />
-                <ui:Button name="btn-quit" text="Quit to Menu" class="menu-button" />
+                <ui:Button name="btn-resume"   text="▶  Resume"        class="menu-button" />
+                <ui:Button name="btn-settings" text="⚙  Settings"      class="menu-button" />
+                <ui:Button name="btn-players"  text="👥  Players"      class="menu-button" />
+                <ui:Button name="btn-quit"     text="✖  Quit to Menu"  class="menu-button btn-danger" />
             </ui:VisualElement>
         </ui:VisualElement>
+
+        <!-- ── SETTINGS PANEL ───────────────────────────────────────── -->
+        <ui:VisualElement name="panel-settings" class="menu-container hidden">
+            <ui:Label text="SETTINGS" class="title-label" />
+
+            <!-- AUDIO -->
+            <ui:Label text="AUDIO" class="section-label" />
+
+            <ui:VisualElement class="slider-row">
+                <ui:Label text="Master"  class="slider-label" />
+                <ui:Slider name="slider-master"  low-value="0" high-value="1" class="setting-slider" />
+                <ui:Label name="lbl-master"  text="100%" class="slider-value" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="slider-row">
+                <ui:Label text="Music"   class="slider-label" />
+                <ui:Slider name="slider-music"   low-value="0" high-value="1" class="setting-slider" />
+                <ui:Label name="lbl-music"   text="80%"  class="slider-value" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="slider-row">
+                <ui:Label text="SFX"     class="slider-label" />
+                <ui:Slider name="slider-sfx"     low-value="0" high-value="1" class="setting-slider" />
+                <ui:Label name="lbl-sfx"     text="100%" class="slider-value" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="slider-row">
+                <ui:Label text="Voice"   class="slider-label" />
+                <ui:Slider name="slider-voice"   low-value="0" high-value="1" class="setting-slider" />
+                <ui:Label name="lbl-voice"   text="100%" class="slider-value" />
+            </ui:VisualElement>
+
+            <!-- GRAPHICS -->
+            <ui:Label text="GRAPHICS" class="section-label" />
+
+            <ui:VisualElement class="toggle-row">
+                <ui:Label text="Fullscreen" class="slider-label" />
+                <ui:Toggle name="toggle-fullscreen" class="setting-toggle" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="toggle-row">
+                <ui:Label text="Show FPS" class="slider-label" />
+                <ui:Toggle name="toggle-fps" class="setting-toggle" />
+            </ui:VisualElement>
+
+            <ui:Button name="btn-settings-back" text="← Back" class="menu-button back-button" />
+        </ui:VisualElement>
+
+        <!-- ── PLAYERS PANEL ─────────────────────────────────────────── -->
+        <ui:VisualElement name="panel-players" class="menu-container hidden">
+            <ui:Label text="PLAYERS" class="title-label" />
+            <ui:ScrollView name="player-list-scroll" class="player-scroll" />
+            <ui:Button name="btn-players-back" text="← Back" class="menu-button back-button" />
+        </ui:VisualElement>
+
     </ui:VisualElement>
 </ui:UXML>

@@ -1,5 +1,6 @@
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.Rendering.Universal;
 
 public enum DoorMotionType
@@ -39,6 +40,8 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     [Header("Door Settings")]
     [SerializeField] private bool isFrontDoor = false; // Hunt locks front doors, also requires key to open initially
     [SerializeField] private bool requiresKey = false;
+    [Tooltip("Whether this door is a hiding spot (closet or cabinet) where players conceal themselves.")]
+    [SerializeField] private bool isHidingSpot = false;
 
     [Header("Legacy Settings (Fallback if no references assigned)")]
     [SerializeField] private float openAngle = 90f;
@@ -47,6 +50,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     public bool IsLocked => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isLocked.Value : localIsLocked;
     public bool IsFrontDoor => isFrontDoor;
     public bool RequiresKey => requiresKey;
+    public bool IsHidingSpot => isHidingSpot;
     public bool IsKeyFound => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isKeyFound.Value : localIsKeyFound;
 
     private NetworkVariable<bool> isKeyFound = new NetworkVariable<bool>(
@@ -84,8 +88,22 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     private void Awake()
     {
+        if (!isHidingSpot && (gameObject.name.ToLower().Contains("cabinet") || gameObject.name.ToLower().Contains("closet")))
+        {
+            isHidingSpot = true;
+        }
+
         if (closedDoorRef != null && openDoorRef != null)
         {
+            // Auto-correct if references were assigned inverted in the inspector (OpenRef in closed slot, ClosedRef in open slot)
+            if (closedDoorRef.name.ToLower().Contains("open") && openDoorRef.name.ToLower().Contains("closed"))
+            {
+                Debug.LogWarning($"NetworkDoor: '{gameObject.name}' has closedDoorRef ('{closedDoorRef.name}') and openDoorRef ('{openDoorRef.name}') inverted! Auto-swapping references.");
+                var temp = closedDoorRef;
+                closedDoorRef = openDoorRef;
+                openDoorRef = temp;
+            }
+
             usesReferenceSprites = true;
             InitializeFromReferences();
         }

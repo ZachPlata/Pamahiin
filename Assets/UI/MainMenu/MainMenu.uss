@@ -169,3 +169,74 @@
     color: rgb(220, 220, 220);
     margin-bottom: 15px;
 }
+
+/* Settings Screen */
+.settings-container {
+    background-color: rgba(20, 0, 0, 0.88);
+    padding: 24px 32px;
+    border-radius: 10px;
+    border-color: rgb(150, 50, 50);
+    border-width: 2px;
+    width: 440px;
+    align-items: stretch;
+}
+
+.settings-title {
+    font-size: 50px;
+    margin-bottom: 8px;
+    -unity-text-align: middle-center;
+}
+
+.section-label {
+    font-size: 18px;
+    color: rgb(220, 90, 90);
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    border-bottom-width: 1px;
+    border-color: rgb(80, 30, 30);
+    padding-bottom: 2px;
+    letter-spacing: 2px;
+}
+
+.slider-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
+.slider-label {
+    width: 90px;
+    font-size: 20px;
+    color: rgb(220, 220, 220);
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+}
+
+.setting-slider {
+    flex-grow: 1;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+.slider-value {
+    width: 50px;
+    font-size: 18px;
+    color: rgb(190, 190, 190);
+    -unity-font: url('project://database/Assets/Fonts/VT323-Regular.ttf');
+    -unity-font-definition: initial;
+    -unity-text-align: middle-right;
+}
+
+.toggle-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
+.setting-toggle {
+    margin-left: auto;
+}

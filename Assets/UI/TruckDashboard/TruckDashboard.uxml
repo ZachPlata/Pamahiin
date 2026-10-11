@@ -16,9 +16,34 @@
             
             <!-- CCTV Screen -->
             <ui:VisualElement name="view-cctv" class="view active-view">
-                <ui:Label text="CAMERA 01 - MAIN ENTRANCE" class="screen-title" />
+                <ui:Label name="cctv-screen-title" text="CAMERA 01 - MAIN ENTRANCE" class="screen-title" />
                 <ui:VisualElement name="cctv-image-container" class="cctv-screen">
                     <ui:Label text="NO SIGNAL" class="no-signal-text" />
+
+                    <!-- CCTV Live Surveillance HUD Overlay -->
+                    <ui:VisualElement name="cctv-hud-overlay" class="cctv-hud" picking-mode="Ignore">
+                        <!-- Top HUD Bar -->
+                        <ui:VisualElement class="cctv-hud-top" picking-mode="Ignore">
+                            <ui:VisualElement class="cctv-rec-cluster" picking-mode="Ignore">
+                                <ui:VisualElement name="cctv-rec-dot" class="cctv-rec-dot" picking-mode="Ignore" />
+                                <ui:Label text="REC" class="cctv-hud-text cctv-rec-label" />
+                                <ui:Label name="cctv-timer" text="00:00:00" class="cctv-hud-text" />
+                            </ui:VisualElement>
+                            <ui:Label name="cctv-hud-cam-id" text="CAM 01 - MAIN ENTRANCE" class="cctv-hud-text cctv-cam-badge" />
+                            <ui:Label name="cctv-nv-badge" text="IR NIGHT VISION: OFF" class="cctv-hud-text cctv-nv-badge cctv-nv-off" />
+                        </ui:VisualElement>
+
+                        <!-- Center Reticle Graphic -->
+                        <ui:VisualElement class="cctv-center-view" picking-mode="Ignore">
+                            <ui:VisualElement class="cctv-scanline-layer" picking-mode="Ignore" />
+                        </ui:VisualElement>
+
+                        <!-- Bottom HUD Bar -->
+                        <ui:VisualElement class="cctv-hud-bottom" picking-mode="Ignore">
+                            <ui:Label name="cctv-timestamp" text="2026-10-11  02:44:19" class="cctv-hud-text" />
+                            <ui:Label text="CH-01 FEED  |  FPS: 30  |  SIGNAL: OPTIMAL" class="cctv-hud-text cctv-hud-sub" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="cctv-controls" style="flex-direction: row; justify-content: center; margin-top: 10px;">
                     <ui:Button name="btn-next-camera" text="Next Camera" class="control-button" />

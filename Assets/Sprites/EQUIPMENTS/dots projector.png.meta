@@ -116,10 +116,10 @@ TextureImporter:
       name: dots projector_0
       rect:
         serializedVersion: 2
-        x: 2
-        y: 3
-        width: 39
-        height: 40
+        x: 361
+        y: 551
+        width: 818
+        height: 162
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ui="UnityEngine.UIElements"
+    xsi:noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd">
+
+    <Style src="SpiritBoxDialogue.uss" />
+
+    <ui:VisualElement name="SpiritBoxOverlay" class="sb-overlay">
+        <ui:VisualElement name="SpiritBoxPanel" class="sb-panel">
+            
+            <!-- Header bar: Radio title & frequency indicator -->
+            <ui:VisualElement class="sb-header">
+                <ui:VisualElement class="sb-header-left">
+                    <ui:VisualElement class="sb-led-dot" />
+                    <ui:Label text="SPIRIT BOX // FREQUENCY SCANNER" class="sb-title" />
+                </ui:VisualElement>
+                <ui:Label name="FrequencyLabel" text="FM 98.4 MHz" class="sb-frequency" />
+            </ui:VisualElement>
+
+            <!-- Screen: Transmission readout & Ghost Voice feedback -->
+            <ui:VisualElement class="sb-screen">
+                <ui:VisualElement class="sb-screen-header">
+                    <ui:Label name="ScreenStatusLabel" text="[SWEEPING FREQUENCIES...]" class="sb-screen-status" />
+                    <ui:Label name="SignalMeter" text="SIG: |||||" class="sb-signal-meter" />
+                </ui:VisualElement>
+                <ui:Label name="ScreenTranscriptLabel" text="Awaiting question... Broadcast a phrase to the entity." class="sb-screen-transcript" />
+            </ui:VisualElement>
+
+            <!-- Dialogue Options List (1 to 5) -->
+            <ui:VisualElement class="sb-options-container">
+                <ui:Button name="Option0" class="sb-option-btn">
+                    <ui:Label text="1" class="sb-option-badge" />
+                    <ui:Label name="OptionText0" text="Where are you?" class="sb-option-text" />
+                    <ui:Label text="►" class="sb-option-arrow" />
+                </ui:Button>
+                <ui:Button name="Option1" class="sb-option-btn">
+                    <ui:Label text="2" class="sb-option-badge" />
+                    <ui:Label name="OptionText1" text="How old are you?" class="sb-option-text" />
+                    <ui:Label text="►" class="sb-option-arrow" />
+                </ui:Button>
+                <ui:Button name="Option2" class="sb-option-btn">
+                    <ui:Label text="3" class="sb-option-badge" />
+                    <ui:Label name="OptionText2" text="Are you close?" class="sb-option-text" />
+                    <ui:Label text="►" class="sb-option-arrow" />
+                </ui:Button>
+                <ui:Button name="Option3" class="sb-option-btn">
+                    <ui:Label text="4" class="sb-option-badge" />
+                    <ui:Label name="OptionText3" text="What do you want?" class="sb-option-text" />
+                    <ui:Label text="►" class="sb-option-arrow" />
+                </ui:Button>
+                <ui:Button name="Option4" class="sb-option-btn">
+                    <ui:Label text="5" class="sb-option-badge" />
+                    <ui:Label name="OptionText4" text="Give us a sign." class="sb-option-text" />
+                    <ui:Label text="►" class="sb-option-arrow" />
+                </ui:Button>
+            </ui:VisualElement>
+
+            <!-- Footer: Controls instruction reminder -->
+            <ui:VisualElement class="sb-footer">
+                <ui:Label text="[SCROLL / 1-5] Choose Question   •   [RMB / ENTER] Broadcast   •   [LMB] Turn Off &amp; Cancel" class="sb-footer-text" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

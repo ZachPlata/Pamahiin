@@ -77,7 +77,7 @@ public class GhostOrbSystem : NetworkBehaviour
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
             {
                 // Only show if the LOCAL player is holding a powered-on Video Camera in hand
-                var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+                var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
                 foreach (var cam in allCameras)
                 {
                     if (cam.IsPoweredOn && cam.CurrentHolderClientId == NetworkManager.Singleton.LocalClientId && cam.IsInHand)

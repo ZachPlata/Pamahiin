@@ -13,9 +13,15 @@ public class MainMenuController : MonoBehaviour
     private VisualElement multiplayerView;
     private VisualElement lobbyView;
     private VisualElement helpView;
+    private VisualElement settingsView;
     
     private TextField ipInput;
     private ScrollView playerListContainer;
+
+    // Settings controls
+    private Slider sliderMaster, sliderMusic, sliderSFX, sliderVoice;
+    private Label  lblMaster, lblMusic, lblSFX, lblVoice;
+    private Toggle toggleFullscreen, toggleFPS;
 
     [Header("Atmospheric VFX")]
     private Label titleLabel;
@@ -37,6 +43,7 @@ public class MainMenuController : MonoBehaviour
         multiplayerView = root.Q<VisualElement>("multiplayer-view");
         lobbyView = root.Q<VisualElement>("lobby-view");
         helpView = root.Q<VisualElement>("help-view");
+        settingsView = root.Q<VisualElement>("settings-view");
 
         // VFX Elements
         titleLabel = root.Q<Label>(className: "title-label");
@@ -52,8 +59,41 @@ public class MainMenuController : MonoBehaviour
         // Main Menu Buttons
         root.Q<Button>("btn-singleplayer").clicked += OnSingleplayerClicked;
         root.Q<Button>("btn-multiplayer").clicked += OnMultiplayerClicked;
+        root.Q<Button>("btn-settings").clicked += ShowSettingsMenu;
         root.Q<Button>("btn-help").clicked += ShowHelpMenu;
         root.Q<Button>("btn-quit").clicked += OnQuitClicked;
+
+        // Settings View
+        root.Q<Button>("btn-back-from-settings").clicked += ShowMainMenu;
+
+        sliderMaster = root.Q<Slider>("slider-master");
+        sliderMusic  = root.Q<Slider>("slider-music");
+        sliderSFX    = root.Q<Slider>("slider-sfx");
+        sliderVoice  = root.Q<Slider>("slider-voice");
+
+        lblMaster = root.Q<Label>("lbl-master");
+        lblMusic  = root.Q<Label>("lbl-music");
+        lblSFX    = root.Q<Label>("lbl-sfx");
+        lblVoice  = root.Q<Label>("lbl-voice");
+
+        toggleFullscreen = root.Q<Toggle>("toggle-fullscreen");
+        toggleFPS        = root.Q<Toggle>("toggle-fps");
+
+        if (sliderMaster != null)
+            sliderMaster.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMasterVolume(e.newValue); UpdateVolLabel(lblMaster, e.newValue); });
+        if (sliderMusic != null)
+            sliderMusic.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMusicVolume(e.newValue); UpdateVolLabel(lblMusic, e.newValue); });
+        if (sliderSFX != null)
+            sliderSFX.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetSFXVolume(e.newValue); UpdateVolLabel(lblSFX, e.newValue); });
+        if (sliderVoice != null)
+            sliderVoice.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetVoiceVolume(e.newValue); UpdateVolLabel(lblVoice, e.newValue); });
+
+        if (toggleFullscreen != null)
+            toggleFullscreen.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetFullscreen(e.newValue));
+        if (toggleFPS != null)
+            toggleFPS.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetShowFPS(e.newValue));
+
+        SyncSettingsFromManager();
 
         // Multiplayer View
         root.Q<Button>("btn-host").clicked += OnHostClicked;
@@ -91,6 +131,7 @@ public class MainMenuController : MonoBehaviour
 
     private void OnDisable()
     {
+        GameSettingsManager.Instance?.SaveAll();
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientStarted -= OnClientStarted;
@@ -148,8 +189,45 @@ public class MainMenuController : MonoBehaviour
     private void ShowMainMenu()
     {
         HideAllViews();
+        GameSettingsManager.Instance?.SaveAll();
         mainMenuView.RemoveFromClassList("hidden-view");
         mainMenuView.AddToClassList("active-view");
+    }
+
+    private void ShowSettingsMenu()
+    {
+        HideAllViews();
+        SyncSettingsFromManager();
+        if (settingsView != null)
+        {
+            settingsView.RemoveFromClassList("hidden-view");
+            settingsView.AddToClassList("active-view");
+        }
+    }
+
+    private void SyncSettingsFromManager()
+    {
+        var s = GameSettingsManager.Instance;
+        if (s == null) return;
+
+        if (sliderMaster != null) sliderMaster.value = s.MasterVolume;
+        if (sliderMusic != null)  sliderMusic.value = s.MusicVolume;
+        if (sliderSFX != null)    sliderSFX.value = s.SFXVolume;
+        if (sliderVoice != null)  sliderVoice.value = s.VoiceVolume;
+
+        if (toggleFullscreen != null) toggleFullscreen.value = s.IsFullscreen;
+        if (toggleFPS != null)        toggleFPS.value = s.ShowFPS;
+
+        UpdateVolLabel(lblMaster, s.MasterVolume);
+        UpdateVolLabel(lblMusic,  s.MusicVolume);
+        UpdateVolLabel(lblSFX,    s.SFXVolume);
+        UpdateVolLabel(lblVoice,  s.VoiceVolume);
+    }
+
+    private static void UpdateVolLabel(Label label, float linear)
+    {
+        if (label != null)
+            label.text = $"{Mathf.RoundToInt(linear * 100f)}%";
     }
 
     private void ShowMultiplayerMenu()
@@ -199,6 +277,12 @@ public class MainMenuController : MonoBehaviour
         
         helpView.RemoveFromClassList("active-view");
         helpView.AddToClassList("hidden-view");
+
+        if (settingsView != null)
+        {
+            settingsView.RemoveFromClassList("active-view");
+            settingsView.AddToClassList("hidden-view");
+        }
     }
 
     private void OnSingleplayerClicked()
