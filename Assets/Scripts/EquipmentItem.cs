@@ -149,8 +149,9 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         isPlaced.Value = false;
         isInHand.Value = true; // Dropped items on floor should be visible
         
-        // Update position on server before broadcasting state
-        transform.position = dropPosition;
+        Vector3 finalPos = new Vector3(dropPosition.x, dropPosition.y, 0f);
+        transform.position = finalPos;
+        SyncPlacedTransformClientRpc(finalPos, transform.rotation);
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -161,8 +162,17 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         isPlaced.Value = true;
         isInHand.Value = true; // Placed items should be visible
         
-        transform.position = placePosition;
+        Vector3 finalPos = new Vector3(placePosition.x, placePosition.y, 0f);
+        transform.position = finalPos;
         transform.rotation = placeRotation;
+        SyncPlacedTransformClientRpc(finalPos, placeRotation);
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void SyncPlacedTransformClientRpc(Vector3 pos, Quaternion rot)
+    {
+        transform.position = pos;
+        transform.rotation = rot;
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]

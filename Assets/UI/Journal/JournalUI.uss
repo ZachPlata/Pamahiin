@@ -459,28 +459,13 @@
     margin-top: auto;
 }
 
-.lock-in-button {
-    background-color: rgb(150, 40, 40);
-    color: white;
-    font-size: 17px;
-    -unity-font-style: bold;
-    padding: 10px 20px;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    width: 85%;
-    transition-duration: 0.15s;
-}
-
-.lock-in-button:hover {
-    background-color: rgb(190, 50, 50);
-}
-
 .close-button {
     background-color: rgb(100, 90, 80);
     color: white;
     font-size: 15px;
-    padding: 6px 16px;
+    padding: 8px 24px;
     border-radius: 5px;
+    margin-top: 10px;
 }
 
 .close-button:hover {
@@ -514,15 +499,36 @@
 .selected-ghost-btn {
     background-color: rgb(150, 40, 40);
     color: white;
+    border-color: rgb(110, 25, 25);
 }
 
 .selected-ghost-btn:hover {
     background-color: rgb(180, 50, 50);
 }
 
+.ghost-btn-disabled {
+    opacity: 0.35;
+    background-color: rgba(180, 170, 160, 0.4);
+    color: rgb(130, 120, 110);
+    border-color: rgb(160, 150, 140);
+}
+
+.ghost-btn-disabled:hover {
+    background-color: rgba(180, 170, 160, 0.4);
+}
+
+.strikethrough {
+    opacity: 0.4;
+}
+
 .strikethrough > .unity-toggle__label {
     text-decoration: line-through;
-    opacity: 0.45;
+    color: rgb(130, 120, 110);
+    opacity: 0.5;
+}
+
+.strikethrough > .unity-toggle__checkmark {
+    opacity: 0.35;
 }
 
 /* ================= BOTTOM NAVIGATION BAR ================= */

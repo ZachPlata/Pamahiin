@@ -90,7 +90,10 @@ public class PlayerInventory : NetworkBehaviour
     {
         if (CurrentItem != null)
         {
-            CurrentItem.PlaceItemRpc(placePosition, placeRotation);
+            Vector3 finalPos = new Vector3(placePosition.x, placePosition.y, 0f);
+            CurrentItem.transform.position = finalPos;
+            CurrentItem.transform.rotation = placeRotation;
+            CurrentItem.PlaceItemRpc(finalPos, placeRotation);
             slots[currentSlotIndex] = null;
             OnInventoryUpdated?.Invoke();
         }

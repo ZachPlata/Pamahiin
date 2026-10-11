@@ -321,7 +321,6 @@
                         </ui:VisualElement>
                         
                         <ui:VisualElement class="button-container">
-                            <ui:Button name="btn-lock-in" text="Lock In Deduction" class="lock-in-button" />
                             <ui:Button name="btn-close" text="Close Journal" class="close-button" />
                         </ui:VisualElement>
                     </ui:VisualElement>

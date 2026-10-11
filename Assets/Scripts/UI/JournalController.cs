@@ -48,8 +48,21 @@ public class JournalController : MonoBehaviour
     private Button btnManananggal;
 
     private string selectedGhost = "None";
-    private Button btnLockIn;
     private Button btnClose;
+
+    // Two-way cross-filtering data structures
+    private readonly System.Collections.Generic.Dictionary<string, Toggle> evidenceToggles = new System.Collections.Generic.Dictionary<string, Toggle>();
+    private readonly System.Collections.Generic.Dictionary<string, Button> ghostButtons = new System.Collections.Generic.Dictionary<string, Button>();
+
+    private static readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>> ghostEvidenceMap =
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>>
+    {
+        { "Tikbalang", new System.Collections.Generic.HashSet<string> { "EMF", "SpiritBox", "GhostOrbs" } },
+        { "Kapre", new System.Collections.Generic.HashSet<string> { "EMF", "Freezing", "DOTS" } },
+        { "Manananggal", new System.Collections.Generic.HashSet<string> { "Freezing", "GhostWriting", "GhostOrbs" } }
+    };
+
+    private bool isUpdatingFilters = false;
 
     private bool isJournalOpen = false;
     private int closedFrame = -1;
@@ -133,6 +146,7 @@ public class JournalController : MonoBehaviour
         if (btnTocJump != null) btnTocJump.clicked += () => ShowSpread(1);
 
         // 6. Bind Evidences Checklist
+        evidenceToggles.Clear();
         tglEmf5 = root.Q<Toggle>("tgl-emf5");
         tglFreezing = root.Q<Toggle>("tgl-freezing");
         tglWriting = root.Q<Toggle>("tgl-writing");
@@ -140,17 +154,36 @@ public class JournalController : MonoBehaviour
         tglSpiritBox = root.Q<Toggle>("tgl-spiritbox");
         tglOrbs = root.Q<Toggle>("tgl-orbs");
 
+        if (tglEmf5 != null) evidenceToggles["EMF"] = tglEmf5;
+        if (tglFreezing != null) evidenceToggles["Freezing"] = tglFreezing;
+        if (tglWriting != null) evidenceToggles["GhostWriting"] = tglWriting;
+        if (tglDots != null) evidenceToggles["DOTS"] = tglDots;
+        if (tglSpiritBox != null) evidenceToggles["SpiritBox"] = tglSpiritBox;
+        if (tglOrbs != null) evidenceToggles["GhostOrbs"] = tglOrbs;
+
+        foreach (var pair in evidenceToggles)
+        {
+            var key = pair.Key;
+            var tgl = pair.Value;
+            if (tgl != null)
+            {
+                tgl.RegisterValueChangedCallback(evt => OnEvidenceToggleChanged(key, evt.newValue));
+            }
+        }
+
         // 7. Ghost Deduction Buttons
+        ghostButtons.Clear();
         btnTikbalang = root.Q<Button>("btn-ghost-tikbalang");
         btnKapre = root.Q<Button>("btn-ghost-kapre");
         btnManananggal = root.Q<Button>("btn-ghost-manananggal");
 
+        if (btnTikbalang != null) ghostButtons["Tikbalang"] = btnTikbalang;
+        if (btnKapre != null) ghostButtons["Kapre"] = btnKapre;
+        if (btnManananggal != null) ghostButtons["Manananggal"] = btnManananggal;
+
         if (btnTikbalang != null) btnTikbalang.clicked += () => SelectGhost("Tikbalang");
         if (btnKapre != null) btnKapre.clicked += () => SelectGhost("Kapre");
         if (btnManananggal != null) btnManananggal.clicked += () => SelectGhost("Manananggal");
-
-        btnLockIn = root.Q<Button>("btn-lock-in");
-        if (btnLockIn != null) btnLockIn.clicked += OnLockInClicked;
 
         btnClose = root.Q<Button>("btn-close");
         if (btnClose != null) btnClose.clicked += ToggleJournal;
@@ -289,87 +322,196 @@ public class JournalController : MonoBehaviour
         }
     }
 
+    private void OnEvidenceToggleChanged(string evidenceKey, bool isChecked)
+    {
+        if (isUpdatingFilters) return;
+
+        // If a ghost is currently selected, check if this toggle change contradicts it
+        if (selectedGhost != "None")
+        {
+            if (ghostEvidenceMap.TryGetValue(selectedGhost, out var ghostEvs))
+            {
+                // If user checked an evidence that does not belong to the selected ghost,
+                // deselect it so evidence-first cross filtering takes over
+                if (isChecked && !ghostEvs.Contains(evidenceKey))
+                {
+                    selectedGhost = "None";
+                }
+            }
+        }
+
+        UpdateCrossFilters();
+    }
+
     private void SelectGhost(string ghostName)
     {
         // Toggle off if same ghost clicked again
         if (selectedGhost == ghostName)
         {
             selectedGhost = "None";
-            ResetEvidences();
-            UpdateButtonVisuals();
-            return;
         }
-
-        selectedGhost = ghostName;
-        ResetEvidences();
-        UpdateButtonVisuals();
-
-        // Strikethrough invalid evidences based on ghost
-        if (ghostName == "Tikbalang")
+        else
         {
-            DisableEvidence(tglFreezing);
-            DisableEvidence(tglWriting);
-            DisableEvidence(tglDots);
+            selectedGhost = ghostName;
         }
-        else if (ghostName == "Kapre")
-        {
-            DisableEvidence(tglWriting);
-            DisableEvidence(tglSpiritBox);
-            DisableEvidence(tglOrbs);
-        }
-        else if (ghostName == "Manananggal")
-        {
-            DisableEvidence(tglEmf5);
-            DisableEvidence(tglDots);
-            DisableEvidence(tglSpiritBox);
-        }
-    }
 
-    private void DisableEvidence(Toggle tgl)
-    {
-        if (tgl == null) return;
-        tgl.value = false;
-        tgl.SetEnabled(false);
-        tgl.AddToClassList("strikethrough");
-    }
-
-    private void ResetEvidences()
-    {
-        Toggle[] allToggles = { tglEmf5, tglFreezing, tglWriting, tglDots, tglSpiritBox, tglOrbs };
-        foreach (var t in allToggles)
-        {
-            if (t == null) continue;
-            t.SetEnabled(true);
-            t.RemoveFromClassList("strikethrough");
-        }
-    }
-
-    private void UpdateButtonVisuals()
-    {
-        if (btnTikbalang != null) btnTikbalang.RemoveFromClassList("selected-ghost-btn");
-        if (btnKapre != null) btnKapre.RemoveFromClassList("selected-ghost-btn");
-        if (btnManananggal != null) btnManananggal.RemoveFromClassList("selected-ghost-btn");
-
-        if (selectedGhost == "Tikbalang" && btnTikbalang != null) btnTikbalang.AddToClassList("selected-ghost-btn");
-        else if (selectedGhost == "Kapre" && btnKapre != null) btnKapre.AddToClassList("selected-ghost-btn");
-        else if (selectedGhost == "Manananggal" && btnManananggal != null) btnManananggal.AddToClassList("selected-ghost-btn");
+        UpdateCrossFilters();
     }
 
     public static string LastLockedInGuess { get; set; } = "None";
 
-    private void OnLockInClicked()
+    private void UpdateCrossFilters()
     {
-        if (selectedGhost == "None") return; // Must select a ghost first
+        if (isUpdatingFilters) return;
+        isUpdatingFilters = true;
 
-        LastLockedInGuess = selectedGhost;
-        Debug.Log($"Player locked in deduction: {selectedGhost}");
-
-        // Pass deduction to GameMatchManager to trigger the end game reveal
-        if (GameMatchManager.Instance != null)
+        try
         {
-            GameMatchManager.Instance.LockInDeduction(selectedGhost);
-        }
+            // Case 1: Specific Ghost is selected (Ghost -> Evidence)
+            if (selectedGhost != "None" && ghostEvidenceMap.TryGetValue(selectedGhost, out var ghostEvidences))
+            {
+                // Automatically disable/gray out any evidence that does not belong to that ghost
+                foreach (var pair in evidenceToggles)
+                {
+                    string evKey = pair.Key;
+                    Toggle tgl = pair.Value;
+                    if (tgl == null) continue;
 
-        ToggleJournal(); // Close journal
+                    if (ghostEvidences.Contains(evKey))
+                    {
+                        tgl.SetEnabled(true);
+                        tgl.RemoveFromClassList("strikethrough");
+                    }
+                    else
+                    {
+                        tgl.value = false;
+                        tgl.SetEnabled(false);
+                        tgl.AddToClassList("strikethrough");
+                    }
+                }
+
+                // Update ghost button styles
+                foreach (var pair in ghostButtons)
+                {
+                    string gName = pair.Key;
+                    Button btn = pair.Value;
+                    if (btn == null) continue;
+
+                    btn.RemoveFromClassList("selected-ghost-btn");
+                    btn.RemoveFromClassList("ghost-btn-disabled");
+                    btn.SetEnabled(true);
+
+                    if (gName == selectedGhost)
+                    {
+                        btn.AddToClassList("selected-ghost-btn");
+                    }
+                }
+
+                LastLockedInGuess = selectedGhost;
+                if (GameMatchManager.Instance != null)
+                {
+                    GameMatchManager.Instance.RecordDeduction(selectedGhost);
+                }
+            }
+            else
+            {
+                // Case 2: No ghost selected (Evidence -> Ghost)
+                // Gather all ticked evidences
+                var tickedEvidences = new System.Collections.Generic.HashSet<string>();
+                foreach (var pair in evidenceToggles)
+                {
+                    if (pair.Value != null && pair.Value.value)
+                    {
+                        tickedEvidences.Add(pair.Key);
+                    }
+                }
+
+                // Automatically disable/gray out any Ghost Types that do not possess ticked evidence
+                var candidateGhosts = new System.Collections.Generic.List<string>();
+                foreach (var pair in ghostEvidenceMap)
+                {
+                    string gName = pair.Key;
+                    var gEvs = pair.Value;
+
+                    bool hasAllTicked = true;
+                    foreach (var ticked in tickedEvidences)
+                    {
+                        if (!gEvs.Contains(ticked))
+                        {
+                            hasAllTicked = false;
+                            break;
+                        }
+                    }
+
+                    Button btn = ghostButtons.ContainsKey(gName) ? ghostButtons[gName] : null;
+                    if (hasAllTicked)
+                    {
+                        candidateGhosts.Add(gName);
+                        if (btn != null)
+                        {
+                            btn.SetEnabled(true);
+                            btn.RemoveFromClassList("ghost-btn-disabled");
+                            btn.RemoveFromClassList("selected-ghost-btn");
+                        }
+                    }
+                    else
+                    {
+                        if (btn != null)
+                        {
+                            btn.SetEnabled(false);
+                            btn.AddToClassList("ghost-btn-disabled");
+                            btn.RemoveFromClassList("selected-ghost-btn");
+                        }
+                    }
+                }
+
+                // Collect remaining possible evidences from candidate ghosts
+                var possibleEvidences = new System.Collections.Generic.HashSet<string>();
+                foreach (var cGhost in candidateGhosts)
+                {
+                    if (ghostEvidenceMap.TryGetValue(cGhost, out var evs))
+                    {
+                        foreach (var e in evs) possibleEvidences.Add(e);
+                    }
+                }
+
+                // If candidate ghosts exist and evidence is ticked, gray out impossible evidences
+                foreach (var pair in evidenceToggles)
+                {
+                    string evKey = pair.Key;
+                    Toggle tgl = pair.Value;
+                    if (tgl == null) continue;
+
+                    if (tickedEvidences.Count > 0 && !possibleEvidences.Contains(evKey))
+                    {
+                        tgl.value = false;
+                        tgl.SetEnabled(false);
+                        tgl.AddToClassList("strikethrough");
+                    }
+                    else
+                    {
+                        tgl.SetEnabled(true);
+                        tgl.RemoveFromClassList("strikethrough");
+                    }
+                }
+
+                if (candidateGhosts.Count == 1)
+                {
+                    LastLockedInGuess = candidateGhosts[0];
+                    if (GameMatchManager.Instance != null)
+                    {
+                        GameMatchManager.Instance.RecordDeduction(candidateGhosts[0]);
+                    }
+                }
+                else
+                {
+                    LastLockedInGuess = "None";
+                }
+            }
+        }
+        finally
+        {
+            isUpdatingFilters = false;
+        }
     }
 }

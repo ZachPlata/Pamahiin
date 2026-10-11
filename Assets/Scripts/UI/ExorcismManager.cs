@@ -429,17 +429,18 @@ public class ExorcismManager : NetworkBehaviour
             ghostHandler.hunterGhost.StartDyingSequence(dyingShriekClip);
         }
 
-        // 2. Lock in deduction for the van / endgame screen
+        // 2. Record deduction for the van / endgame screen
+        JournalController.LastLockedInGuess = selectedGhostGuess;
         if (GameMatchManager.Instance != null)
         {
-            GameMatchManager.Instance.LockInDeduction(selectedGhostGuess);
+            GameMatchManager.Instance.RecordDeduction(selectedGhostGuess);
         }
 
         // 3. Show dialogue banner: "Ghost has been exorcised. Correct ghost identified."
         ShowDialogueBanner(
             "EXORCISM COMPLETE",
-            "Ghost has been exorcised. Correct ghost identified.",
-            "Return to the van and click 'End Game' to finish."
+            $"Entity banished ({selectedGhostGuess}). Investigation successful!",
+            "Return to the van and press the 'End Game' button to leave and review mission results."
         );
     }
 

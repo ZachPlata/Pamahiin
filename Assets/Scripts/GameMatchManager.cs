@@ -29,7 +29,12 @@ public class GameMatchManager : NetworkBehaviour
 
     public void LockInDeduction(string ghostType)
     {
-        if (NetworkManager.Singleton.IsClient)
+        RecordDeduction(ghostType);
+    }
+
+    public void RecordDeduction(string ghostType)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsClient)
         {
             SubmitDeductionServerRpc(ghostType);
         }
@@ -49,20 +54,7 @@ public class GameMatchManager : NetworkBehaviour
             playerDeductions[clientId] = ghostType;
         }
 
-        Debug.Log($"Server recorded deduction '{ghostType}' from client {clientId}");
-
-        // In a real game, we might check if all alive players have locked in.
-        // For testing/MVP, let's assume if the Host submits, we end the game, or if everyone submits.
-        CheckForMatchEnd();
-    }
-
-    private void CheckForMatchEnd()
-    {
-        // Simple condition: everyone connected has submitted a deduction
-        if (playerDeductions.Count >= NetworkManager.Singleton.ConnectedClientsIds.Count)
-        {
-            ForceEndMatch();
-        }
+        Debug.Log($"Server recorded deduction '{ghostType}' from client {clientId}. Match continues until van End Game button is pressed.");
     }
 
     public void ForceEndMatch()
