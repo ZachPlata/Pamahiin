@@ -22,6 +22,11 @@ public class PlayerHUDManager : MonoBehaviour
     private float nvRecBlinkTimer = 0f;
     private bool nvRecBlinkState = true;
 
+    // Death / End Game Screen elements
+    private VisualElement deathOverlay;
+    private Button btnEndGame;
+    private PlayerController localPlayerController;
+
     private void OnEnable()
     {
         if (hudDocument == null || hudDocument.rootVisualElement == null) return;
@@ -54,6 +59,23 @@ public class PlayerHUDManager : MonoBehaviour
             pauseButton.clicked += OnPauseClicked;
         }
 
+        deathOverlay = root.Q<VisualElement>("DeathOverlay");
+        if (deathOverlay != null)
+        {
+            deathOverlay.AddToClassList("death-overlay-hidden");
+            deathOverlay.style.display = DisplayStyle.None;
+        }
+
+        btnEndGame = root.Q<Button>("BtnEndGame");
+        if (btnEndGame != null)
+        {
+            btnEndGame.clicked += OnEndGameClicked;
+        }
+
+        var tutorialMgr = GetComponent<TutorialTooltipManager>();
+        if (tutorialMgr == null) tutorialMgr = gameObject.AddComponent<TutorialTooltipManager>();
+        tutorialMgr.BindUI(root);
+
         FindLocalPlayer();
     }
 
@@ -72,9 +94,28 @@ public class PlayerHUDManager : MonoBehaviour
             hudDocument.rootVisualElement.style.display = DisplayStyle.Flex;
         }
 
-        if (localInventory == null)
+        if (localInventory == null || localPlayerController == null)
         {
             FindLocalPlayer();
+        }
+
+        if (deathOverlay != null)
+        {
+            bool isDead = localPlayerController != null && !localPlayerController.IsAlive;
+            if (isDead)
+            {
+                if (hudDocument != null) hudDocument.sortingOrder = 100;
+                deathOverlay.RemoveFromClassList("death-overlay-hidden");
+                deathOverlay.style.display = DisplayStyle.Flex;
+                UnityEngine.Cursor.lockState = CursorLockMode.None;
+                UnityEngine.Cursor.visible = true;
+            }
+            else
+            {
+                if (hudDocument != null) hudDocument.sortingOrder = 1;
+                deathOverlay.AddToClassList("death-overlay-hidden");
+                deathOverlay.style.display = DisplayStyle.None;
+            }
         }
 
         UpdateDynamicHUD();
@@ -202,10 +243,21 @@ public class PlayerHUDManager : MonoBehaviour
 
     private void FindLocalPlayer()
     {
-        var player = Unity.Netcode.NetworkManager.Singleton?.LocalClient?.PlayerObject;
-        if (player != null)
+        PlayerController pc = PlayerController.LocalInstance;
+        if (pc == null && Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
         {
-            localInventory = player.GetComponent<PlayerInventory>();
+            var playerObj = Unity.Netcode.NetworkManager.Singleton.LocalClient?.PlayerObject;
+            if (playerObj != null) pc = playerObj.GetComponent<PlayerController>();
+        }
+        if (pc == null && PlayerController.AllPlayers.Count > 0)
+        {
+            pc = PlayerController.AllPlayers[0];
+        }
+
+        if (pc != null)
+        {
+            localPlayerController = pc;
+            localInventory = pc.GetComponent<PlayerInventory>();
             if (localInventory != null)
             {
                 localInventory.OnSlotChanged -= HandleSlotChanged;
@@ -232,6 +284,11 @@ public class PlayerHUDManager : MonoBehaviour
             {
                 pauseButton.clicked -= OnPauseClicked;
             }
+        }
+
+        if (btnEndGame != null)
+        {
+            btnEndGame.clicked -= OnEndGameClicked;
         }
     }
 
@@ -280,6 +337,25 @@ public class PlayerHUDManager : MonoBehaviour
         if (pauseMenu != null)
         {
             pauseMenu.TogglePause();
+        }
+    }
+
+    private void OnEndGameClicked()
+    {
+        GameSettingsManager.Instance?.SaveAll();
+
+        if (NetworkController.Instance != null)
+        {
+            NetworkController.Instance.DisconnectAndReturnToMenu();
+        }
+        else if (Unity.Netcode.NetworkManager.Singleton != null)
+        {
+            Unity.Netcode.NetworkManager.Singleton.Shutdown();
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
         }
     }
 }

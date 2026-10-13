@@ -25,7 +25,8 @@ public class EventGhostBehavior : NetworkBehaviour
     [Header("Evidence Mechanics")]
     public float interactionScanRadius = 5f;
     public LayerMask interactionLayer;
-    public float dotsDashSpeed = 10f;
+    [Tooltip("Movement speed during DOTS dash (eerie, visible glide matching player pace).")]
+    public float dotsDashSpeed = 1.5f;
     
     private float nextEventTime = 0f;
     public float eventIntervalMin = 8f;
@@ -71,6 +72,7 @@ public class EventGhostBehavior : NetworkBehaviour
         }
 
         ghostSprite = GetComponentInChildren<SpriteRenderer>();
+        if (dotsDashSpeed > 3f) dotsDashSpeed = 1.5f; // Automatically correct legacy 10f value from scene/prefab
     }
 
     public override void OnNetworkSpawn()
@@ -112,6 +114,23 @@ public class EventGhostBehavior : NetworkBehaviour
 
     private void Update()
     {
+        // Client-side visual dash interpolation so all players see the DOTS dash smoothly
+        if (!IsServer && isDashing)
+        {
+            transform.position = Vector2.MoveTowards(transform.position, dashTarget, dotsDashSpeed * Time.deltaTime);
+            Vector2 dir = (dashTarget - (Vector2)transform.position).normalized;
+            if (dir.sqrMagnitude > 0.01f)
+            {
+                float targetAngle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f;
+                transform.rotation = Quaternion.Euler(0f, 0f, targetAngle);
+            }
+            if (Vector2.Distance(transform.position, dashTarget) < 0.2f)
+            {
+                isDashing = false;
+                UpdateVisuals(false);
+            }
+        }
+
         if (!IsServer || !isInitialized) return;
 
         if (ghostHandler != null && ghostHandler.CurrentState == GhostHandlerState.Dormant)
@@ -165,7 +184,7 @@ public class EventGhostBehavior : NetworkBehaviour
             
             bool cancelDash = (activeDotsProjector != null && !activeDotsProjector.IsPoweredOn);
             bool reachedTarget = Vector2.Distance(rb.position, dashTarget) < 0.2f;
-            bool stuck = currentDashTime > 1.5f;
+            bool stuck = currentDashTime > 6.0f;
 
             if (cancelDash || reachedTarget || stuck)
             {
@@ -173,6 +192,7 @@ public class EventGhostBehavior : NetworkBehaviour
                 activeDotsProjector = null;
                 isVisiblyManifested.Value = false;
                 UpdateVisuals(false);
+                EndDotsDashClientRpc();
                 return;
             }
 
@@ -277,7 +297,8 @@ public class EventGhostBehavior : NetworkBehaviour
         
         foreach (var col in cols)
         {
-            if (col.GetComponent<GhostWritingBookItem>() != null) hasBook = true;
+            var book = col.GetComponent<GhostWritingBookItem>();
+            if (book != null && book.IsOpened && book.IsInsideGhostRoom()) hasBook = true;
             var rbObj = col.GetComponent<Rigidbody2D>();
             if (rbObj != null && rbObj != rb && rbObj.bodyType == RigidbodyType2D.Dynamic)
             {
@@ -377,7 +398,7 @@ public class EventGhostBehavior : NetworkBehaviour
                 foreach (var col in cols)
                 {
                     var book = col.GetComponent<GhostWritingBookItem>();
-                    if (book != null && book.IsOpened)
+                    if (book != null && book.IsOpened && book.IsInsideGhostRoom())
                     {
                         book.WriteInBook();
                         if (ParanormalManager.Instance != null) ParanormalManager.Instance.RegisterEvent(rb.position, 2, 10f);
@@ -391,18 +412,20 @@ public class EventGhostBehavior : NetworkBehaviour
                 {
                     // Teleport the ghost to the edge of the DOTS projector so it always dashes THROUGH the beam
                     Vector2 randomStartDir = Random.insideUnitCircle.normalized;
-                    rb.position = (Vector2)dots.transform.position + randomStartDir * dots.projectionRadius;
-                    
-                    Vector2 dirToDots = ((Vector2)dots.transform.position - rb.position);
+                    Vector2 startPos = (Vector2)dots.transform.position + randomStartDir * dots.projectionRadius;
+                    Vector2 dirToDots = ((Vector2)dots.transform.position - startPos);
+                    Vector2 targetPos = startPos + dirToDots.normalized * (dots.projectionRadius * 2.5f);
+
+                    rb.position = startPos;
                     isDashing = true;
                     currentDashTime = 0f;
                     activeDotsProjector = dots;
+                    dashTarget = targetPos;
                     isVisiblyManifested.Value = true; // Show at 50% opacity
                     UpdateVisuals(true);
                     
-                    // Dash across the projector to the opposite side
-                    dashTarget = rb.position + dirToDots.normalized * (dots.projectionRadius * 2.5f);
-                    
+                    TriggerDotsDashClientRpc(startPos, targetPos, dotsDashSpeed);
+
                     if (ParanormalManager.Instance != null) ParanormalManager.Instance.RegisterEvent(rb.position, 2, 5f);
                 }
                 break;
@@ -481,5 +504,25 @@ public class EventGhostBehavior : NetworkBehaviour
                 }
             }
         }
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void TriggerDotsDashClientRpc(Vector2 startPos, Vector2 targetPos, float speed)
+    {
+        transform.position = startPos;
+        if (rb != null) rb.position = startPos;
+        dashTarget = targetPos;
+        dotsDashSpeed = speed;
+        isDashing = true;
+        currentDashTime = 0f;
+        UpdateVisuals(true);
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void EndDotsDashClientRpc()
+    {
+        isDashing = false;
+        activeDotsProjector = null;
+        UpdateVisuals(false);
     }
 }

@@ -115,6 +115,18 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        isOpen.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (newVal && isFrontDoor)
+            {
+                TutorialTooltipManager.TriggerHint(TutorialHintId.HousePower);
+            }
+        };
+    }
+
     private void InitializeFromReferences()
     {
         // Cache world transform poses
@@ -437,6 +449,10 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         else
         {
             localIsOpen = !localIsOpen;
+            if (isFrontDoor && localIsOpen)
+            {
+                TutorialTooltipManager.TriggerHint(TutorialHintId.HousePower);
+            }
             if (isFrontDoor && localIsOpen && !hasTriggeredGhostSpawn)
             {
                 Debug.Log("NetworkDoor: Local front door opened! Searching for GhostHandler...");

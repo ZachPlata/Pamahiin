@@ -26,6 +26,7 @@ public class PauseMenuController : MonoBehaviour
     private Slider sliderMaster, sliderMusic, sliderSFX, sliderVoice;
     private Label  lblMaster, lblMusic, lblSFX, lblVoice;
     private Toggle toggleFullscreen, toggleFPS;
+    private Toggle toggleTutorialHints;
 
     // Players panel
     private ScrollView playerListScroll;
@@ -90,6 +91,7 @@ public class PauseMenuController : MonoBehaviour
 
         toggleFullscreen = root.Q<Toggle>("toggle-fullscreen");
         toggleFPS        = root.Q<Toggle>("toggle-fps");
+        toggleTutorialHints  = root.Q<Toggle>("toggle-tutorial-hints");
 
         // Wire sliders → GameSettingsManager
         sliderMaster .RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMasterVolume(e.newValue); UpdateVolLabel(lblMaster,  e.newValue); });
@@ -99,6 +101,8 @@ public class PauseMenuController : MonoBehaviour
 
         toggleFullscreen.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetFullscreen(e.newValue));
         toggleFPS       .RegisterValueChangedCallback(e => OnToggleFPS(e.newValue));
+        if (toggleTutorialHints != null)
+            toggleTutorialHints.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetTutorialHintsEnabled(e.newValue));
 
         root.Q<Button>("btn-settings-back").clicked += ShowMain;
 
@@ -221,6 +225,7 @@ public class PauseMenuController : MonoBehaviour
 
         toggleFullscreen.value = s.IsFullscreen;
         toggleFPS       .value = s.ShowFPS;
+        if (toggleTutorialHints != null)  toggleTutorialHints.value = s.TutorialHintsEnabled;
 
         UpdateVolLabel(lblMaster,  s.MasterVolume);
         UpdateVolLabel(lblMusic,   s.MusicVolume);

@@ -102,6 +102,29 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <!-- Minecraft-Style Top-Right Tutorial Toast Container -->
+        <ui:VisualElement name="TutorialToastContainer" class="tutorial-toast-container" picking-mode="Ignore">
+            <ui:VisualElement name="TutorialToast" class="tutorial-toast tutorial-toast-hidden" picking-mode="Ignore">
+                <ui:VisualElement class="toast-header-row" picking-mode="Ignore">
+                    <ui:Label name="ToastKeyBadge" class="toast-key-badge" text="L-CLICK / R-CLICK" />
+                    <ui:Label name="ToastTitle" class="toast-title" text="EQUIPMENT: FLASHLIGHT" />
+                </ui:VisualElement>
+                <ui:Label name="ToastDescription" class="toast-desc" text="Left-Click to turn on or toggle light. Right-Click to place it down on the floor." />
+                <ui:VisualElement class="toast-progress-track" picking-mode="Ignore">
+                    <ui:VisualElement name="ToastProgressBar" class="toast-progress-bar" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Death / Game Over Screen -->
+        <ui:VisualElement name="DeathOverlay" class="death-overlay death-overlay-hidden" picking-mode="Position">
+            <ui:VisualElement class="death-panel" picking-mode="Position">
+                <ui:Label text="YOU DIED" class="death-title" />
+                <ui:Label text="You were claimed by the paranormal entity." class="death-subtitle" />
+                <ui:Button name="BtnEndGame" text="END GAME &amp; RETURN TO MAIN MENU" class="death-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
     </ui:VisualElement>
 
 </ui:UXML>

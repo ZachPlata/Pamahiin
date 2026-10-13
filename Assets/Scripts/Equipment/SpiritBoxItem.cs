@@ -28,8 +28,13 @@ public class SpiritBoxItem : EquipmentItem
     [SerializeField] private AudioClip[] ghostResponseAudios = new AudioClip[5];
 
     [Header("Static / Radio Sweep Sound")]
-    [Tooltip("Audio clip played when radio scans or when ghost does not respond")]
+    [Tooltip("Audio clip played on loop when radio is powered on.")]
     [SerializeField] private AudioClip radioStaticAudio;
+    [Tooltip("Volume level for the looping radio static sound.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float staticAudioVolume = 0.5f;
+
+    [SerializeField] private AudioSource staticAudioSource;
 
     [Header("Dialogue Questions (1 to 5)")]
     [SerializeField] private string[] dialogueQuestions = new string[5]
@@ -68,7 +73,7 @@ public class SpiritBoxItem : EquipmentItem
 
     private AudioSource audioSource;
 
-    public bool IsHeldByLocalPlayer
+    public override bool IsHeldByLocalPlayer
     {
         get
         {
@@ -107,28 +112,54 @@ public class SpiritBoxItem : EquipmentItem
         base.Awake();
         itemName = "Spirit Box";
 
+        // Ghost voice response audio source
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
         {
             audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.spatialBlend = 0.8f; // Spatialized world audio so nearby teammates hear responses
-            audioSource.minDistance = 2f;
-            audioSource.maxDistance = 15f;
-            audioSource.rolloffMode = AudioRolloffMode.Linear;
-            audioSource.playOnAwake = false;
+            ConfigureAudioSource(audioSource);
         }
+
+        // Dedicated looping static audio source
+        if (staticAudioSource == null)
+        {
+            var sources = GetComponents<AudioSource>();
+            if (sources.Length > 1)
+            {
+                staticAudioSource = sources[1];
+            }
+            else
+            {
+                staticAudioSource = gameObject.AddComponent<AudioSource>();
+                ConfigureAudioSource(staticAudioSource);
+            }
+        }
+        staticAudioSource.loop = true;
+        staticAudioSource.playOnAwake = false;
+        staticAudioSource.volume = staticAudioVolume;
+    }
+
+    private void ConfigureAudioSource(AudioSource src)
+    {
+        src.spatialBlend = 0.8f; // Spatialized world audio so nearby teammates hear it
+        src.minDistance = 2f;
+        src.maxDistance = 15f;
+        src.rolloffMode = AudioRolloffMode.Linear;
+        src.playOnAwake = false;
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
         isPoweredOn.OnValueChanged += OnPowerStateChanged;
+        UpdateStaticAudio();
     }
 
     public override void OnNetworkDespawn()
     {
         base.OnNetworkDespawn();
         isPoweredOn.OnValueChanged -= OnPowerStateChanged;
+        UpdateStaticAudio();
 
         if (IsHeldByLocalPlayer)
         {
@@ -138,21 +169,66 @@ public class SpiritBoxItem : EquipmentItem
 
     private void OnDisable()
     {
+        UpdateStaticAudio();
+
         if (IsHeldByLocalPlayer)
         {
             CloseLocalDialogue();
         }
     }
 
+    private void UpdateStaticAudio()
+    {
+        if (staticAudioSource == null) return;
+
+        bool shouldPlay = IsPoweredOn && radioStaticAudio != null;
+        if (shouldPlay)
+        {
+            if (staticAudioSource.clip != radioStaticAudio)
+            {
+                staticAudioSource.clip = radioStaticAudio;
+            }
+            staticAudioSource.loop = true;
+            staticAudioSource.volume = staticAudioVolume;
+            if (!staticAudioSource.isPlaying)
+            {
+                staticAudioSource.Play();
+            }
+        }
+        else
+        {
+            if (staticAudioSource.isPlaying)
+            {
+                staticAudioSource.Stop();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Validates whether the Spirit Box is currently inside the active Ghost Room bounds.
+    /// </summary>
+    public bool IsInsideGhostRoom()
+    {
+        return GhostRoomMarker.IsInsideGhostRoom(transform.position);
+    }
+
     private void OnPowerStateChanged(bool oldVal, bool newVal)
     {
         UpdateVisuals();
+        UpdateStaticAudio();
 
         if (IsHeldByLocalPlayer)
         {
             if (newVal)
             {
-                OpenLocalDialogue();
+                if (IsInsideGhostRoom())
+                {
+                    OpenLocalDialogue();
+                }
+                else
+                {
+                    CloseLocalDialogue();
+                }
             }
             else
             {
@@ -164,11 +240,18 @@ public class SpiritBoxItem : EquipmentItem
     /// <summary>
     /// Left Click toggle when held in hand.
     /// Turns on the Spirit Box (opens dialogue), or turns it off (cancels and closes dialogue).
+    /// Strictly only opens dialogue when inside the GhostRoomMarker.
     /// </summary>
     public override void UsePrimary()
     {
         if (!IsPoweredOn)
         {
+            if (!IsInsideGhostRoom())
+            {
+                Debug.Log("[SpiritBoxItem] Location check failed: Spirit Box can only be used inside the Ghost Room.");
+                return;
+            }
+
             // Power ON
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
             {
@@ -202,6 +285,7 @@ public class SpiritBoxItem : EquipmentItem
             localFallbackPower = false;
             UpdateVisuals();
         }
+        UpdateStaticAudio();
         CloseLocalDialogue();
     }
 
@@ -219,6 +303,12 @@ public class SpiritBoxItem : EquipmentItem
 
     public void OpenLocalDialogue()
     {
+        if (!IsInsideGhostRoom())
+        {
+            Debug.Log("[SpiritBoxItem] Cannot open dialogue: Spirit Box is not inside the GhostRoomMarker bounds.");
+            return;
+        }
+
         EnsureDialogueUI();
         if (SpiritBoxDialogueUI.Instance != null)
         {
@@ -302,51 +392,24 @@ public class SpiritBoxItem : EquipmentItem
             return false;
         }
 
-        // 2. Proximity check: inside ghost room OR within detection radius of the ghost
-        bool inGhostRoom = (ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.OverlapPoint(transform.position));
-        if (inGhostRoom) return true;
-
-        if (Vector2.Distance(transform.position, ghostHandler.transform.position) <= detectionRadius)
+        // 2. Strict location check: strictly inside the GhostRoomMarker bounds
+        if (!IsInsideGhostRoom())
         {
-            return true;
+            return false;
         }
 
-        if (ghostHandler.eventGhost != null && Vector2.Distance(transform.position, ghostHandler.eventGhost.transform.position) <= detectionRadius)
-        {
-            return true;
-        }
-
-        if (ghostHandler.hunterGhost != null && Vector2.Distance(transform.position, ghostHandler.hunterGhost.transform.position) <= detectionRadius)
-        {
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     [Rpc(SendTo.ClientsAndHost)]
     private void ReceiveGhostResponseRpc(int questionIndex, bool hasEvidence)
     {
-        if (audioSource != null)
+        if (audioSource != null && hasEvidence)
         {
-            if (hasEvidence)
+            AudioClip clip = GetResponseClip(questionIndex);
+            if (clip != null)
             {
-                AudioClip clip = GetResponseClip(questionIndex);
-                if (clip != null)
-                {
-                    audioSource.PlayOneShot(clip);
-                }
-                else if (radioStaticAudio != null)
-                {
-                    audioSource.PlayOneShot(radioStaticAudio, 0.4f);
-                }
-            }
-            else
-            {
-                if (radioStaticAudio != null)
-                {
-                    audioSource.PlayOneShot(radioStaticAudio, 0.6f);
-                }
+                audioSource.PlayOneShot(clip);
             }
         }
 
@@ -407,6 +470,7 @@ public class SpiritBoxItem : EquipmentItem
     protected override void UpdateVisuals()
     {
         base.UpdateVisuals();
+        UpdateStaticAudio();
         if (spriteRenderer != null)
         {
             if (IsPoweredOn && activatedSprite != null)

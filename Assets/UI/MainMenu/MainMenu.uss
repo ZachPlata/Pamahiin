@@ -240,3 +240,7 @@
 .setting-toggle {
     margin-left: auto;
 }
+
+.toggle-label {
+    width: 230px;
+}

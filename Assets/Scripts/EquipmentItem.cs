@@ -30,6 +30,23 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     public bool IsPlaced => ownerClientId.Value == ulong.MaxValue && isPlaced.Value;
     public virtual bool IsPoweredOn => false;
 
+    public virtual bool IsHeldByLocalPlayer
+    {
+        get
+        {
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient?.PlayerObject != null)
+            {
+                var inv = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerInventory>();
+                if (inv != null && inv.CurrentItem == this) return true;
+            }
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                return ownerClientId.Value == NetworkManager.Singleton.LocalClientId && isInHand.Value;
+            }
+            return isInHand.Value;
+        }
+    }
+
     protected virtual void Awake()
     {
         var colliders = GetComponents<Collider2D>();
@@ -154,9 +171,21 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         SyncPlacedTransformClientRpc(finalPos, transform.rotation);
     }
 
+    /// <summary>
+    /// Validates whether the item can be placed at the target position.
+    /// Override in derived classes to enforce placement rules (e.g. Ritual Chalk in Ghost Room).
+    /// </summary>
+    public virtual bool CanPlace(Vector3 targetPosition) => true;
+
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     public virtual void PlaceItemRpc(Vector3 placePosition, Quaternion placeRotation)
     {
+        if (!CanPlace(placePosition))
+        {
+            Debug.Log($"[EquipmentItem] Placement rejected for {itemName} at {placePosition}: validation failed.");
+            return;
+        }
+
         Debug.Log($"Player placed {itemName}");
         ownerClientId.Value = ulong.MaxValue;
         isPlaced.Value = true;
@@ -242,6 +271,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
                 if (localInventory != null)
                 {
                     localInventory.AddItem(this);
+                    TriggerEquipmentTutorial();
                 }
             }
         }
@@ -252,6 +282,32 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     protected virtual void OnInHandChanged(bool inHand)
     {
         UpdateVisuals();
+        if (inHand && IsHeldByLocalPlayer)
+        {
+            TriggerEquipmentTutorial();
+        }
+    }
+
+    public virtual void TriggerEquipmentTutorial()
+    {
+        if (this is FlashlightItem) TutorialTooltipManager.TriggerHint(TutorialHintId.Flashlight);
+        else if (this is EMFReaderItem) TutorialTooltipManager.TriggerHint(TutorialHintId.EMFReader);
+        else if (this is SpiritBoxItem) TutorialTooltipManager.TriggerHint(TutorialHintId.SpiritBox);
+        else if (this is ThermometerItem) TutorialTooltipManager.TriggerHint(TutorialHintId.Thermometer);
+        else if (this is GhostWritingBookItem) TutorialTooltipManager.TriggerHint(TutorialHintId.WritingBook);
+        else if (this is VideoCameraItem) TutorialTooltipManager.TriggerHint(TutorialHintId.VideoCamera);
+        else if (this is RitualChalkItem) TutorialTooltipManager.TriggerHint(TutorialHintId.RitualChalk);
+        else if (this is CrucifixItem) TutorialTooltipManager.TriggerHint(TutorialHintId.Crucifix);
+        else if (this is SanityPillsItem) TutorialTooltipManager.TriggerHint(TutorialHintId.SanityPills);
+        else
+        {
+            TutorialTooltipManager.TriggerCustomHint(
+                $"EQUIPMENT: {itemName.ToUpper()}",
+                "[L-CLICK] / [R-CLICK]",
+                "Left-Click to turn on or activate. Right-Click to place it down on the floor.",
+                $"equip_{itemName.Replace(" ", "")}"
+            );
+        }
     }
 
     protected virtual void OnPlacedChanged(bool placed)

@@ -254,7 +254,11 @@ public class RitualChalkItem : EquipmentItem
 
         if (placed && autoStartOnPlace)
         {
-            TriggerRitualPopup();
+            var exorcismManager = GetExorcismManager();
+            if (exorcismManager != null && !exorcismManager.IsExorcismActive && !exorcismManager.IsExorcismCompleted)
+            {
+                TriggerRitualPopup();
+            }
         }
     }
 
@@ -331,8 +335,18 @@ public class RitualChalkItem : EquipmentItem
         }
         else
         {
-            // Unplaced / Dropped State: show chalk item sprite and apply calibrated handheld item scale
-            spriteRenderer.enabled = true;
+            // Unplaced / Dropped / In-Hand State: hide if deselected in inventory
+            bool isVisible = isInHand.Value || IsOnGround;
+            spriteRenderer.enabled = isVisible;
+            if (!isVisible)
+            {
+                if (interactCollider != null)
+                {
+                    interactCollider.enabled = false;
+                }
+                return;
+            }
+
             if (itemSprite != null)
             {
                 spriteRenderer.sprite = itemSprite;
@@ -348,6 +362,7 @@ public class RitualChalkItem : EquipmentItem
             if (interactCollider != null)
             {
                 interactCollider.isTrigger = originalIsTrigger;
+                interactCollider.enabled = IsOnGround;
             }
         }
     }
@@ -356,7 +371,11 @@ public class RitualChalkItem : EquipmentItem
     {
         if (IsPlaced)
         {
-            // Interacting with the placed diagram triggers the exorcism ghost-selection popup if not already running
+            var exorcismManager = GetExorcismManager();
+            if (exorcismManager != null && (exorcismManager.IsExorcismActive || exorcismManager.IsExorcismCompleted))
+            {
+                return;
+            }
             TriggerRitualPopup();
         }
         else
@@ -371,14 +390,74 @@ public class RitualChalkItem : EquipmentItem
         if (IsPlaced)
         {
             var exorcismManager = GetExorcismManager();
-            if (exorcismManager != null && exorcismManager.IsMinigameActive)
+            if (exorcismManager != null)
             {
-                return "Exorcism in Progress";
+                if (exorcismManager.IsExorcismCompleted)
+                {
+                    return "Exorcism Completed";
+                }
+                if (exorcismManager.IsExorcismActive)
+                {
+                    return "Exorcism in Progress";
+                }
             }
             return "Begin Exorcism";
         }
 
         return base.GetInteractText();
+    }
+
+    /// <summary>
+    /// Validates whether the Ritual Chalk is currently inside the active Ghost Room bounds.
+    /// Exactly matches SpiritBoxItem.IsInsideGhostRoom().
+    /// </summary>
+    public bool IsInsideGhostRoom()
+    {
+        return GhostRoomMarker.IsInsideGhostRoom(transform.position);
+    }
+
+    /// <summary>
+    /// Validates whether a specific world position is inside the active Ghost Room bounds.
+    /// </summary>
+    public bool IsInsideGhostRoom(Vector3 position)
+    {
+        return GhostRoomMarker.IsInsideGhostRoom(position);
+    }
+
+    /// <summary>
+    /// Validates whether the chalk can be placed / right-clicked.
+    /// Strictly only allows placement if inside the GhostRoomMarker.
+    /// </summary>
+    public override bool CanPlace(Vector3 targetPosition)
+    {
+        if (!IsInsideGhostRoom() && !IsInsideGhostRoom(targetPosition))
+        {
+            Debug.Log("[RitualChalkItem] Location check failed: Ritual Chalk can only be placed inside the Ghost Room.");
+            return false;
+        }
+
+        if (!IsInsideGhostRoom(targetPosition))
+        {
+            Debug.Log("[RitualChalkItem] Target placement location is outside the Ghost Room.");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Triggered on Right Click while held in hand.
+    /// Strictly only allows using/placing if inside the GhostRoomMarker.
+    /// </summary>
+    public override void UseSecondary()
+    {
+        if (!IsInsideGhostRoom())
+        {
+            Debug.Log("[RitualChalkItem] Location check failed: Ritual Chalk can only be right-clicked inside the Ghost Room.");
+            return;
+        }
+
+        base.UseSecondary();
     }
 
     public override void UsePrimary()

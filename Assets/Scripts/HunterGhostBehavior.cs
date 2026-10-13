@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Netcode;
 using UnityEngine.AI;
+using UnityEngine.Rendering.Universal;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(Rigidbody2D))]
@@ -64,6 +65,15 @@ public class HunterGhostBehavior : NetworkBehaviour
     public bool IsAngeredState => isAngeredState;
     public bool IsRepelled => isRepelled;
 
+    // Network synchronization & visuals
+    private NetworkVariable<Vector2> netPosition = new NetworkVariable<Vector2>(
+        Vector2.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<float> netRotation = new NetworkVariable<float>(
+        0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private Light2D ghostLight;
+    private bool isExecutingKill = false;
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -88,6 +98,33 @@ public class HunterGhostBehavior : NetworkBehaviour
         // Setup dummy LineRenderer for backwards compatibility with Dev Console Button
         breadcrumbLine = gameObject.AddComponent<LineRenderer>();
         breadcrumbLine.enabled = false;
+
+        EnsureGhostLight();
+    }
+
+    private void EnsureGhostLight()
+    {
+        ghostLight = GetComponentInChildren<Light2D>();
+        if (ghostLight == null)
+        {
+            var lightGo = new GameObject("GhostAuraLight");
+            lightGo.transform.SetParent(transform, false);
+            ghostLight = lightGo.AddComponent<Light2D>();
+            ghostLight.lightType = Light2D.LightType.Point;
+            ghostLight.color = new Color(0.95f, 0.25f, 0.25f, 1f); // Menacing dim crimson ghostly aura
+            ghostLight.pointLightOuterRadius = 3.5f;
+            ghostLight.pointLightInnerRadius = 0.5f;
+            ghostLight.intensity = 1.0f;
+        }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        if (!IsServer && agent != null)
+        {
+            agent.enabled = false; // Only server runs NavMeshAgent; clients lerp transform
+        }
     }
 
     public void OnHuntStarted()
@@ -120,6 +157,22 @@ public class HunterGhostBehavior : NetworkBehaviour
 
     private void Update()
     {
+        if (ghostLight != null)
+        {
+            var sr = GetComponentInChildren<SpriteRenderer>();
+            ghostLight.enabled = sr != null && sr.enabled;
+        }
+
+        // Client-side transform interpolation so clients can see the ghost moving during hunt
+        if (!IsServer && IsSpawned)
+        {
+            if (netPosition.Value != Vector2.zero)
+            {
+                transform.position = Vector3.Lerp(transform.position, new Vector3(netPosition.Value.x, netPosition.Value.y, transform.position.z), Time.deltaTime * 18f);
+                transform.rotation = Quaternion.Euler(0f, 0f, netRotation.Value);
+            }
+        }
+
         if (isRepelled)
         {
             repelTimer -= Time.deltaTime;
@@ -163,7 +216,11 @@ public class HunterGhostBehavior : NetworkBehaviour
 
     private void FixedUpdate()
     {
-        if (!IsServer) return;
+        if (!IsServer || !IsSpawned) return;
+
+        // Sync position and rotation over network for all clients
+        netPosition.Value = transform.position;
+        netRotation.Value = rb.rotation;
 
         // Manually rotate the ghost to face its velocity (NavMeshAgent velocity)
         if (agent != null && agent.velocity.sqrMagnitude > 0.01f)
@@ -230,12 +287,12 @@ public class HunterGhostBehavior : NetworkBehaviour
                     }
                 }
 
-                if (canKill)
+                if (canKill && !isExecutingKill)
                 {
                     if (chaseTarget.KillPlayer())
                     {
                         NotifyPlayerCaughtClientRpc(chaseTarget.OwnerClientId);
-                        ghostHandler.EndHunt();
+                        StartCoroutine(KillSequenceRoutine());
                         return;
                     }
                 }
@@ -769,24 +826,48 @@ public class HunterGhostBehavior : NetworkBehaviour
         }
     }
 
-    public void StartDyingSequence(AudioClip dyingClip)
+    public void StartDyingSequence(AudioClip dyingClip, Vector3? manifestPosition = null)
     {
-        StartCoroutine(DyingRoutine(dyingClip));
+        gameObject.SetActive(true);
+        StartCoroutine(DyingRoutine(dyingClip, manifestPosition));
     }
 
-    private System.Collections.IEnumerator DyingRoutine(AudioClip dyingClip)
+    private System.Collections.IEnumerator DyingRoutine(AudioClip dyingClip, Vector3? manifestPosition)
     {
         enabled = false;
-        if (agent != null) agent.isStopped = true;
-
-        if (dyingClip != null)
+        if (agent != null)
         {
-            AudioSource.PlayClipAtPoint(dyingClip, transform.position, 1f);
+            if (agent.isOnNavMesh) agent.isStopped = true;
+            agent.enabled = false; // Disable NavMeshAgent so it does not fight transform position
+        }
+
+        if (manifestPosition.HasValue && manifestPosition.Value != Vector3.zero)
+        {
+            transform.position = new Vector3(manifestPosition.Value.x, manifestPosition.Value.y, 0f);
         }
 
         Vector3 originalPos = transform.position;
         Vector3 originalScale = transform.localScale;
+        if (originalScale.sqrMagnitude < 0.01f)
+        {
+            originalScale = new Vector3(0.266f, 0.266f, 1f);
+        }
+        transform.localScale = originalScale;
+
         var sr = GetComponentInChildren<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.enabled = true;
+            sr.color = Color.white;
+            sr.sortingLayerName = "Item";
+            sr.sortingOrder = 50; // Render cleanly above diagram, floor, and players
+        }
+
+        AudioClip clipToPlay = dyingClip != null ? dyingClip : CreateProceduralShriekClip();
+        if (clipToPlay != null)
+        {
+            AudioSource.PlayClipAtPoint(clipToPlay, transform.position, 1f);
+        }
 
         float duration = 2.8f;
         float elapsed = 0f;
@@ -797,14 +878,14 @@ public class HunterGhostBehavior : NetworkBehaviour
             float progress = elapsed / duration;
 
             // Violently shake
-            float shakeMagnitude = Mathf.Lerp(0.18f, 0.02f, progress);
+            float shakeMagnitude = Mathf.Lerp(0.22f, 0.02f, progress);
             transform.position = originalPos + (Vector3)(Random.insideUnitCircle * shakeMagnitude);
 
             // Shrink and fade
             transform.localScale = Vector3.Lerp(originalScale, Vector3.zero, progress);
             if (sr != null)
             {
-                Color c = sr.color;
+                Color c = Color.white;
                 c.a = Mathf.Lerp(1f, 0f, progress);
                 sr.color = c;
             }
@@ -812,13 +893,103 @@ public class HunterGhostBehavior : NetworkBehaviour
             yield return null;
         }
 
-        if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+        if (sr != null)
         {
-            NetworkObject.Despawn(true);
+            sr.enabled = false;
         }
-        else
+
+        // Notify ghostHandler that the ghost is exorcised so it halts hunts/events,
+        // but DO NOT despawn or destroy the Ghost Handler hierarchy so Ghost Type data is preserved.
+        if (ghostHandler != null)
         {
-            gameObject.SetActive(false);
+            ghostHandler.OnGhostExorcised();
+        }
+
+        gameObject.SetActive(false);
+    }
+
+    private static AudioClip CreateProceduralShriekClip()
+    {
+        int sampleRate = 44100;
+        float duration = 2.8f;
+        int sampleCount = Mathf.FloorToInt(sampleRate * duration);
+        float[] samples = new float[sampleCount];
+
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float t = (float)i / sampleRate;
+            float progress = t / duration;
+
+            // Pitch swoops from high scream (~880 Hz) downward to low guttural growl (~140 Hz)
+            float freq = Mathf.Lerp(880f, 140f, Mathf.Pow(progress, 0.7f));
+            
+            // Vibrato / erratic warble
+            float vibrato = Mathf.Sin(2f * Mathf.PI * 18f * t) * 60f;
+            float phase = 2f * Mathf.PI * (freq + vibrato) * t;
+
+            // Base tone with eerie harmonics
+            float wave = Mathf.Sin(phase) * 0.5f 
+                       + Mathf.Sin(phase * 1.5f) * 0.25f 
+                       + Mathf.Sin(phase * 2.3f) * 0.15f;
+
+            // Add harsh noisy rasp
+            float noise = (Random.value * 2f - 1f) * 0.35f;
+            float raw = (wave + noise);
+
+            // Envelope: quick attack, sustained loud shriek, violent fadeout
+            float envelope;
+            if (progress < 0.08f) envelope = progress / 0.08f;
+            else if (progress > 0.7f) envelope = Mathf.Lerp(1f, 0f, (progress - 0.7f) / 0.3f);
+            else envelope = 1f;
+
+            samples[i] = Mathf.Clamp(raw * envelope * 0.8f, -1f, 1f);
+        }
+
+        AudioClip clip = AudioClip.Create("ProceduralGhostShriek", sampleCount, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        return clip;
+    }
+
+    private System.Collections.IEnumerator KillSequenceRoutine()
+    {
+        isExecutingKill = true;
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
+        }
+
+        // Reveal ghost fully over the player so the player actually sees their killer
+        ShowKillPresenceClientRpc();
+
+        yield return new WaitForSeconds(1.8f);
+
+        isExecutingKill = false;
+        if (agent != null && agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+        }
+        if (ghostHandler != null)
+        {
+            ghostHandler.EndHunt();
+        }
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void ShowKillPresenceClientRpc()
+    {
+        var sr = GetComponentInChildren<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.enabled = true;
+            Color c = sr.color;
+            c.a = 1f;
+            sr.color = c;
+        }
+        if (ghostLight != null)
+        {
+            ghostLight.enabled = true;
+            ghostLight.intensity = 1.5f;
         }
     }
 }

@@ -72,8 +72,13 @@ public class ExorcismManager : NetworkBehaviour
     private Volume redAtmosphereVolume;
     private Coroutine repelCoroutine;
     private Coroutine bannerHideCoroutine;
+    private bool isExorcismActive = false;
+    private bool isExorcismCompleted = false;
+    private bool uiButtonsBound = false;
 
     public bool IsMinigameActive => isMinigameActive;
+    public bool IsExorcismActive => isExorcismActive || isMinigameActive;
+    public bool IsExorcismCompleted => isExorcismCompleted;
 
     private void Awake()
     {
@@ -110,9 +115,13 @@ public class ExorcismManager : NetworkBehaviour
                 btnKapre = root.Q<Button>("btn-ghost-kapre");
                 btnManananggal = root.Q<Button>("btn-ghost-manananggal");
 
-                if (btnTikbalang != null) btnTikbalang.clicked += () => OnGhostSelected("Tikbalang");
-                if (btnKapre != null) btnKapre.clicked += () => OnGhostSelected("Kapre");
-                if (btnManananggal != null) btnManananggal.clicked += () => OnGhostSelected("Manananggal");
+                if (!uiButtonsBound)
+                {
+                    if (btnTikbalang != null) btnTikbalang.clicked += () => OnGhostSelected("Tikbalang");
+                    if (btnKapre != null) btnKapre.clicked += () => OnGhostSelected("Kapre");
+                    if (btnManananggal != null) btnManananggal.clicked += () => OnGhostSelected("Manananggal");
+                    uiButtonsBound = true;
+                }
 
                 // Circular Minigame
                 exorcismOverlay = root.Q<VisualElement>("exorcism-overlay");
@@ -140,12 +149,24 @@ public class ExorcismManager : NetworkBehaviour
 
     // ── Initiation & UI Popup ──────────────────────────────────────────
 
+    private void SetGhostButtonsInteractable(bool interactable)
+    {
+        if (btnTikbalang != null) btnTikbalang.SetEnabled(interactable);
+        if (btnKapre != null) btnKapre.SetEnabled(interactable);
+        if (btnManananggal != null) btnManananggal.SetEnabled(interactable);
+    }
+
     /// <summary>
     /// Triggered when the chalk diagram is placed or interacted with on the floor.
     /// Opens the ghost selection popup to finalize the guess before the minigame starts.
     /// </summary>
     public void InitiateRitual(Vector3 diagramPos)
     {
+        if (isExorcismCompleted || isExorcismActive || isMinigameActive)
+        {
+            return;
+        }
+
         chalkDiagramPos = diagramPos;
 
         if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
@@ -166,8 +187,15 @@ public class ExorcismManager : NetworkBehaviour
 
     private void InitiateRitualLocal(Vector3 diagramPos)
     {
+        if (isExorcismCompleted || isExorcismActive || isMinigameActive)
+        {
+            return;
+        }
+
+        isExorcismActive = true;
         chalkDiagramPos = diagramPos;
         EnsureUIReferences();
+        SetGhostButtonsInteractable(true);
 
         if (ghostSelectPopup != null)
         {
@@ -177,6 +205,14 @@ public class ExorcismManager : NetworkBehaviour
 
     private void OnGhostSelected(string ghostName)
     {
+        if (!isExorcismActive || isMinigameActive)
+        {
+            return;
+        }
+
+        // Disable immediately upon the first click to prevent double clicks and duplicate starts
+        SetGhostButtonsInteractable(false);
+
         selectedGhostGuess = ghostName;
         JournalController.LastLockedInGuess = ghostName;
         Debug.Log($"[ExorcismManager] Ghost type selected: {ghostName}");
@@ -281,8 +317,6 @@ public class ExorcismManager : NetworkBehaviour
     private void Update()
     {
         if (!isMinigameActive) return;
-
-        EnsureUIReferences();
 
         // 1. Rotate the needle
         needleAngle += currentRotationSpeed * Time.deltaTime;
@@ -390,6 +424,8 @@ public class ExorcismManager : NetworkBehaviour
 
         if (isGhostCorrect && isMinigameSuccess)
         {
+            isExorcismActive = false;
+            isExorcismCompleted = true;
             if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
             {
                 TriggerSuccessClientRpc();
@@ -401,6 +437,7 @@ public class ExorcismManager : NetworkBehaviour
         }
         else
         {
+            isExorcismActive = false;
             if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
             {
                 TriggerFailureClientRpc();
@@ -422,11 +459,33 @@ public class ExorcismManager : NetworkBehaviour
     {
         Debug.Log("[ExorcismManager] SUCCESS! Correct ghost identified and minigame passed.");
 
-        // 1. Ghost shakes, plays dying shriek, and slowly disappears
+        // 1. Ghost shakes, plays dying shriek, and slowly disappears (GhostHandler is kept intact)
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
-        if (ghostHandler != null && ghostHandler.hunterGhost != null)
+        if (ghostHandler != null)
         {
-            ghostHandler.hunterGhost.StartDyingSequence(dyingShriekClip);
+            // Immediately halt ongoing hunts and unlock doors so players are safe
+            ghostHandler.EndHunt();
+            ghostHandler.SetDoorsLocked(false);
+
+            if (ghostHandler.hunterGhost != null)
+            {
+                // Manifest the dying ghost directly at the ritual chalk position so players clearly witness the dying sequence
+                Vector3 manifestPos = (chalkDiagramPos != Vector3.zero) ? chalkDiagramPos : transform.position;
+                ghostHandler.hunterGhost.StartDyingSequence(dyingShriekClip, manifestPos);
+            }
+            else
+            {
+                ghostHandler.OnGhostExorcised();
+            }
+
+            if (GameMatchManager.Instance != null && !string.IsNullOrEmpty(ghostHandler.ghostName))
+            {
+                GameMatchManager.Instance.SetTrueGhostName(ghostHandler.ghostName);
+            }
+        }
+        else if (GameMatchManager.Instance != null && !string.IsNullOrEmpty(selectedGhostGuess))
+        {
+            GameMatchManager.Instance.SetTrueGhostName(selectedGhostGuess);
         }
 
         // 2. Record deduction for the van / endgame screen

@@ -134,6 +134,10 @@
     margin-left: auto;
 }
 
+.toggle-label {
+    width: 200px;
+}
+
 /* ── Player List ─────────────────────────────────────────── */
 .player-scroll {
     max-height: 260px;

@@ -58,6 +58,11 @@ public class SanityPillsItem : EquipmentItem
     // Do not drag sanity pills with mouse; clicking LMB or pressing E directly picks them up!
     public override bool CanDrag() => false;
 
+    public override void TriggerEquipmentTutorial()
+    {
+        TutorialTooltipManager.TriggerHint(TutorialHintId.SanityPills);
+    }
+
     /// <summary>
     /// Left click when held in hand consumes the pills.
     /// </summary>

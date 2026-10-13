@@ -72,7 +72,15 @@ public class GhostHandler : NetworkBehaviour
             currentEvidence.Add(EvidenceType.GhostWriting);
             currentEvidence.Add(EvidenceType.GhostOrbs);
         }
+
+        if (GameMatchManager.Instance != null && !string.IsNullOrEmpty(ghostName) && !ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
+        {
+            GameMatchManager.Instance.SetTrueGhostName(ghostName);
+        }
     }
+
+    private bool isExorcised = false;
+    public bool IsExorcised => isExorcised;
 
     private NetworkVariable<GhostHandlerState> currentState = new NetworkVariable<GhostHandlerState>(
         GhostHandlerState.Dormant, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -116,7 +124,14 @@ public class GhostHandler : NetworkBehaviour
             if (sr != null) sr.sortingOrder = 10;
         }
         
-        currentState.OnValueChanged += (oldState, newState) => UpdateVisibility(newState);
+        currentState.OnValueChanged += (oldState, newState) => 
+        {
+            UpdateVisibility(newState);
+            if (newState != GhostHandlerState.Dormant)
+            {
+                TutorialTooltipManager.TriggerHint(TutorialHintId.GhostHunt);
+            }
+        };
         isExorcismFailedHunt.OnValueChanged += (oldVal, newVal) =>
         {
             if (ExorcismManager.Instance != null)
@@ -230,6 +245,7 @@ public class GhostHandler : NetworkBehaviour
 
     public void TriggerGhostEvent()
     {
+        if (isExorcised) return;
         if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
         
         // Show the event ghost for 3 seconds
@@ -269,8 +285,37 @@ public class GhostHandler : NetworkBehaviour
         currentState.Value = newState;
     }
 
+    public void OnGhostExorcised()
+    {
+        isExorcised = true;
+        EndHunt();
+
+        if (eventGhost != null)
+        {
+            var eventSr = eventGhost.GetComponentInChildren<SpriteRenderer>();
+            if (eventSr != null) eventSr.enabled = false;
+            eventGhost.gameObject.SetActive(false);
+        }
+
+        if (hunterGhost != null)
+        {
+            var hunterSr = hunterGhost.GetComponentInChildren<SpriteRenderer>();
+            if (hunterSr != null) hunterSr.enabled = false;
+            hunterGhost.gameObject.SetActive(false);
+        }
+
+        SetDoorsLocked(false);
+        SetState(GhostHandlerState.Dormant);
+
+        if (GameMatchManager.Instance != null && !string.IsNullOrEmpty(ghostName) && !ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
+        {
+            GameMatchManager.Instance.SetTrueGhostName(ghostName);
+        }
+    }
+
     public void StartHunt(bool isFromFailedExorcism = false)
     {
+        if (isExorcised) return;
         if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
 
         isExorcismFailedHunt.Value = isFromFailedExorcism;
@@ -364,7 +409,7 @@ public class GhostHandler : NetworkBehaviour
         }
     }
 
-    private void SetDoorsLocked(bool locked)
+    public void SetDoorsLocked(bool locked)
     {
         var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);
         foreach (var door in doors)
@@ -378,6 +423,8 @@ public class GhostHandler : NetworkBehaviour
 
     private void Update()
     {
+        if (isExorcised) return;
+
         // Visual logic should run on BOTH Server and Client!
         if (currentState.Value == GhostHandlerState.Dormant)
         {

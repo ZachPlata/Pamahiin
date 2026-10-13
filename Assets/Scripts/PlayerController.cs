@@ -7,6 +7,7 @@ using UnityEngine;
 public class PlayerController : NetworkBehaviour
 {
     public static readonly List<PlayerController> AllPlayers = new List<PlayerController>();
+    public static PlayerController LocalInstance { get; private set; }
 
     [Header("Movement Settings")]
     [SerializeField] private float walkSpeed = 3f;
@@ -38,6 +39,10 @@ public class PlayerController : NetworkBehaviour
 
     private NetworkVariable<bool> isCrouching = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+    [Header("Sanity Settings")]
+    [Tooltip("Rate at which sanity drains per second while in the dark and outside safe zones (sped up by 0.5x to 0.75/s).")]
+    [SerializeField] private float darkSanityDrainRate = 0.75f;
 
     private NetworkVariable<float> sanity = new NetworkVariable<float>(
         100f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -120,16 +125,34 @@ public class PlayerController : NetworkBehaviour
 
         if (IsOwner)
         {
+            LocalInstance = this;
             localCamera = Camera.main;
+            GameSettingsManager.Instance?.ResetMatchTutorialHints();
+            StartCoroutine(DelayedMatchStartTutorialRoutine());
+            StartCoroutine(DelayedJournalHintRoutine());
         }
 
         isAlive.OnValueChanged += (oldVal, newVal) => OnAliveStateChanged(newVal);
         isCrouching.OnValueChanged += (oldVal, newVal) => OnCrouchStateChanged(newVal);
     }
 
+    private System.Collections.IEnumerator DelayedMatchStartTutorialRoutine()
+    {
+        yield return new WaitForSeconds(5f);
+        TutorialTooltipManager.TriggerHint(TutorialHintId.Movement);
+        TutorialTooltipManager.TriggerHint(TutorialHintId.ItemPickup);
+    }
+
+    private System.Collections.IEnumerator DelayedJournalHintRoutine()
+    {
+        yield return new WaitForSeconds(35f);
+        TutorialTooltipManager.TriggerHint(TutorialHintId.Journal);
+    }
+
     public override void OnNetworkDespawn()
     {
         AllPlayers.Remove(this);
+        if (LocalInstance == this) LocalInstance = null;
     }
 
     /// <summary>
@@ -164,7 +187,7 @@ public class PlayerController : NetworkBehaviour
             if (inDark && !IsInSafeZone)
             {
                 // Light-based sanity drain (only drain in the dark and outside safe zones)
-                sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * 0.5f);
+                sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * darkSanityDrainRate);
             }
         }
 
@@ -429,8 +452,12 @@ public class PlayerController : NetworkBehaviour
                 spriteRenderer.color = new Color(0.4f, 0.4f, 0.4f, 0.5f);
             }
 
-            // Change layer to Spectator so ghosts and physics doors ignore them
-            gameObject.layer = LayerMask.NameToLayer("Spectator");
+            // Change layer to Ignore Raycast so ghosts and raycasts ignore dead spectators
+            int ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
+            if (ignoreRaycastLayer >= 0)
+            {
+                gameObject.layer = ignoreRaycastLayer;
+            }
 
             // Disable physics interaction
             var col = GetComponent<Collider2D>();
@@ -444,7 +471,7 @@ public class PlayerController : NetworkBehaviour
                 spriteRenderer.color = Color.white;
             }
 
-            gameObject.layer = LayerMask.NameToLayer("Player");
+            gameObject.layer = 0; // Default layer
 
             var col = GetComponent<Collider2D>();
             if (col != null) col.enabled = true;

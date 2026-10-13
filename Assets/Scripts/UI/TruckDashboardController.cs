@@ -59,6 +59,10 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     public static bool IsOpen => Instance != null && Instance.isDashboardOpen;
     public static bool WasOpenThisFrame => IsOpen || (Instance != null && Instance.closedFrame == Time.frameCount);
     public bool IsDashboardOpen => isDashboardOpen;
+    public Camera ActiveCamera => (allCameras.Count > 0 && currentCameraIndex < allCameras.Count) ? allCameras[currentCameraIndex] : null;
+
+    private RoofFader[] cachedRoofFaders;
+    private List<RoofFader> activeHiddenFaders = new List<RoofFader>();
 
     private void Awake()
     {
@@ -134,6 +138,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     {
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+        RestoreActiveHiddenFaders();
         if (cctvNightVisionLight != null) Destroy(cctvNightVisionLight.gameObject);
         if (cctvGlobalLight != null) Destroy(cctvGlobalLight.gameObject);
         if (cctvVolume != null) Destroy(cctvVolume.gameObject);
@@ -144,15 +149,72 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     {
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+        RestoreActiveHiddenFaders();
         if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;
         if (cctvGlobalLight != null) cctvGlobalLight.enabled = false;
         if (cctvVolume != null) cctvVolume.weight = 0f;
+    }
+
+    private void EnsureRoofFaders()
+    {
+        if (cachedRoofFaders == null || cachedRoofFaders.Length == 0)
+        {
+            cachedRoofFaders = Object.FindObjectsByType<RoofFader>(FindObjectsInactive.Exclude);
+        }
+    }
+
+    private void ApplyRoofFaderForCamera(Camera cam, bool hide)
+    {
+        if (cam == null)
+        {
+            RestoreActiveHiddenFaders();
+            return;
+        }
+
+        EnsureRoofFaders();
+        if (cachedRoofFaders == null || cachedRoofFaders.Length == 0) return;
+
+        if (hide)
+        {
+            RestoreActiveHiddenFaders();
+            Vector2 camPos = cam.transform.position;
+            foreach (var fader in cachedRoofFaders)
+            {
+                if (fader != null && fader.IsPositionInside(camPos))
+                {
+                    fader.SetCameraRenderHide(true);
+                    activeHiddenFaders.Add(fader);
+                }
+            }
+        }
+        else
+        {
+            RestoreActiveHiddenFaders();
+        }
+    }
+
+    private void RestoreActiveHiddenFaders()
+    {
+        if (activeHiddenFaders.Count > 0)
+        {
+            foreach (var fader in activeHiddenFaders)
+            {
+                if (fader != null)
+                {
+                    fader.SetCameraRenderHide(false);
+                }
+            }
+            activeHiddenFaders.Clear();
+        }
     }
 
     private void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
     {
         if (allCameras.Count > 0 && currentCameraIndex < allCameras.Count && cam == allCameras[currentCameraIndex])
         {
+            // Temporarily hide the roof for this camera's render view if the camera is inside the house
+            ApplyRoofFaderForCamera(cam, true);
+
             if (isCCTVNightVisionOn)
             {
                 if (cctvVolume != null) cctvVolume.weight = 1f;
@@ -171,6 +233,9 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     {
         if (allCameras.Count > 0 && currentCameraIndex < allCameras.Count && cam == allCameras[currentCameraIndex])
         {
+            // Restore roof renderers immediately after CCTV camera finishes rendering
+            ApplyRoofFaderForCamera(cam, false);
+
             if (cctvVolume != null) cctvVolume.weight = 0f;
             if (cctvGlobalLight != null) cctvGlobalLight.enabled = false;
             if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;

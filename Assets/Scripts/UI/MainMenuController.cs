@@ -22,6 +22,7 @@ public class MainMenuController : MonoBehaviour
     private Slider sliderMaster, sliderMusic, sliderSFX, sliderVoice;
     private Label  lblMaster, lblMusic, lblSFX, lblVoice;
     private Toggle toggleFullscreen, toggleFPS;
+    private Toggle toggleTutorialHints;
 
     [Header("Atmospheric VFX")]
     private Label titleLabel;
@@ -78,6 +79,7 @@ public class MainMenuController : MonoBehaviour
 
         toggleFullscreen = root.Q<Toggle>("toggle-fullscreen");
         toggleFPS        = root.Q<Toggle>("toggle-fps");
+        toggleTutorialHints = root.Q<Toggle>("toggle-tutorial-hints");
 
         if (sliderMaster != null)
             sliderMaster.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMasterVolume(e.newValue); UpdateVolLabel(lblMaster, e.newValue); });
@@ -92,6 +94,8 @@ public class MainMenuController : MonoBehaviour
             toggleFullscreen.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetFullscreen(e.newValue));
         if (toggleFPS != null)
             toggleFPS.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetShowFPS(e.newValue));
+        if (toggleTutorialHints != null)
+            toggleTutorialHints.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetTutorialHintsEnabled(e.newValue));
 
         SyncSettingsFromManager();
 
@@ -217,6 +221,7 @@ public class MainMenuController : MonoBehaviour
 
         if (toggleFullscreen != null) toggleFullscreen.value = s.IsFullscreen;
         if (toggleFPS != null)        toggleFPS.value = s.ShowFPS;
+        if (toggleTutorialHints != null)  toggleTutorialHints.value = s.TutorialHintsEnabled;
 
         UpdateVolLabel(lblMaster, s.MasterVolume);
         UpdateVolLabel(lblMusic,  s.MusicVolume);

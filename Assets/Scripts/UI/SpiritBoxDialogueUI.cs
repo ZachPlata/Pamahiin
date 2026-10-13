@@ -151,6 +151,14 @@ public class SpiritBoxDialogueUI : MonoBehaviour
     {
         if (!isDialogueOpen || activeSpiritBox == null) return;
 
+        // Validate location: automatically close dialogue if outside Ghost Room
+        if (!activeSpiritBox.IsInsideGhostRoom())
+        {
+            activeSpiritBox.TurnOffAndCancel();
+            CloseDialogue();
+            return;
+        }
+
         // 1. Radio sweep effect animation on frequency readout
         sweepTimer += Time.deltaTime;
         if (sweepTimer >= 0.15f)
@@ -245,6 +253,12 @@ public class SpiritBoxDialogueUI : MonoBehaviour
     public void OpenDialogue(SpiritBoxItem box, string[] questions)
     {
         if (box == null) return;
+
+        if (!box.IsInsideGhostRoom())
+        {
+            Debug.Log("[SpiritBoxDialogueUI] Dialogue rejected: Spirit Box is not inside the GhostRoomMarker bounds.");
+            return;
+        }
 
         activeSpiritBox = box;
         isDialogueOpen = true;
@@ -376,6 +390,14 @@ public class SpiritBoxDialogueUI : MonoBehaviour
     private void SubmitQuestion(int index)
     {
         if (activeSpiritBox == null || isTransmitting) return;
+
+        if (!activeSpiritBox.IsInsideGhostRoom())
+        {
+            Debug.Log("[SpiritBoxDialogueUI] Transmission blocked: Spirit Box is outside the Ghost Room.");
+            activeSpiritBox.TurnOffAndCancel();
+            CloseDialogue();
+            return;
+        }
 
         isTransmitting = true;
         transmitCooldown = 2.5f; // Wait for audio response before next inquiry

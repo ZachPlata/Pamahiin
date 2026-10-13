@@ -3,7 +3,6 @@
     height: 100%;
     justify-content: space-between;
     padding: 20px;
-    picking-mode: ignore;
 }
 
 .pause-container {
@@ -129,7 +128,6 @@
     height: 100%;
     justify-content: space-between;
     padding: 35px 45px;
-    picking-mode: ignore;
 }
 
 .nv-overlay-hidden {
@@ -146,7 +144,6 @@
     height: 100%;
     background-image: url('project://database/Assets/UI/HUD/night_vision_overlay.png');
     -unity-background-scale-mode: stretch-to-fill;
-    picking-mode: ignore;
 }
 
 .nv-top-bar {
@@ -161,14 +158,12 @@
     font-size: 16px;
     -unity-font-style: bold;
     text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
-    letter-spacing: 1px;
 }
 
 .nv-hud-subtext {
     color: rgba(220, 220, 220, 0.85);
     font-size: 13px;
     -unity-font-style: normal;
-    letter-spacing: 1px;
 }
 
 .nv-rec-cluster {
@@ -253,4 +248,147 @@
 
 .nv-bottom-right {
     align-items: flex-end;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Minecraft-Style Top-Right Tutorial Toast
+   ───────────────────────────────────────────────────────────── */
+
+.tutorial-toast-container {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    align-items: flex-end;
+    justify-content: flex-start;
+}
+
+.tutorial-toast {
+    width: 440px;
+    background-color: rgba(18, 22, 28, 0.94);
+    border-width: 1.5px;
+    border-color: rgb(75, 88, 105);
+    border-radius: 6px;
+    padding: 12px 16px 14px 16px;
+    opacity: 1;
+    transition-duration: 0.3s;
+}
+
+.tutorial-toast-hidden {
+    opacity: 0;
+    display: none;
+}
+
+.toast-header-row {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.toast-key-badge {
+    background-color: rgb(34, 43, 56);
+    border-width: 1px;
+    border-color: rgb(130, 150, 175);
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: rgb(255, 255, 255);
+    font-size: 11px;
+    -unity-font-style: bold;
+    margin-right: 8px;
+}
+
+.toast-title {
+    color: rgb(250, 192, 78);
+    font-size: 13px;
+    -unity-font-style: bold;
+}
+
+.toast-desc {
+    color: rgb(220, 228, 236);
+    font-size: 12.5px;
+    white-space: normal;
+    margin-bottom: 8px;
+    -unity-text-align: middle-left;
+}
+
+.toast-progress-track {
+    width: 100%;
+    height: 3px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 1.5px;
+    overflow: hidden;
+}
+
+.toast-progress-bar {
+    width: 100%;
+    height: 100%;
+    background-color: rgb(250, 192, 78);
+}
+
+/* ── Death / Game Over Screen ── */
+.death-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(8, 0, 0, 0.92);
+    align-items: center;
+    justify-content: center;
+    transition-duration: 0.5s;
+    opacity: 1;
+}
+
+.death-overlay-hidden {
+    display: none;
+    opacity: 0;
+}
+
+.death-panel {
+    align-items: center;
+    justify-content: center;
+    padding: 45px 65px;
+    background-color: rgba(16, 4, 4, 0.95);
+    border-width: 2px;
+    border-color: rgba(180, 20, 20, 0.85);
+    border-radius: 4px;
+}
+
+.death-title {
+    font-size: 56px;
+    -unity-font-style: bold;
+    color: rgb(255, 34, 34);
+    margin-bottom: 12px;
+    -unity-text-align: middle-center;
+}
+
+.death-subtitle {
+    font-size: 18px;
+    color: rgba(210, 210, 210, 0.85);
+    margin-bottom: 35px;
+    -unity-text-align: middle-center;
+}
+
+.death-button {
+    width: 340px;
+    height: 52px;
+    font-size: 15px;
+    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    background-color: rgba(85, 12, 12, 0.9);
+    border-width: 1px;
+    border-color: rgba(220, 45, 45, 0.9);
+    border-radius: 2px;
+    transition-duration: 0.25s;
+}
+
+.death-button:hover {
+    background-color: rgba(165, 25, 25, 0.95);
+    border-color: rgb(255, 51, 51);
+    color: rgb(255, 255, 255);
+}
+
+.death-button:active {
+    background-color: rgba(100, 10, 10, 1);
 }

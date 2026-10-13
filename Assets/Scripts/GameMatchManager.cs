@@ -14,8 +14,16 @@ public class GameMatchManager : NetworkBehaviour
     public Action<string> OnMatchEnded; // Passes the true ghost name
 
     private Dictionary<ulong, string> playerDeductions = new Dictionary<ulong, string>();
+    private string cachedTrueGhostName = "";
 
-    // We dynamically fetch the ghost name from GhostHandler instead.
+    public void SetTrueGhostName(string ghostName)
+    {
+        if (!string.IsNullOrEmpty(ghostName) && !ghostName.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            cachedTrueGhostName = ghostName;
+            Debug.Log($"[GameMatchManager] True Ghost Name cached: {cachedTrueGhostName}");
+        }
+    }
 
     private void Awake()
     {
@@ -59,11 +67,17 @@ public class GameMatchManager : NetworkBehaviour
 
     public void ForceEndMatch()
     {
-        string actualGhostName = "Unknown Entity";
+        string actualGhostName = cachedTrueGhostName;
         var ghost = UnityEngine.Object.FindAnyObjectByType<GhostHandler>();
-        if (ghost != null)
+        if (ghost != null && !string.IsNullOrEmpty(ghost.ghostName) && !ghost.ghostName.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
         {
             actualGhostName = ghost.ghostName;
+            cachedTrueGhostName = ghost.ghostName;
+        }
+
+        if (string.IsNullOrEmpty(actualGhostName))
+        {
+            actualGhostName = "Unknown Entity";
         }
 
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)

@@ -91,6 +91,11 @@ public class PlayerInventory : NetworkBehaviour
         if (CurrentItem != null)
         {
             Vector3 finalPos = new Vector3(placePosition.x, placePosition.y, 0f);
+            if (!CurrentItem.CanPlace(finalPos))
+            {
+                return;
+            }
+
             CurrentItem.transform.position = finalPos;
             CurrentItem.transform.rotation = placeRotation;
             CurrentItem.PlaceItemRpc(finalPos, placeRotation);
@@ -134,6 +139,7 @@ public class PlayerInventory : NetworkBehaviour
         {
             slots[currentSlotIndex] = item;
             item.SetInHandRpc(true);
+            item.TriggerEquipmentTutorial();
             OnInventoryUpdated?.Invoke();
             return true;
         }

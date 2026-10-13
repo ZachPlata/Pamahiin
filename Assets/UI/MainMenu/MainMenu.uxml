@@ -98,6 +98,14 @@
                     <ui:Toggle name="toggle-fps" class="setting-toggle" />
                 </ui:VisualElement>
 
+                <!-- GAMEPLAY -->
+                <ui:Label text="GAMEPLAY" class="section-label" />
+
+                <ui:VisualElement class="toggle-row" tooltip="Display helpful on-screen tutorial tooltips once per match for equipment, controls, and house mechanics.">
+                    <ui:Label text="Tutorial Hints" class="slider-label toggle-label" tooltip="Display helpful on-screen tutorial tooltips once per match for equipment, controls, and house mechanics." />
+                    <ui:Toggle name="toggle-tutorial-hints" class="setting-toggle" tooltip="Display helpful on-screen tutorial tooltips once per match for equipment, controls, and house mechanics." />
+                </ui:VisualElement>
+
                 <ui:Button name="btn-back-from-settings" text="Back to Menu" class="menu-button back-button" />
             </ui:VisualElement>
         </ui:VisualElement>

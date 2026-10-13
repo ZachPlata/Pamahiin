@@ -56,11 +56,19 @@ public class GhostWritingBookItem : EquipmentItem
         UpdateVisuals(); // Update visual state when dropped or picked up
     }
 
+    /// <summary>
+    /// Validates whether the book is currently placed inside the active Ghost Room bounds.
+    /// </summary>
+    public bool IsInsideGhostRoom()
+    {
+        return GhostRoomMarker.IsInsideGhostRoom(transform.position);
+    }
+
     public void WriteInBook()
     {
         if (!IsServer) return;
         
-        if (IsOpened)
+        if (IsOpened && IsInsideGhostRoom())
         {
             isWritten.Value = true;
         }

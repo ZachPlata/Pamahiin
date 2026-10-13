@@ -75,44 +75,67 @@ public class RoofFader : MonoBehaviour
     }
 
     /// <summary>
-    /// Returns true if the local client has the dashboard open AND a placed, powered-on
-    /// VideoCameraItem is physically inside this RoofFader's bounds.
-    /// Uses a 2D AABB check (X/Y only, ignoring Z) — Bounds.Contains is 3D
-    /// and fails in 2D games because the collider's Z extent is nearly zero.
+    /// Checks if a 2D world position is inside this roof trigger's bounding box.
+    /// </summary>
+    public bool IsPositionInside(Vector2 position)
+    {
+        if (triggerCollider == null) triggerCollider = GetComponent<Collider2D>();
+        if (triggerCollider == null) return false;
+        Bounds bounds = triggerCollider.bounds;
+        return position.x >= bounds.min.x && position.x <= bounds.max.x &&
+               position.y >= bounds.min.y && position.y <= bounds.max.y;
+    }
+
+    /// <summary>
+    /// Instantly hides or restores the roof renderers for a specific camera render pass (e.g. CCTV render texture).
+    /// </summary>
+    public void SetCameraRenderHide(bool hide)
+    {
+        foreach (var sr in spriteRenderers)
+        {
+            if (sr != null) sr.enabled = !hide;
+        }
+
+        foreach (var tmr in tilemapRenderers)
+        {
+            if (tmr != null) tmr.enabled = !hide;
+        }
+    }
+
+    /// <summary>
+    /// Returns true if the local client has the dashboard open AND the currently viewed camera
+    /// (or any deployed video camera) is physically inside this RoofFader's bounds.
+    /// Uses a 2D AABB check (X/Y only, ignoring Z).
     /// </summary>
     private bool ShouldFadeForCCTV()
     {
         // Cache the dashboard reference
         if (dashboard == null)
         {
-            dashboard = FindAnyObjectByType<TruckDashboardController>();
+            dashboard = TruckDashboardController.Instance != null 
+                ? TruckDashboardController.Instance 
+                : FindAnyObjectByType<TruckDashboardController>();
         }
 
-        // Only fade for CCTV when the local client has the dashboard open
-        if (dashboard == null)
-        {
-            Debug.Log("[RoofFader] No TruckDashboardController found.");
-            return false;
-        }
-        if (!dashboard.IsDashboardOpen) return false;
+        if (dashboard == null || !dashboard.IsDashboardOpen) return false;
         if (triggerCollider == null) return false;
 
-        Bounds bounds = triggerCollider.bounds;
+        // 1. Check the currently viewed camera feed on the Truck Dashboard
+        Camera activeCam = dashboard.ActiveCamera;
+        if (activeCam != null && IsPositionInside(activeCam.transform.position))
+        {
+            return true;
+        }
 
+        // 2. Fallback: check if any placed or deployed VideoCameraItem is inside this roof
         var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
         foreach (var cam in allCameras)
         {
             if (cam == null) continue;
 
-            // Check if the camera is on the ground or placed, and powered on
-            if ((cam.IsPlaced || cam.IsOnGround) && cam.IsPoweredOn)
+            if (cam.IsPlaced || cam.IsOnGround)
             {
-                // 2D AABB check — ignore Z axis entirely
-                Vector2 camPos = cam.transform.position;
-                bool insideX = camPos.x >= bounds.min.x && camPos.x <= bounds.max.x;
-                bool insideY = camPos.y >= bounds.min.y && camPos.y <= bounds.max.y;
-
-                if (insideX && insideY)
+                if (IsPositionInside(cam.transform.position))
                 {
                     return true;
                 }

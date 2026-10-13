@@ -61,10 +61,7 @@ public class DotsProjectorItem : EquipmentItem
 
     public override void UsePrimary()
     {
-        if (IsOwner)
-        {
-            TogglePowerRpc();
-        }
+        TogglePowerRpc();
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]

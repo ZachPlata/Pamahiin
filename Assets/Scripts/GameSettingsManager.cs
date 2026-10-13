@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Audio;
 
@@ -39,11 +40,15 @@ public class GameSettingsManager : MonoBehaviour
     private const string KEY_FULLSCR = "fullscreen";
     private const string KEY_QUALITY = "quality";
     private const string KEY_FPS     = "show_fps";
+    private const string KEY_TUTORIAL_ENABLE = "tutorial_enabled";
 
     // ── Inspector ───────────────────────────────────────────────────────────
     [Header("Audio Mixer (optional but recommended)")]
     [Tooltip("Assign the project's main AudioMixer. Leave empty to use AudioListener fallback.")]
     [SerializeField] private AudioMixer audioMixer;
+
+    // ── Runtime State ────────────────────────────────────────────────────────
+    private readonly HashSet<string> seenHintsThisMatch = new HashSet<string>();
 
     // ── Exposed Properties ──────────────────────────────────────────────────
     public float MasterVolume  { get; private set; }
@@ -53,6 +58,8 @@ public class GameSettingsManager : MonoBehaviour
     public bool  IsFullscreen  { get; private set; }
     public int   QualityLevel  { get; private set; }
     public bool  ShowFPS       { get; private set; }
+    public bool  TutorialHintsEnabled { get; private set; } = true;
+    public bool  TutorialHintsRepeatAlways => true;
 
     // ── Unity Lifecycle ─────────────────────────────────────────────────────
     private void Awake()
@@ -73,6 +80,7 @@ public class GameSettingsManager : MonoBehaviour
         SetFullscreen   (PlayerPrefs.GetInt  (KEY_FULLSCR, Screen.fullScreen ? 1 : 0) == 1);
         SetQuality      (PlayerPrefs.GetInt  (KEY_QUALITY, QualitySettings.GetQualityLevel()));
         SetShowFPS      (PlayerPrefs.GetInt  (KEY_FPS,     0) == 1);
+        SetTutorialHintsEnabled(PlayerPrefs.GetInt(KEY_TUTORIAL_ENABLE, 1) == 1);
     }
 
     // ── Public Setters ──────────────────────────────────────────────────────
@@ -125,6 +133,42 @@ public class GameSettingsManager : MonoBehaviour
     {
         ShowFPS = value;
         PlayerPrefs.SetInt(KEY_FPS, value ? 1 : 0);
+    }
+
+    public void SetTutorialHintsEnabled(bool value)
+    {
+        TutorialHintsEnabled = value;
+        PlayerPrefs.SetInt(KEY_TUTORIAL_ENABLE, value ? 1 : 0);
+    }
+
+    public void SetTutorialHintsRepeatAlways(bool value)
+    {
+        // Deprecated: tutorial hints are now automatically per-match
+    }
+
+    public void ResetMatchTutorialHints()
+    {
+        seenHintsThisMatch.Clear();
+        Debug.Log("[GameSettingsManager] Tutorial hints reset for new match.");
+    }
+
+    public bool HasSeenTutorial(string hintKey)
+    {
+        if (string.IsNullOrEmpty(hintKey)) return false;
+        return seenHintsThisMatch.Contains(hintKey);
+    }
+
+    public void MarkTutorialSeen(string hintKey)
+    {
+        if (!string.IsNullOrEmpty(hintKey))
+        {
+            seenHintsThisMatch.Add(hintKey);
+        }
+    }
+
+    public void ResetTutorialHistory()
+    {
+        ResetMatchTutorialHints();
     }
 
     public void SaveAll() => PlayerPrefs.Save();
