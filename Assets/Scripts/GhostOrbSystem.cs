@@ -13,9 +13,28 @@ public class GhostOrbSystem : NetworkBehaviour
     [SerializeField] private float changeDirectionInterval = 3f;
 
     private Bounds roomBounds;
+    private Collider2D roomCollider;
     private bool initialized = false;
     private Vector2 targetPosition;
     private float timer = 0f;
+
+    /// <summary>
+    /// Call this after spawning to give the orb the exact room collider to stay inside.
+    /// </summary>
+    public void Initialize(Collider2D collider)
+    {
+        roomCollider = collider;
+        roomBounds = collider != null ? collider.bounds : new Bounds(transform.position, Vector3.one);
+        initialized = true;
+
+        Vector2 startPos = roomBounds.center;
+        if (roomCollider != null && !roomCollider.OverlapPoint(startPos))
+        {
+            startPos = roomCollider.ClosestPoint(startPos);
+        }
+        transform.position = startPos;
+        PickNewTarget();
+    }
 
     /// <summary>
     /// Call this after spawning to give the orb the exact room bounds to stay inside.
@@ -67,6 +86,18 @@ public class GhostOrbSystem : NetworkBehaviour
 
             // Constant speed movement (MoveTowards already gives constant speed)
             transform.position = Vector2.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
+
+            // Enforce that the orb NEVER leaves the active ghost room
+            if (roomCollider != null && !roomCollider.OverlapPoint(transform.position))
+            {
+                transform.position = roomCollider.ClosestPoint(transform.position);
+                PickNewTarget();
+            }
+            else if (roomCollider == null && !roomBounds.Contains(transform.position))
+            {
+                transform.position = roomBounds.ClosestPoint(transform.position);
+                PickNewTarget();
+            }
         }
 
         // Client-side visual toggle
@@ -104,11 +135,42 @@ public class GhostOrbSystem : NetworkBehaviour
 
     private void PickNewTarget()
     {
-        // Pick a random point strictly inside the room bounds (with a small inset margin)
-        float margin = 0.2f;
-        float x = Random.Range(roomBounds.min.x + margin, roomBounds.max.x - margin);
-        float y = Random.Range(roomBounds.min.y + margin, roomBounds.max.y - margin);
-        targetPosition = new Vector2(x, y);
+        // Dynamic inset margin scaled to room dimensions so small rooms (e.g. bathroom) don't have inverted/impossible margins
+        float marginX = Mathf.Min(0.12f, roomBounds.extents.x * 0.3f);
+        float marginY = Mathf.Min(0.12f, roomBounds.extents.y * 0.3f);
+
+        float minX = roomBounds.min.x + marginX;
+        float maxX = roomBounds.max.x - marginX;
+        float minY = roomBounds.min.y + marginY;
+        float maxY = roomBounds.max.y - marginY;
+
+        if (minX > maxX) { minX = roomBounds.center.x; maxX = roomBounds.center.x; }
+        if (minY > maxY) { minY = roomBounds.center.y; maxY = roomBounds.center.y; }
+
+        for (int attempts = 0; attempts < 15; attempts++)
+        {
+            float rx = Random.Range(minX, maxX);
+            float ry = Random.Range(minY, maxY);
+            Vector2 candidate = new Vector2(rx, ry);
+
+            if (roomCollider == null || roomCollider.OverlapPoint(candidate))
+            {
+                targetPosition = candidate;
+                return;
+            }
+        }
+
+        // If no random point matched collider shape, use center or closest point
+        if (roomCollider != null)
+        {
+            targetPosition = roomCollider.OverlapPoint(roomBounds.center) 
+                ? (Vector2)roomBounds.center 
+                : roomCollider.ClosestPoint(roomBounds.center);
+        }
+        else
+        {
+            targetPosition = roomBounds.center;
+        }
     }
 }
 

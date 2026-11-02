@@ -16,7 +16,17 @@
                 <ui:Label name="lbl-result-status" text="SUCCESS" class="status-label success" />
             </ui:VisualElement>
 
-            <ui:Button name="btn-return-lobby" text="Return to Lobby" class="return-button" />
+            <!-- Itemized Currency Payout Box -->
+            <ui:VisualElement class="payout-box">
+                <ui:Label text="CONTRACT PAYOUT BREAKDOWN" class="payout-header" />
+                <ui:Label name="lbl-payout-evidences" text="Correct Evidences (0/3): +$0" class="payout-line" />
+                <ui:Label name="lbl-payout-ghost" text="Correct Ghost Type: +$0" class="payout-line" />
+                <ui:Label name="lbl-payout-defeat" text="Ghost Defeated Bonus: +$0" class="payout-line" />
+                <ui:Label name="lbl-payout-multiplier" text="Difficulty Multiplier (Amateur): 1.0x" class="payout-line" />
+                <ui:Label name="lbl-payout-total" text="TOTAL EARNED: +$0   |   NEW BALANCE: $250" class="payout-total-line" />
+            </ui:VisualElement>
+
+            <ui:Button name="btn-return-lobby" text="Return to Safe House Lobby" class="return-button" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

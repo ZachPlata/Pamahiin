@@ -339,7 +339,6 @@
     border-radius: 4px;
     overflow: hidden;
     background-color: rgb(20, 15, 10);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
 .ghost-art-image {
@@ -383,7 +382,6 @@
     color: rgb(55, 45, 35);
     white-space: normal;
     margin-bottom: 14px;
-    line-height: 16px;
 }
 
 .ghost-traits-section {
@@ -522,7 +520,6 @@
 }
 
 .strikethrough > .unity-toggle__label {
-    text-decoration: line-through;
     color: rgb(130, 120, 110);
     opacity: 0.5;
 }
@@ -567,4 +564,284 @@
     font-size: 14px;
     color: rgb(220, 195, 150);
     -unity-font-style: bold;
+}
+
+/* ================= SPREAD 8: LOBBY, MULTIPLAYER & EQUIPMENT LOADOUT ================= */
+.lobby-special-tab {
+    background-color: rgb(115, 35, 30);
+    color: rgb(255, 235, 195);
+    border-color: rgb(175, 75, 60);
+}
+
+.lobby-special-tab:hover {
+    background-color: rgb(145, 45, 40);
+    color: white;
+}
+
+.lobby-section-box {
+    background-color: rgba(215, 200, 175, 0.55);
+    border-width: 1px;
+    border-color: rgb(175, 155, 125);
+    border-radius: 5px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+}
+
+.lobby-section-heading {
+    font-size: 12px;
+    color: rgb(85, 45, 25);
+    -unity-font-style: bold;
+    margin-bottom: 4px;
+}
+
+.lobby-map-selector-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.lobby-small-btn {
+    background-color: rgb(95, 70, 45);
+    color: rgb(245, 235, 210);
+    font-size: 12px;
+    -unity-font-style: bold;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(65, 45, 30);
+}
+
+.lobby-small-btn:hover {
+    background-color: rgb(125, 90, 60);
+}
+
+.lobby-map-label {
+    font-size: 13px;
+    color: rgb(40, 30, 20);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    flex-grow: 1;
+}
+
+.lobby-diff-row {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.lobby-diff-btn {
+    flex-grow: 1;
+    background-color: rgb(210, 198, 175);
+    color: rgb(55, 40, 25);
+    font-size: 11px;
+    -unity-font-style: bold;
+    padding: 5px 4px;
+    margin: 0 2px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(140, 115, 85);
+}
+
+.lobby-diff-btn:hover {
+    background-color: rgb(225, 215, 195);
+}
+
+.lobby-diff-btn-active {
+    background-color: rgb(135, 40, 35);
+    color: rgb(255, 240, 210);
+    border-color: rgb(90, 20, 20);
+}
+
+.lobby-sub-note {
+    font-size: 11px;
+    color: rgb(90, 70, 50);
+    -unity-font-style: italic;
+    -unity-text-align: middle-center;
+}
+
+.lobby-action-btn {
+    background-color: rgb(70, 50, 35);
+    color: rgb(245, 225, 185);
+    font-size: 12px;
+    -unity-font-style: bold;
+    padding: 6px 10px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(120, 90, 60);
+    margin-bottom: 4px;
+}
+
+.lobby-action-btn:hover {
+    background-color: rgb(100, 70, 45);
+    color: white;
+}
+
+.lobby-party-code-badge {
+    background-color: rgb(38, 30, 24);
+    color: rgb(255, 215, 110);
+    font-size: 14px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(150, 115, 65);
+    margin-bottom: 6px;
+    letter-spacing: 2px;
+}
+
+.lobby-join-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.lobby-code-input {
+    flex-grow: 1;
+    font-size: 12px;
+    color: rgb(35, 25, 15);
+    margin-right: 6px;
+}
+
+.lobby-code-input > .unity-base-field__label {
+    min-width: 68px;
+    color: rgb(65, 45, 30);
+    -unity-font-style: bold;
+}
+
+.lobby-join-btn {
+    background-color: rgb(50, 90, 55);
+    color: white;
+    font-size: 12px;
+    -unity-font-style: bold;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(35, 65, 40);
+}
+
+.lobby-join-btn:hover {
+    background-color: rgb(65, 115, 70);
+}
+
+.lobby-players-label {
+    font-size: 11px;
+    color: rgb(45, 35, 25);
+    -unity-font-style: bold;
+    margin-top: 2px;
+}
+
+.lobby-status-label {
+    font-size: 11px;
+    color: rgb(110, 55, 30);
+    -unity-font-style: italic;
+}
+
+.lobby-start-contract-btn {
+    background-color: rgb(140, 35, 30);
+    color: rgb(255, 240, 210);
+    font-size: 15px;
+    -unity-font-style: bold;
+    padding: 10px 16px;
+    border-radius: 6px;
+    border-width: 2px;
+    border-color: rgb(90, 20, 15);
+    margin-top: auto;
+    letter-spacing: 1px;
+}
+
+.lobby-start-contract-btn:hover {
+    background-color: rgb(175, 45, 40);
+    color: white;
+}
+
+.lobby-currency-banner {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgb(42, 32, 24);
+    border-width: 1px;
+    border-color: rgb(150, 115, 65);
+    border-radius: 5px;
+    padding: 7px 12px;
+    margin-bottom: 6px;
+}
+
+.lobby-currency-label {
+    font-size: 15px;
+    color: rgb(135, 225, 125);
+    -unity-font-style: bold;
+}
+
+.lobby-loadout-value-label {
+    font-size: 12px;
+    color: rgb(225, 205, 165);
+    -unity-font-style: bold;
+}
+
+.lobby-tight-instruction {
+    margin-bottom: 6px;
+}
+
+.loadout-shop-scroll {
+    flex-grow: 1;
+    max-height: 410px;
+}
+
+.loadout-item-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(215, 200, 175, 0.65);
+    border-width: 1px;
+    border-color: rgb(180, 160, 130);
+    border-radius: 4px;
+    padding: 5px 8px;
+    margin-bottom: 4px;
+}
+
+.loadout-item-info {
+    flex-grow: 1;
+}
+
+.loadout-item-title {
+    font-size: 13px;
+    color: rgb(45, 32, 20);
+    -unity-font-style: bold;
+}
+
+.loadout-item-sub {
+    font-size: 10px;
+    color: rgb(100, 80, 60);
+}
+
+.loadout-item-controls {
+    flex-direction: row;
+    align-items: center;
+}
+
+.loadout-qty-label {
+    font-size: 13px;
+    color: rgb(45, 32, 20);
+    -unity-font-style: bold;
+    min-width: 44px;
+    -unity-text-align: middle-center;
+}
+
+.loadout-qty-btn {
+    background-color: rgb(95, 70, 45);
+    color: white;
+    font-size: 13px;
+    -unity-font-style: bold;
+    width: 26px;
+    height: 24px;
+    border-radius: 4px;
+    border-width: 1px;
+    border-color: rgb(65, 45, 30);
+    margin: 0 2px;
+}
+
+.loadout-qty-btn:hover {
+    background-color: rgb(130, 95, 60);
 }

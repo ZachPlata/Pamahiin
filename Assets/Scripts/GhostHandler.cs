@@ -204,12 +204,18 @@ public class GhostHandler : NetworkBehaviour
         // Spawn Ghost Orbs natively if applicable
         if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null && ghostroomMarker != null)
         {
-            GameObject orb = Instantiate(ghostOrbPrefab, ghostroomMarker.bounds.center, Quaternion.identity);
+            Vector3 spawnPos = ghostroomMarker.bounds.center;
+            if (!ghostroomMarker.OverlapPoint(spawnPos))
+            {
+                spawnPos = ghostroomMarker.ClosestPoint(spawnPos);
+            }
+
+            GameObject orb = Instantiate(ghostOrbPrefab, spawnPos, Quaternion.identity);
             var orbNetwork = orb.GetComponent<NetworkObject>();
             if (orbNetwork != null) orbNetwork.Spawn();
             
             var orbSystem = orb.GetComponent<GhostOrbSystem>();
-            if (orbSystem != null) orbSystem.Initialize(ghostroomMarker.bounds);
+            if (orbSystem != null) orbSystem.Initialize(ghostroomMarker);
         }
     }
 
@@ -307,9 +313,13 @@ public class GhostHandler : NetworkBehaviour
         SetDoorsLocked(false);
         SetState(GhostHandlerState.Dormant);
 
-        if (GameMatchManager.Instance != null && !string.IsNullOrEmpty(ghostName) && !ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
+        if (GameMatchManager.Instance != null)
         {
-            GameMatchManager.Instance.SetTrueGhostName(ghostName);
+            GameMatchManager.Instance.MarkGhostDefeated();
+            if (!string.IsNullOrEmpty(ghostName) && !ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
+            {
+                GameMatchManager.Instance.SetTrueGhostName(ghostName);
+            }
         }
     }
 

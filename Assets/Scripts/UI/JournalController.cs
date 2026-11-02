@@ -1,4 +1,7 @@
+using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 [RequireComponent(typeof(UIDocument))]
@@ -7,12 +10,14 @@ public class JournalController : MonoBehaviour
     private UIDocument uiDocument;
     private VisualElement journalOverlay;
 
-    // Spreads
-    private const int TotalSpreads = 8;
+    // Spreads (0..7 = Standard Field Journal, 8 = Lobby / Multiplayer / Equipment Shop)
+    private const int TotalSpreads = 9;
+    private const int LobbySpreadIndex = 8;
     private VisualElement[] spreads = new VisualElement[TotalSpreads];
     private int currentSpread = 0;
 
     // Top Tabs
+    private Button tabLobby;
     private Button tabCover;
     private Button tabToc;
     private Button tabEquip;
@@ -50,16 +55,36 @@ public class JournalController : MonoBehaviour
     private string selectedGhost = "None";
     private Button btnClose;
 
-    // Two-way cross-filtering data structures
-    private readonly System.Collections.Generic.Dictionary<string, Toggle> evidenceToggles = new System.Collections.Generic.Dictionary<string, Toggle>();
-    private readonly System.Collections.Generic.Dictionary<string, Button> ghostButtons = new System.Collections.Generic.Dictionary<string, Button>();
+    // Lobby / Multiplayer / Loadout Controls (Spread 8)
+    private Button btnMapPrev;
+    private Button btnMapNext;
+    private Label lblSelectedMap;
+    private Button btnDiffAmateur;
+    private Button btnDiffIntermediate;
+    private Button btnDiffProfessional;
+    private Button btnDiffNightmare;
+    private Label lblDifficultyDesc;
+    private Button btnCreateParty;
+    private Label lblPartyCode;
+    private TextField inputPartyCode;
+    private Button btnJoinParty;
+    private Label lblPartyPlayers;
+    private Label lblPartyStatus;
+    private Button btnStartContract;
+    private Label lblPlayerCurrency;
+    private Label lblLoadoutSummary;
+    private ScrollView loadoutShopList;
 
-    private static readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>> ghostEvidenceMap =
-        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.HashSet<string>>
+    // Two-way cross-filtering data structures
+    private readonly Dictionary<string, Toggle> evidenceToggles = new Dictionary<string, Toggle>();
+    private readonly Dictionary<string, Button> ghostButtons = new Dictionary<string, Button>();
+
+    private static readonly Dictionary<string, HashSet<string>> ghostEvidenceMap =
+        new Dictionary<string, HashSet<string>>
     {
-        { "Tikbalang", new System.Collections.Generic.HashSet<string> { "EMF", "SpiritBox", "GhostOrbs" } },
-        { "Kapre", new System.Collections.Generic.HashSet<string> { "EMF", "Freezing", "DOTS" } },
-        { "Manananggal", new System.Collections.Generic.HashSet<string> { "Freezing", "GhostWriting", "GhostOrbs" } }
+        { "Tikbalang", new HashSet<string> { "EMF", "SpiritBox", "GhostOrbs" } },
+        { "Kapre", new HashSet<string> { "EMF", "Freezing", "DOTS" } },
+        { "Manananggal", new HashSet<string> { "Freezing", "GhostWriting", "GhostOrbs" } }
     };
 
     private bool isUpdatingFilters = false;
@@ -81,6 +106,7 @@ public class JournalController : MonoBehaviour
         }
         Instance = this;
         uiDocument = GetComponent<UIDocument>();
+        ProgressionAndLoadoutManager.EnsureInstance();
     }
 
     private void OnDestroy()
@@ -90,7 +116,7 @@ public class JournalController : MonoBehaviour
 
     private void OnEnable()
     {
-        uiDocument.sortingOrder = 3;
+        uiDocument.sortingOrder = 10;
         var root = uiDocument.rootVisualElement;
 
         journalOverlay = root.Q<VisualElement>("journal-overlay");
@@ -102,6 +128,7 @@ public class JournalController : MonoBehaviour
         }
 
         // 2. Bookmark Tabs
+        tabLobby = root.Q<Button>("tab-lobby");
         tabCover = root.Q<Button>("tab-cover");
         tabToc = root.Q<Button>("tab-toc");
         tabEquip = root.Q<Button>("tab-equip");
@@ -109,6 +136,7 @@ public class JournalController : MonoBehaviour
         tabEvidence = root.Q<Button>("tab-evidence");
         btnCloseTop = root.Q<Button>("btn-close-top");
 
+        if (tabLobby != null) tabLobby.clicked += () => ShowSpread(LobbySpreadIndex);
         if (tabCover != null) tabCover.clicked += () => ShowSpread(0);
         if (tabToc != null) tabToc.clicked += () => ShowSpread(1);
         if (tabEquip != null) tabEquip.clicked += () => ShowSpread(2);
@@ -188,13 +216,333 @@ public class JournalController : MonoBehaviour
         btnClose = root.Q<Button>("btn-close");
         if (btnClose != null) btnClose.clicked += ToggleJournal;
 
-        // Default spread: Cover
-        ShowSpread(0);
+        // 8. Bind Lobby / Multiplayer / Equipment Loadout Spread (Spread 8)
+        BindLobbySpreadControls(root);
+
+        if (ProgressionAndLoadoutManager.Instance != null)
+        {
+            ProgressionAndLoadoutManager.Instance.OnCurrencyOrLoadoutChanged += RefreshLobbySpreadUI;
+            ProgressionAndLoadoutManager.Instance.OnContractSettingsChanged += RefreshLobbySpreadUI;
+        }
+        if (NetworkController.Instance != null)
+        {
+            NetworkController.Instance.OnPartyStateChanged += RefreshLobbySpreadUI;
+        }
+
+        UpdateLobbyTabVisibility();
+
+        // Default spread: Lobby spread if in LobbyScene, otherwise Cover
+        if (ProgressionAndLoadoutManager.IsInLobbyScene)
+        {
+            ShowSpread(LobbySpreadIndex);
+        }
+        else
+        {
+            ShowSpread(0);
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (ProgressionAndLoadoutManager.Instance != null)
+        {
+            ProgressionAndLoadoutManager.Instance.OnCurrencyOrLoadoutChanged -= RefreshLobbySpreadUI;
+            ProgressionAndLoadoutManager.Instance.OnContractSettingsChanged -= RefreshLobbySpreadUI;
+        }
+        if (NetworkController.Instance != null)
+        {
+            NetworkController.Instance.OnPartyStateChanged -= RefreshLobbySpreadUI;
+        }
+    }
+
+    private void BindLobbySpreadControls(VisualElement root)
+    {
+        btnMapPrev = root.Q<Button>("btn-map-prev");
+        btnMapNext = root.Q<Button>("btn-map-next");
+        lblSelectedMap = root.Q<Label>("lbl-selected-map");
+
+        btnDiffAmateur = root.Q<Button>("btn-diff-amateur");
+        btnDiffIntermediate = root.Q<Button>("btn-diff-intermediate");
+        btnDiffProfessional = root.Q<Button>("btn-diff-professional");
+        btnDiffNightmare = root.Q<Button>("btn-diff-nightmare");
+        lblDifficultyDesc = root.Q<Label>("lbl-difficulty-desc");
+
+        btnCreateParty = root.Q<Button>("btn-create-party");
+        lblPartyCode = root.Q<Label>("lbl-party-code");
+        inputPartyCode = root.Q<TextField>("input-party-code");
+        btnJoinParty = root.Q<Button>("btn-join-party");
+        lblPartyPlayers = root.Q<Label>("lbl-party-players");
+        lblPartyStatus = root.Q<Label>("lbl-party-status");
+        btnStartContract = root.Q<Button>("btn-start-contract");
+
+        lblPlayerCurrency = root.Q<Label>("lbl-player-currency");
+        lblLoadoutSummary = root.Q<Label>("lbl-loadout-summary");
+        loadoutShopList = root.Q<ScrollView>("loadout-shop-list");
+
+        if (btnMapPrev != null)
+        {
+            btnMapPrev.clicked += () =>
+            {
+                var mgr = ProgressionAndLoadoutManager.Instance;
+                if (mgr != null) mgr.SetMapIndex(mgr.SelectedMapIndex - 1);
+            };
+        }
+
+        if (btnMapNext != null)
+        {
+            btnMapNext.clicked += () =>
+            {
+                var mgr = ProgressionAndLoadoutManager.Instance;
+                if (mgr != null) mgr.SetMapIndex(mgr.SelectedMapIndex + 1);
+            };
+        }
+
+        if (btnDiffAmateur != null)
+            btnDiffAmateur.clicked += () => ProgressionAndLoadoutManager.Instance?.SetDifficulty(ContractDifficulty.Amateur);
+        if (btnDiffIntermediate != null)
+            btnDiffIntermediate.clicked += () => ProgressionAndLoadoutManager.Instance?.SetDifficulty(ContractDifficulty.Intermediate);
+        if (btnDiffProfessional != null)
+            btnDiffProfessional.clicked += () => ProgressionAndLoadoutManager.Instance?.SetDifficulty(ContractDifficulty.Professional);
+        if (btnDiffNightmare != null)
+            btnDiffNightmare.clicked += () => ProgressionAndLoadoutManager.Instance?.SetDifficulty(ContractDifficulty.Nightmare);
+
+        if (btnCreateParty != null)
+        {
+            btnCreateParty.clicked += () =>
+            {
+                if (NetworkController.Instance != null)
+                {
+                    string code = NetworkController.Instance.CreateMultiplayerPartyCode();
+                    if (!string.IsNullOrEmpty(code))
+                    {
+                        GUIUtility.systemCopyBuffer = code;
+                    }
+                    RefreshLobbySpreadUI();
+                }
+            };
+        }
+
+        if (btnJoinParty != null)
+        {
+            btnJoinParty.clicked += () =>
+            {
+                if (NetworkController.Instance != null && inputPartyCode != null)
+                {
+                    NetworkController.Instance.JoinMultiplayerByPartyCode(inputPartyCode.value);
+                    RefreshLobbySpreadUI();
+                }
+            };
+        }
+
+        if (btnStartContract != null)
+        {
+            btnStartContract.clicked += () =>
+            {
+                if (NetworkController.Instance != null)
+                {
+                    if (isJournalOpen) ToggleJournal();
+                    NetworkController.Instance.LoadGameScene();
+                }
+            };
+        }
+
+        BuildLoadoutShopList();
+        RefreshLobbySpreadUI();
+    }
+
+    private void BuildLoadoutShopList()
+    {
+        if (loadoutShopList == null) return;
+        loadoutShopList.Clear();
+
+        var mgr = ProgressionAndLoadoutManager.Instance;
+        if (mgr == null) return;
+
+        foreach (var entry in mgr.Catalog)
+        {
+            string itemId = entry.id;
+            VisualElement row = new VisualElement();
+            row.AddToClassList("loadout-item-row");
+
+            VisualElement infoCol = new VisualElement();
+            infoCol.AddToClassList("loadout-item-info");
+
+            Label titleLbl = new Label($"{entry.displayName}  —  ${entry.cost}");
+            titleLbl.AddToClassList("loadout-item-title");
+
+            Label subLbl = new Label(entry.description);
+            subLbl.AddToClassList("loadout-item-sub");
+
+            infoCol.Add(titleLbl);
+            infoCol.Add(subLbl);
+
+            VisualElement controls = new VisualElement();
+            controls.AddToClassList("loadout-item-controls");
+
+            Button btnMinus = new Button(() =>
+            {
+                ProgressionAndLoadoutManager.Instance?.TryRemoveEquipmentAndRefund(itemId);
+            })
+            { text = "-" };
+            btnMinus.name = $"btn-minus-{itemId}";
+            btnMinus.AddToClassList("loadout-qty-btn");
+
+            Label qtyLbl = new Label($"{mgr.GetLoadoutCount(itemId)} / {entry.maxCount}");
+            qtyLbl.name = $"lbl-qty-{itemId}";
+            qtyLbl.AddToClassList("loadout-qty-label");
+
+            Button btnPlus = new Button(() =>
+            {
+                ProgressionAndLoadoutManager.Instance?.TryBuyEquipment(itemId);
+            })
+            { text = "+" };
+            btnPlus.name = $"btn-plus-{itemId}";
+            btnPlus.AddToClassList("loadout-qty-btn");
+
+            controls.Add(btnMinus);
+            controls.Add(qtyLbl);
+            controls.Add(btnPlus);
+
+            row.Add(infoCol);
+            row.Add(controls);
+
+            loadoutShopList.Add(row);
+        }
+    }
+
+    public void RefreshLobbySpreadUI()
+    {
+        var mgr = ProgressionAndLoadoutManager.Instance;
+        if (mgr == null) return;
+
+        if (lblSelectedMap != null)
+            lblSelectedMap.text = mgr.GetSelectedMapDisplayName();
+
+        if (lblDifficultyDesc != null)
+            lblDifficultyDesc.text = ProgressionAndLoadoutManager.GetDifficultyDescription(mgr.SelectedDifficulty);
+
+        UpdateDifficultyBtnHighlight(btnDiffAmateur, mgr.SelectedDifficulty == ContractDifficulty.Amateur);
+        UpdateDifficultyBtnHighlight(btnDiffIntermediate, mgr.SelectedDifficulty == ContractDifficulty.Intermediate);
+        UpdateDifficultyBtnHighlight(btnDiffProfessional, mgr.SelectedDifficulty == ContractDifficulty.Professional);
+        UpdateDifficultyBtnHighlight(btnDiffNightmare, mgr.SelectedDifficulty == ContractDifficulty.Nightmare);
+
+        // Multiplayer Party UI
+        var net = NetworkController.Instance;
+        if (net != null)
+        {
+            if (lblPartyCode != null)
+            {
+                if (!string.IsNullOrEmpty(net.CurrentPartyCode))
+                {
+                    lblPartyCode.text = $"PARTY CODE: {net.CurrentPartyCode}";
+                }
+                else
+                {
+                    lblPartyCode.text = "PARTY CODE: SOLO (CLICK CREATE ABOVE)";
+                }
+            }
+
+            if (lblPartyStatus != null && !string.IsNullOrEmpty(net.LastStatusMessage))
+            {
+                lblPartyStatus.text = net.LastStatusMessage;
+            }
+        }
+
+        bool isHostOrSolo = NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer;
+        int connectedCount = 1;
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            connectedCount = NetworkManager.Singleton.IsServer
+                ? Mathf.Max(1, NetworkManager.Singleton.ConnectedClientsIds.Count)
+                : Mathf.Max(1, PlayerController.AllPlayers.Count);
+        }
+
+        if (lblPartyPlayers != null)
+        {
+            string roleStr = isHostOrSolo ? "Host" : "Client";
+            lblPartyPlayers.text = $"Investigators in Lobby: {connectedCount} ({roleStr})";
+        }
+
+        if (btnStartContract != null)
+        {
+            btnStartContract.SetEnabled(isHostOrSolo);
+            btnStartContract.text = isHostOrSolo
+                ? "▶ START INVESTIGATION"
+                : "WAITING FOR HOST TO START...";
+        }
+
+        // Currency & Equipment Loadout UI
+        if (lblPlayerCurrency != null)
+            lblPlayerCurrency.text = $"CURRENCY: ${mgr.Currency}";
+
+        if (lblLoadoutSummary != null)
+            lblLoadoutSummary.text = $"Van Gear: {mgr.GetTotalBroughtItemsCount()} Items (${mgr.GetTotalLoadoutValue()})";
+
+        if (loadoutShopList != null)
+        {
+            foreach (var entry in mgr.Catalog)
+            {
+                int count = mgr.GetLoadoutCount(entry.id);
+                var qtyLbl = loadoutShopList.Q<Label>($"lbl-qty-{entry.id}");
+                if (qtyLbl != null)
+                {
+                    qtyLbl.text = $"{count} / {entry.maxCount}";
+                }
+
+                var btnMinus = loadoutShopList.Q<Button>($"btn-minus-{entry.id}");
+                if (btnMinus != null)
+                {
+                    btnMinus.SetEnabled(count > 0);
+                }
+
+                var btnPlus = loadoutShopList.Q<Button>($"btn-plus-{entry.id}");
+                if (btnPlus != null)
+                {
+                    btnPlus.SetEnabled(count < entry.maxCount && mgr.Currency >= entry.cost);
+                }
+            }
+        }
+    }
+
+    private static void UpdateDifficultyBtnHighlight(Button btn, bool isActive)
+    {
+        if (btn == null) return;
+        if (isActive) btn.AddToClassList("lobby-diff-btn-active");
+        else btn.RemoveFromClassList("lobby-diff-btn-active");
+    }
+
+    private void UpdateLobbyTabVisibility()
+    {
+        bool inLobby = ProgressionAndLoadoutManager.IsInLobbyScene;
+        if (tabLobby != null)
+        {
+            // Multiplayer & Lobby tab ONLY appears inside the Lobby Map and disappears inside the playable map
+            tabLobby.style.display = inLobby ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        if (!inLobby && currentSpread == LobbySpreadIndex)
+        {
+            ShowSpread(0);
+        }
+    }
+
+    public void OpenToLobbyTab()
+    {
+        UpdateLobbyTabVisibility();
+        if (!isJournalOpen)
+        {
+            isJournalOpen = true;
+            journalOverlay.RemoveFromClassList("hidden");
+        }
+        RefreshLobbySpreadUI();
+        ShowSpread(LobbySpreadIndex);
     }
 
     public void ShowSpread(int index)
     {
-        currentSpread = Mathf.Clamp(index, 0, TotalSpreads - 1);
+        bool inLobby = ProgressionAndLoadoutManager.IsInLobbyScene;
+        int maxAllowedSpread = inLobby ? LobbySpreadIndex : (TotalSpreads - 2);
+        currentSpread = Mathf.Clamp(index, 0, maxAllowedSpread);
 
         for (int i = 0; i < TotalSpreads; i++)
         {
@@ -209,12 +557,19 @@ public class JournalController : MonoBehaviour
             }
         }
 
+        if (currentSpread == LobbySpreadIndex)
+        {
+            RefreshLobbySpreadUI();
+        }
+
         UpdateNavigationVisuals();
     }
 
     public void NextSpread()
     {
-        if (currentSpread < TotalSpreads - 1)
+        bool inLobby = ProgressionAndLoadoutManager.IsInLobbyScene;
+        int maxAllowedSpread = inLobby ? LobbySpreadIndex : (TotalSpreads - 2);
+        if (currentSpread < maxAllowedSpread)
         {
             ShowSpread(currentSpread + 1);
         }
@@ -230,6 +585,9 @@ public class JournalController : MonoBehaviour
 
     private void UpdateNavigationVisuals()
     {
+        bool inLobby = ProgressionAndLoadoutManager.IsInLobbyScene;
+        int maxAllowedSpread = inLobby ? LobbySpreadIndex : (TotalSpreads - 2);
+
         // Update indicator label
         if (lblPageIndicator != null)
         {
@@ -259,21 +617,25 @@ public class JournalController : MonoBehaviour
                 case 7:
                     lblPageIndicator.text = "Deduction Checklist  (Page 7 of 7)";
                     break;
+                case LobbySpreadIndex:
+                    lblPageIndicator.text = "Safe House Contract, Multiplayer & Equipment Loadout";
+                    break;
             }
         }
 
         // Prev/Next buttons enable state
         if (btnPrevPage != null) btnPrevPage.SetEnabled(currentSpread > 0);
-        if (btnNextPage != null) btnNextPage.SetEnabled(currentSpread < TotalSpreads - 1);
+        if (btnNextPage != null) btnNextPage.SetEnabled(currentSpread < maxAllowedSpread);
 
         // Update active tab bookmarks
-        Button[] allTabs = { tabCover, tabToc, tabEquip, tabGhosts, tabEvidence };
+        Button[] allTabs = { tabLobby, tabCover, tabToc, tabEquip, tabGhosts, tabEvidence };
         foreach (var t in allTabs)
         {
             if (t != null) t.RemoveFromClassList("active-tab");
         }
 
-        if (currentSpread == 0 && tabCover != null) tabCover.AddToClassList("active-tab");
+        if (currentSpread == LobbySpreadIndex && tabLobby != null) tabLobby.AddToClassList("active-tab");
+        else if (currentSpread == 0 && tabCover != null) tabCover.AddToClassList("active-tab");
         else if (currentSpread == 1 && tabToc != null) tabToc.AddToClassList("active-tab");
         else if ((currentSpread == 2 || currentSpread == 3) && tabEquip != null) tabEquip.AddToClassList("active-tab");
         else if ((currentSpread >= 4 && currentSpread <= 6) && tabGhosts != null) tabGhosts.AddToClassList("active-tab");
@@ -282,7 +644,9 @@ public class JournalController : MonoBehaviour
 
     private void Update()
     {
-        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene") return;
+        if (SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.MAIN_MENU_SCENE_NAME) return;
+
+        UpdateLobbyTabVisibility();
 
         if (Input.GetKeyDown(KeyCode.J) || (isJournalOpen && Input.GetKeyDown(KeyCode.Escape)))
         {
@@ -293,8 +657,8 @@ public class JournalController : MonoBehaviour
             ToggleJournal();
         }
 
-        // Keyboard navigation while journal is open
-        if (isJournalOpen)
+        // Keyboard navigation while journal is open (ignore A/D when typing in Party Code TextField)
+        if (isJournalOpen && currentSpread != LobbySpreadIndex)
         {
             if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
             {
@@ -309,17 +673,45 @@ public class JournalController : MonoBehaviour
 
     public void ToggleJournal()
     {
+        UpdateLobbyTabVisibility();
         isJournalOpen = !isJournalOpen;
 
         if (isJournalOpen)
         {
             journalOverlay.RemoveFromClassList("hidden");
+            if (ProgressionAndLoadoutManager.IsInLobbyScene)
+            {
+                RefreshLobbySpreadUI();
+                ShowSpread(LobbySpreadIndex);
+            }
         }
         else
         {
             closedFrame = Time.frameCount;
             journalOverlay.AddToClassList("hidden");
         }
+    }
+
+    /// <summary>
+    /// Counts how many of the player's ticked evidences in the Journal match the true ghost's actual evidences.
+    /// Used at the end of the match to award currency per correct evidence found.
+    /// </summary>
+    public int GetCorrectEvidenceCount(string trueGhostName)
+    {
+        if (string.IsNullOrEmpty(trueGhostName) || !ghostEvidenceMap.TryGetValue(trueGhostName, out var actualEvidences))
+        {
+            return 0;
+        }
+
+        int correctCount = 0;
+        foreach (var pair in evidenceToggles)
+        {
+            if (pair.Value != null && pair.Value.value && actualEvidences.Contains(pair.Key))
+            {
+                correctCount++;
+            }
+        }
+        return correctCount;
     }
 
     private void OnEvidenceToggleChanged(string evidenceKey, bool isChecked)
@@ -417,7 +809,7 @@ public class JournalController : MonoBehaviour
             {
                 // Case 2: No ghost selected (Evidence -> Ghost)
                 // Gather all ticked evidences
-                var tickedEvidences = new System.Collections.Generic.HashSet<string>();
+                var tickedEvidences = new HashSet<string>();
                 foreach (var pair in evidenceToggles)
                 {
                     if (pair.Value != null && pair.Value.value)
@@ -427,7 +819,7 @@ public class JournalController : MonoBehaviour
                 }
 
                 // Automatically disable/gray out any Ghost Types that do not possess ticked evidence
-                var candidateGhosts = new System.Collections.Generic.List<string>();
+                var candidateGhosts = new List<string>();
                 foreach (var pair in ghostEvidenceMap)
                 {
                     string gName = pair.Key;
@@ -466,7 +858,7 @@ public class JournalController : MonoBehaviour
                 }
 
                 // Collect remaining possible evidences from candidate ghosts
-                var possibleEvidences = new System.Collections.Generic.HashSet<string>();
+                var possibleEvidences = new HashSet<string>();
                 foreach (var cGhost in candidateGhosts)
                 {
                     if (ghostEvidenceMap.TryGetValue(cGhost, out var evs))

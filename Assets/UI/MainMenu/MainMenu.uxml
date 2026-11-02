@@ -13,8 +13,7 @@
             <ui:Label text="A Philippine Horror Experience" class="subtitle-label" />
             
             <ui:VisualElement class="button-container">
-                <ui:Button name="btn-singleplayer" text="Singleplayer" class="menu-button" />
-                <ui:Button name="btn-multiplayer" text="Multiplayer" class="menu-button" />
+                <ui:Button name="btn-play" text="Play" class="menu-button" />
                 <ui:Button name="btn-settings" text="Settings" class="menu-button" />
                 <ui:Button name="btn-help" text="Help &amp; Controls" class="menu-button" />
                 <ui:Button name="btn-quit" text="Quit Game" class="menu-button" />

@@ -100,7 +100,6 @@ public class PlayerController : NetworkBehaviour
     private Vector3 originalScale;
     private IInteractable currentDraggedInteractable = null;
 
-    private float hoverCheckTimer = 0f;
     private IInteractable currentlyHoveredInteractable = null;
 
     private void Awake()
@@ -127,6 +126,10 @@ public class PlayerController : NetworkBehaviour
         {
             LocalInstance = this;
             localCamera = Camera.main;
+            if (ItemHoverIndicator.Instance == null)
+            {
+                new GameObject("ItemHoverIndicator").AddComponent<ItemHoverIndicator>();
+            }
             GameSettingsManager.Instance?.ResetMatchTutorialHints();
             StartCoroutine(DelayedMatchStartTutorialRoutine());
             StartCoroutine(DelayedJournalHintRoutine());
@@ -152,7 +155,11 @@ public class PlayerController : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         AllPlayers.Remove(this);
-        if (LocalInstance == this) LocalInstance = null;
+        if (LocalInstance == this)
+        {
+            LocalInstance = null;
+            ItemHoverIndicator.Instance?.Hide();
+        }
     }
 
     /// <summary>
@@ -203,6 +210,7 @@ public class PlayerController : NetworkBehaviour
                 currentDraggedInteractable = null;
             }
             currentlyHoveredInteractable = null;
+            ItemHoverIndicator.Instance?.Hide();
             if (animator != null)
             {
                 animator.SetBool("isWalking", false);
@@ -232,6 +240,7 @@ public class PlayerController : NetworkBehaviour
                 currentDraggedInteractable = null;
             }
             currentlyHoveredInteractable = null;
+            ItemHoverIndicator.Instance?.Hide();
 
             // Maintain walking animation state for WASD movement in Journal
             if (animator != null)
@@ -254,13 +263,9 @@ public class PlayerController : NetworkBehaviour
             localCamera = Camera.main;
         }
 
-        // Check for hovered interactable every 0.1 seconds
-        hoverCheckTimer -= Time.deltaTime;
-        if (hoverCheckTimer <= 0f)
-        {
-            currentlyHoveredInteractable = CalculateHoveredInteractable();
-            hoverCheckTimer = 0.1f;
-        }
+        // Check for hovered interactable and update visual hover indicator every frame
+        currentlyHoveredInteractable = CalculateHoveredInteractable();
+        UpdateItemHoverIndicator();
 
         // 4. Targeted Interact Input (E)
         if (Input.GetKeyDown(KeyCode.E))
@@ -441,9 +446,13 @@ public class PlayerController : NetworkBehaviour
     {
         if (!alive)
         {
-            if (IsOwner && inventory != null)
+            if (IsOwner)
             {
-                inventory.DropAllItems(transform.position);
+                ItemHoverIndicator.Instance?.Hide();
+                if (inventory != null)
+                {
+                    inventory.DropAllItems(transform.position);
+                }
             }
 
             // Death state visuals and collision
@@ -554,5 +563,55 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsServer) return;
         sanity.Value = Mathf.Min(100f, sanity.Value + amount);
+    }
+
+    private void UpdateItemHoverIndicator()
+    {
+        if (ItemHoverIndicator.Instance == null) return;
+
+        if (IsInteractionBlocked || !isAlive.Value)
+        {
+            ItemHoverIndicator.Instance.Hide();
+            return;
+        }
+
+        if (currentlyHoveredInteractable != null)
+        {
+            if (currentlyHoveredInteractable is EquipmentItem equipment)
+            {
+                if (equipment.IsOnGround || equipment.IsPlaced)
+                {
+                    float distToMouse = Vector2.Distance(transform.position, mousePosition);
+                    float distToItem = Vector2.Distance(transform.position, equipment.transform.position);
+
+                    if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
+                    {
+                        ItemHoverIndicator.Instance.Show(equipment.gameObject, equipment.ItemName);
+                        return;
+                    }
+                }
+            }
+            else if (currentlyHoveredInteractable is FrontDoorKeyItem keyItem)
+            {
+                float distToMouse = Vector2.Distance(transform.position, mousePosition);
+                float distToItem = Vector2.Distance(transform.position, keyItem.transform.position);
+
+                if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
+                {
+                    ItemHoverIndicator.Instance.Show(keyItem.gameObject, "Front Door Key");
+                    return;
+                }
+            }
+        }
+
+        ItemHoverIndicator.Instance.Hide();
+    }
+
+    private void OnDisable()
+    {
+        if (IsOwner)
+        {
+            ItemHoverIndicator.Instance?.Hide();
+        }
     }
 }

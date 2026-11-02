@@ -58,8 +58,15 @@ public class MainMenuController : MonoBehaviour
         }
 
         // Main Menu Buttons
-        root.Q<Button>("btn-singleplayer").clicked += OnSingleplayerClicked;
-        root.Q<Button>("btn-multiplayer").clicked += OnMultiplayerClicked;
+        var playBtn = root.Q<Button>("btn-play");
+        if (playBtn != null) playBtn.clicked += OnPlayClicked;
+
+        var singleplayerBtn = root.Q<Button>("btn-singleplayer");
+        if (singleplayerBtn != null) singleplayerBtn.clicked += OnPlayClicked;
+
+        var multiplayerBtn = root.Q<Button>("btn-multiplayer");
+        if (multiplayerBtn != null) multiplayerBtn.clicked += OnMultiplayerClicked;
+
         root.Q<Button>("btn-settings").clicked += ShowSettingsMenu;
         root.Q<Button>("btn-help").clicked += ShowHelpMenu;
         root.Q<Button>("btn-quit").clicked += OnQuitClicked;
@@ -290,12 +297,17 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
-    private void OnSingleplayerClicked()
+    private void OnPlayClicked()
     {
         if (NetworkController.Instance != null)
         {
-            NetworkController.Instance.StartSingleplayer();
+            NetworkController.Instance.EnterLobbyMap();
         }
+    }
+
+    private void OnSingleplayerClicked()
+    {
+        OnPlayClicked();
     }
 
     private void OnMultiplayerClicked()

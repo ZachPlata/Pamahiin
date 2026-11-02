@@ -6,6 +6,7 @@
             
             <!-- Quick Bookmark Tabs -->
             <ui:VisualElement class="journal-tabs-bar">
+                <ui:Button name="tab-lobby" text="MULTIPLAYER &amp; LOBBY" class="journal-tab lobby-special-tab" />
                 <ui:Button name="tab-cover" text="COVER" class="journal-tab" />
                 <ui:Button name="tab-toc" text="CONTENTS" class="journal-tab active-tab" />
                 <ui:Button name="tab-equip" text="EQUIPMENT" class="journal-tab" />
@@ -323,6 +324,67 @@
                         <ui:VisualElement class="button-container">
                             <ui:Button name="btn-close" text="Close Journal" class="close-button" />
                         </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 8: LOBBY, MULTIPLAYER & EQUIPMENT SHOP ================= -->
+                <ui:VisualElement name="spread-8" class="journal-spread hidden-spread">
+                    <!-- Left Page: Map, Difficulty & Multiplayer Party -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Contract &amp; Multiplayer" class="page-title" />
+
+                        <!-- Map Selection -->
+                        <ui:VisualElement class="lobby-section-box">
+                            <ui:Label text="INVESTIGATION MAP:" class="lobby-section-heading" />
+                            <ui:VisualElement class="lobby-map-selector-row">
+                                <ui:Button name="btn-map-prev" text="◀" class="lobby-small-btn" />
+                                <ui:Label name="lbl-selected-map" text="Abandoned House (Baryo San Nicolas)" class="lobby-map-label" />
+                                <ui:Button name="btn-map-next" text="▶" class="lobby-small-btn" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <!-- Difficulty Selection -->
+                        <ui:VisualElement class="lobby-section-box">
+                            <ui:Label text="CONTRACT DIFFICULTY:" class="lobby-section-heading" />
+                            <ui:VisualElement class="lobby-diff-row">
+                                <ui:Button name="btn-diff-amateur" text="Amateur" class="lobby-diff-btn" />
+                                <ui:Button name="btn-diff-intermediate" text="Interm." class="lobby-diff-btn" />
+                                <ui:Button name="btn-diff-professional" text="Pro" class="lobby-diff-btn" />
+                                <ui:Button name="btn-diff-nightmare" text="Nightmare" class="lobby-diff-btn" />
+                            </ui:VisualElement>
+                            <ui:Label name="lbl-difficulty-desc" text="1.0x Payout | Standard sanity drain &amp; shorter hunts." class="lobby-sub-note" />
+                        </ui:VisualElement>
+
+                        <!-- Multiplayer 5-Character Party Code -->
+                        <ui:VisualElement class="lobby-section-box">
+                            <ui:Label text="MULTIPLAYER PARTY (5-CHAR CODE):" class="lobby-section-heading" />
+                            <ui:Button name="btn-create-party" text="CREATE MULTIPLAYER PARTY CODE" class="lobby-action-btn" />
+                            <ui:Label name="lbl-party-code" text="PARTY CODE: SOLO (NOT CREATED)" class="lobby-party-code-badge" />
+
+                            <ui:VisualElement class="lobby-join-row">
+                                <ui:TextField name="input-party-code" label="Join Code:" max-length="5" value="" class="lobby-code-input" />
+                                <ui:Button name="btn-join-party" text="JOIN PARTY" class="lobby-join-btn" />
+                            </ui:VisualElement>
+
+                            <ui:Label name="lbl-party-players" text="Investigators in Lobby: 1 (Solo / Host)" class="lobby-players-label" />
+                            <ui:Label name="lbl-party-status" text="Ready in Safe House." class="lobby-status-label" />
+                        </ui:VisualElement>
+
+                        <ui:Button name="btn-start-contract" text="▶ START INVESTIGATION" class="lobby-start-contract-btn" />
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Van Ghost Equipment Loadout & Currency Shop -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label text="Van Equipment Loadout" class="page-title" />
+
+                        <ui:VisualElement class="lobby-currency-banner">
+                            <ui:Label name="lbl-player-currency" text="CURRENCY: $250" class="lobby-currency-label" />
+                            <ui:Label name="lbl-loadout-summary" text="Van Loadout: 1 Item ($20)" class="lobby-loadout-value-label" />
+                        </ui:VisualElement>
+
+                        <ui:Label text="Purchase ghost hunting gear to spawn inside the van:" class="instruction-text lobby-tight-instruction" />
+
+                        <ui:ScrollView name="loadout-shop-list" class="loadout-shop-scroll" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

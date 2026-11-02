@@ -61,7 +61,7 @@ public class FlashlightItem : EquipmentItem
     /// </summary>
     public override void UsePrimary()
     {
-        if (IsOwner) // Only the person holding it can toggle it
+        if (IsOwner || IsHeldByLocalPlayer) // Only the person holding it can toggle it
         {
             ToggleLightRpc();
         }

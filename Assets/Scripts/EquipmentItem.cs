@@ -77,6 +77,17 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         OnPlacedChanged(isPlaced.Value);
     }
 
+    /// <summary>
+    /// Ensures runtime-cloned equipment items initialize their state listeners even if spawned locally.
+    /// </summary>
+    public void InitializeLocalCloneFallback()
+    {
+        if (!IsSpawned)
+        {
+            OnNetworkSpawn();
+        }
+    }
+
     public override void OnNetworkDespawn()
     {
         base.OnNetworkDespawn();

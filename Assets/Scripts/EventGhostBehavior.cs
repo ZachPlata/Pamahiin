@@ -185,8 +185,9 @@ public class EventGhostBehavior : NetworkBehaviour
             bool cancelDash = (activeDotsProjector != null && !activeDotsProjector.IsPoweredOn);
             bool reachedTarget = Vector2.Distance(rb.position, dashTarget) < 0.2f;
             bool stuck = currentDashTime > 6.0f;
+            bool leftGhostRoom = ghostHandler != null && ghostHandler.ghostroomMarker != null && !ghostHandler.ghostroomMarker.OverlapPoint(rb.position);
 
-            if (cancelDash || reachedTarget || stuck)
+            if (cancelDash || reachedTarget || stuck || leftGhostRoom)
             {
                 isDashing = false;
                 activeDotsProjector = null;
@@ -265,7 +266,15 @@ public class EventGhostBehavior : NetworkBehaviour
         if (type == GhostEventType.DotsManifestation)
         {
             var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsInactive.Exclude);
-            if (projectors.Length > 0) targetDots = projectors[Random.Range(0, projectors.Length)];
+            var roomProjectors = new List<DotsProjectorItem>();
+            foreach (var p in projectors)
+            {
+                if (ghostHandler != null && ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.OverlapPoint(p.transform.position))
+                    roomProjectors.Add(p);
+                else if (GhostRoomMarker.IsInsideGhostRoom(p.transform.position))
+                    roomProjectors.Add(p);
+            }
+            if (roomProjectors.Count > 0) targetDots = roomProjectors[Random.Range(0, roomProjectors.Count)];
         }
         else if (type == GhostEventType.SpiritBoxTalk)
         {
@@ -275,7 +284,15 @@ public class EventGhostBehavior : NetworkBehaviour
         else if (type == GhostEventType.GhostOrbsManifestation)
         {
             var cameras = Object.FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
-            if (cameras.Length > 0) targetCamera = cameras[Random.Range(0, cameras.Length)];
+            var roomCameras = new List<VideoCameraItem>();
+            foreach (var c in cameras)
+            {
+                if (ghostHandler != null && ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.OverlapPoint(c.transform.position))
+                    roomCameras.Add(c);
+                else if (GhostRoomMarker.IsInsideGhostRoom(c.transform.position))
+                    roomCameras.Add(c);
+            }
+            if (roomCameras.Count > 0) targetCamera = roomCameras[Random.Range(0, roomCameras.Count)];
         }
         else if (type == GhostEventType.LowSanityManifestation)
         {
@@ -324,6 +341,17 @@ public class EventGhostBehavior : NetworkBehaviour
         DotsProjectorItem targetDots = null;
         foreach (var dots in dotsProjectors)
         {
+            // Only consider DOTS projectors located inside the active ghost room
+            if (ghostHandler != null && ghostHandler.ghostroomMarker != null)
+            {
+                if (!ghostHandler.ghostroomMarker.OverlapPoint(dots.transform.position))
+                    continue;
+            }
+            else if (!GhostRoomMarker.IsInsideGhostRoom(dots.transform.position))
+            {
+                continue;
+            }
+
             if (dots.IsPoweredOn && Vector2.Distance(rb.position, dots.transform.position) <= dots.projectionRadius * 1.5f)
             {
                 hasActiveDots = true;
@@ -337,6 +365,17 @@ public class EventGhostBehavior : NetworkBehaviour
         VideoCameraItem targetCamera = null;
         foreach (var cam in cameras)
         {
+            // Only consider video cameras located inside the active ghost room
+            if (ghostHandler != null && ghostHandler.ghostroomMarker != null)
+            {
+                if (!ghostHandler.ghostroomMarker.OverlapPoint(cam.transform.position))
+                    continue;
+            }
+            else if (!GhostRoomMarker.IsInsideGhostRoom(cam.transform.position))
+            {
+                continue;
+            }
+
             if (cam.IsPoweredOn && Vector2.Distance(rb.position, cam.transform.position) <= interactionScanRadius)
             {
                 hasActiveCamera = true;
@@ -410,13 +449,28 @@ public class EventGhostBehavior : NetworkBehaviour
             case GhostEventType.DotsManifestation:
                 if (dots != null)
                 {
-                    // Teleport the ghost to the edge of the DOTS projector so it always dashes THROUGH the beam
+                    Collider2D roomCol = ghostHandler != null ? ghostHandler.ghostroomMarker : null;
+
+                    // Ensure DOTS projection starts and stays strictly inside the active ghost room
                     Vector2 randomStartDir = Random.insideUnitCircle.normalized;
-                    Vector2 startPos = (Vector2)dots.transform.position + randomStartDir * dots.projectionRadius;
-                    Vector2 dirToDots = ((Vector2)dots.transform.position - startPos);
-                    Vector2 targetPos = startPos + dirToDots.normalized * (dots.projectionRadius * 2.5f);
+                    float maxOffset = dots.projectionRadius;
+                    if (roomCol != null)
+                    {
+                        maxOffset = Mathf.Min(dots.projectionRadius, Mathf.Max(roomCol.bounds.extents.x, roomCol.bounds.extents.y));
+                    }
+
+                    Vector2 candidateStart = (Vector2)dots.transform.position + randomStartDir * maxOffset;
+                    Vector2 startPos = GetConstrainedGhostRoomPoint(candidateStart, roomCol);
+
+                    // Dash across/through the projector inside the room
+                    Vector2 dirAcross = ((Vector2)dots.transform.position - startPos).normalized;
+                    if (dirAcross.sqrMagnitude < 0.001f) dirAcross = -randomStartDir;
+
+                    Vector2 candidateEnd = (Vector2)dots.transform.position + dirAcross * maxOffset;
+                    Vector2 targetPos = GetConstrainedGhostRoomPoint(candidateEnd, roomCol);
 
                     rb.position = startPos;
+                    transform.position = startPos;
                     isDashing = true;
                     currentDashTime = 0f;
                     activeDotsProjector = dots;
@@ -439,24 +493,31 @@ public class EventGhostBehavior : NetworkBehaviour
                 break;
                 
             case GhostEventType.GhostOrbsManifestation:
-                if (camera != null && ghostHandler != null && ghostHandler.ghostOrbPrefab != null)
+                if (camera != null && ghostHandler != null && ghostHandler.ghostOrbPrefab != null && ghostHandler.ghostroomMarker != null)
                 {
-                    // Temporarily spawn an extra orb directly in front of the camera as an active event
-                    Vector2 spawnPos = camera.transform.position + camera.transform.up * 1f;
-                    GameObject orb = Instantiate(ghostHandler.ghostOrbPrefab, spawnPos, Quaternion.identity);
-                    var orbNetwork = orb.GetComponent<NetworkObject>();
-                    if (orbNetwork != null) orbNetwork.Spawn();
-                    
-                    var orbSystem = orb.GetComponent<GhostOrbSystem>();
-                    if (orbSystem != null) 
+                    // Temporarily spawn an extra orb inside the active ghost room in front of camera
+                    Vector2 candidatePos = (Vector2)camera.transform.position + (Vector2)camera.transform.up * 0.8f;
+                    Vector2 spawnPos = candidatePos;
+                    if (!ghostHandler.ghostroomMarker.OverlapPoint(spawnPos))
                     {
-                        // Give it a tiny bounds so it stays right in front of the camera
-                        Bounds camBounds = new Bounds(spawnPos, new Vector3(1f, 1f, 1f));
-                        orbSystem.Initialize(camBounds);
+                        spawnPos = ghostHandler.ghostroomMarker.ClosestPoint(candidatePos);
                     }
-                    
-                    // Destroy this temporary event orb after 5 seconds
-                    Destroy(orb, 5f);
+
+                    if (ghostHandler.ghostroomMarker.OverlapPoint(spawnPos))
+                    {
+                        GameObject orb = Instantiate(ghostHandler.ghostOrbPrefab, spawnPos, Quaternion.identity);
+                        var orbNetwork = orb.GetComponent<NetworkObject>();
+                        if (orbNetwork != null) orbNetwork.Spawn();
+                        
+                        var orbSystem = orb.GetComponent<GhostOrbSystem>();
+                        if (orbSystem != null) 
+                        {
+                            orbSystem.Initialize(ghostHandler.ghostroomMarker);
+                        }
+                        
+                        // Destroy this temporary event orb after 5 seconds
+                        Destroy(orb, 5f);
+                    }
                 }
                 break;
                 
@@ -524,5 +585,21 @@ public class EventGhostBehavior : NetworkBehaviour
         isDashing = false;
         activeDotsProjector = null;
         UpdateVisuals(false);
+    }
+
+    private Vector2 GetConstrainedGhostRoomPoint(Vector2 preferredPos, Collider2D roomCol)
+    {
+        if (roomCol == null) return preferredPos;
+        if (roomCol.OverlapPoint(preferredPos)) return preferredPos;
+
+        Bounds b = roomCol.bounds;
+        float marginX = Mathf.Min(0.12f, b.extents.x * 0.35f);
+        float marginY = Mathf.Min(0.12f, b.extents.y * 0.35f);
+        float clampedX = Mathf.Clamp(preferredPos.x, b.min.x + marginX, b.max.x - marginX);
+        float clampedY = Mathf.Clamp(preferredPos.y, b.min.y + marginY, b.max.y - marginY);
+        Vector2 clamped = new Vector2(clampedX, clampedY);
+
+        if (roomCol.OverlapPoint(clamped)) return clamped;
+        return roomCol.ClosestPoint(preferredPos);
     }
 }

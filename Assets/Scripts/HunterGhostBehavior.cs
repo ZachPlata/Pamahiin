@@ -82,7 +82,20 @@ public class HunterGhostBehavior : NetworkBehaviour
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
 
+        // Ensure ghost object is not accidentally marked as a Wall layer (which blocks its own LOS and raycasts)
+        int wallLayer = LayerMask.NameToLayer("Walls");
+        if (wallLayer >= 0 && gameObject.layer == wallLayer)
+        {
+            int defaultLayer = LayerMask.NameToLayer("Default");
+            gameObject.layer = (defaultLayer >= 0) ? defaultLayer : 0;
+        }
+
         if (ghostHandler == null) ghostHandler = GetComponentInParent<GhostHandler>();
+        if (ghostHandler != null && wallLayer >= 0 && ghostHandler.gameObject.layer == wallLayer)
+        {
+            int defaultLayer = LayerMask.NameToLayer("Default");
+            ghostHandler.gameObject.layer = (defaultLayer >= 0) ? defaultLayer : 0;
+        }
 
         // Setup NavMeshAgent for 2D
         agent = GetComponent<NavMeshAgent>();
@@ -144,6 +157,11 @@ public class HunterGhostBehavior : NetworkBehaviour
                 agent.Warp(transform.position);
             }
             if (!agent.isOnNavMesh) Debug.LogWarning("HunterGhost: FAILED to snap to NavMesh! Ensure the room marker is on a baked area.");
+        }
+
+        if (agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
         }
 
         nodesVisitedCount = 0;
@@ -276,16 +294,7 @@ public class HunterGhostBehavior : NetworkBehaviour
 
             if (chaseTarget != null && distance <= killDistance)
             {
-                RaycastHit2D killCheck = Physics2D.Raycast(transform.position, dirToPlayer.normalized, distance, combinedMask);
-                bool canKill = (killCheck.collider == null);
-                if (!canKill)
-                {
-                    var door = GetDoorFromCollider(killCheck.collider);
-                    if (door != null && door.IsOpen)
-                    {
-                        canKill = true;
-                    }
-                }
+                bool canKill = CheckHasVisualLOS(chaseTarget, distance, combinedMask);
 
                 if (canKill && !isExecutingKill)
                 {
@@ -394,6 +403,7 @@ public class HunterGhostBehavior : NetworkBehaviour
                         chaseLostTimer = chaseMemoryDuration;
                         isTrackingEquipment = true;
                         nodesVisitedCount = 0;
+                        SetAgentDestination(player.transform.position);
                         ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
                         return;
                     }
@@ -425,6 +435,7 @@ public class HunterGhostBehavior : NetworkBehaviour
                 lastKnownPlayerPos = player.transform.position;
                 chaseLostTimer = chaseMemoryDuration;
                 nodesVisitedCount = 0;
+                SetAgentDestination(player.transform.position);
                 ghostHandler.RequestStateChange(GhostHandlerState.Chasing);
                 return;
             }
@@ -437,27 +448,75 @@ public class HunterGhostBehavior : NetworkBehaviour
         if (distance > lineOfSightDistance * 1.5f) return false;
         if (distance < 0.05f) return true;
 
-        Vector2 dir = (player.transform.position - transform.position).normalized;
-        RaycastHit2D hit = Physics2D.Raycast(transform.position, dir, distance, combinedMask);
-        if (hit.collider == null) return true;
+        Vector2 origin = transform.position;
+        Vector2 target = player.transform.position;
+        Vector2 dir = (target - origin).normalized;
 
-        var door = GetDoorFromCollider(hit.collider);
-        if (door != null && door.IsOpen)
-        {
-            return true;
-        }
+        // Cast through all colliders along the sightline to filter out non-blocking objects
+        RaycastHit2D[] hits = Physics2D.RaycastAll(origin, dir, distance, combinedMask);
 
-        // Check if the obstruction is a closed cabinet/closet door that conceals the player
-        if (door != null && !door.IsFrontDoor && door.IsHidingSpot && !door.IsOpen)
+        // Sort by distance from ghost to evaluate obstructions sequentially
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (var hit in hits)
         {
-            if (Vector2.Distance(player.transform.position, door.transform.position) <= 1.5f)
+            if (hit.collider == null) continue;
+
+            // 1. Ignore ghost's own colliders and parent hierarchy
+            if (hit.collider.gameObject == gameObject || hit.collider.transform.IsChildOf(transform) ||
+                (ghostHandler != null && hit.collider.transform.IsChildOf(ghostHandler.transform)))
             {
-                targetedHidingDoor = door;
-                return true;
+                continue;
             }
+
+            // 2. Ignore player's colliders and items in player's hands
+            if (hit.collider.gameObject == player.gameObject || hit.collider.transform.IsChildOf(player.transform))
+            {
+                continue;
+            }
+
+            // 3. Ignore trigger volumes (safe zones, room markers, light switch triggers, item pickup triggers, etc.)
+            if (hit.collider.isTrigger)
+            {
+                continue;
+            }
+
+            // 4. Ignore equipment items on the floor (not opaque obstacles)
+            if (hit.collider.GetComponent<EquipmentItem>() != null || hit.collider.GetComponentInParent<EquipmentItem>() != null)
+            {
+                continue;
+            }
+
+            // 5. Handle doors
+            var door = GetDoorFromCollider(hit.collider);
+            if (door != null)
+            {
+                if (door.IsOpen)
+                {
+                    // Open doors do not block line of sight
+                    continue;
+                }
+
+                // Check if this closed door is a hiding spot concealing the player
+                if (!door.IsFrontDoor && door.IsHidingSpot)
+                {
+                    if (Vector2.Distance(player.transform.position, door.transform.position) <= 1.5f)
+                    {
+                        targetedHidingDoor = door;
+                        return true;
+                    }
+                }
+
+                // Any other closed door blocks line of sight
+                return false;
+            }
+
+            // 6. Solid obstacle (walls, physical room obstacles) blocks line of sight
+            return false;
         }
 
-        return false;
+        // Sightline is completely clear!
+        return true;
     }
 
     private bool IsPlayerEquipmentActive(PlayerController player)
@@ -470,6 +529,7 @@ public class HunterGhostBehavior : NetworkBehaviour
     private void SetAgentDestination(Vector3 targetPos)
     {
         if (agent == null || !agent.isOnNavMesh) return;
+        targetPos.z = transform.position.z;
         if (NavMesh.SamplePosition(targetPos, out NavMeshHit hit, 2.0f, NavMesh.AllAreas))
         {
             agent.SetDestination(hit.position);

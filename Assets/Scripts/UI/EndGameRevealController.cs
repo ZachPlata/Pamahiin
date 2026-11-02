@@ -12,23 +12,42 @@ public class EndGameRevealController : MonoBehaviour
     private Label lblYourGuess;
     private Label lblResultStatus;
 
+    private Label lblPayoutEvidences;
+    private Label lblPayoutGhost;
+    private Label lblPayoutDefeat;
+    private Label lblPayoutMultiplier;
+    private Label lblPayoutTotal;
+
+    private bool hasAwardedPayout = false;
+
     private void Awake()
     {
         uiDocument = GetComponent<UIDocument>();
+        ProgressionAndLoadoutManager.EnsureInstance();
     }
 
     private void OnEnable()
     {
-        uiDocument.sortingOrder = 5;
+        uiDocument.sortingOrder = 25;
         var root = uiDocument.rootVisualElement;
-        
+
         endgameOverlay = root.Q<VisualElement>("endgame-overlay");
 
         lblTrueGhost = root.Q<Label>("lbl-true-ghost");
         lblYourGuess = root.Q<Label>("lbl-your-guess");
         lblResultStatus = root.Q<Label>("lbl-result-status");
 
-        root.Q<Button>("btn-return-lobby").clicked += OnReturnClicked;
+        lblPayoutEvidences = root.Q<Label>("lbl-payout-evidences");
+        lblPayoutGhost = root.Q<Label>("lbl-payout-ghost");
+        lblPayoutDefeat = root.Q<Label>("lbl-payout-defeat");
+        lblPayoutMultiplier = root.Q<Label>("lbl-payout-multiplier");
+        lblPayoutTotal = root.Q<Label>("lbl-payout-total");
+
+        var returnBtn = root.Q<Button>("btn-return-lobby");
+        if (returnBtn != null)
+        {
+            returnBtn.clicked += OnReturnClicked;
+        }
     }
 
     private void Start()
@@ -55,56 +74,104 @@ public class EndGameRevealController : MonoBehaviour
     {
         string playerGuess = JournalController.LastLockedInGuess;
 
-        lblTrueGhost.text = trueGhostName.ToUpper();
-        lblYourGuess.text = string.IsNullOrEmpty(playerGuess) ? "None" : playerGuess;
+        if (lblTrueGhost != null) lblTrueGhost.text = trueGhostName.ToUpper();
+        if (lblYourGuess != null) lblYourGuess.text = string.IsNullOrEmpty(playerGuess) ? "None" : playerGuess;
 
-        bool isCorrect = string.Equals(trueGhostName, playerGuess, System.StringComparison.OrdinalIgnoreCase);
+        bool isCorrectGhost = string.Equals(trueGhostName, playerGuess, System.StringComparison.OrdinalIgnoreCase);
 
-        if (isCorrect)
+        if (lblResultStatus != null)
         {
-            lblResultStatus.text = "SUCCESS";
-            lblResultStatus.RemoveFromClassList("failure");
-            lblResultStatus.AddToClassList("success");
+            if (isCorrectGhost)
+            {
+                lblResultStatus.text = "SUCCESS";
+                lblResultStatus.RemoveFromClassList("failure");
+                lblResultStatus.AddToClassList("success");
+            }
+            else
+            {
+                lblResultStatus.text = "FAILED";
+                lblResultStatus.RemoveFromClassList("success");
+                lblResultStatus.AddToClassList("failure");
+            }
         }
-        else
+
+        // Calculate and award In-Game Currency
+        if (!hasAwardedPayout)
         {
-            lblResultStatus.text = "FAILED";
-            lblResultStatus.RemoveFromClassList("success");
-            lblResultStatus.AddToClassList("failure");
+            hasAwardedPayout = true;
+
+            int correctEvidences = 0;
+            if (JournalController.Instance != null)
+            {
+                correctEvidences = JournalController.Instance.GetCorrectEvidenceCount(trueGhostName);
+            }
+
+            bool isGhostDefeated = (GameMatchManager.Instance != null && GameMatchManager.Instance.IsGhostDefeated) ||
+                                   (ExorcismManager.Instance != null && ExorcismManager.Instance.IsExorcismCompleted);
+
+            ProgressionAndLoadoutManager.EnsureInstance();
+            var mgr = ProgressionAndLoadoutManager.Instance;
+            if (mgr != null)
+            {
+                MatchPayoutBreakdown breakdown = mgr.CalculateAndAwardMatchPayout(
+                    correctEvidences,
+                    isCorrectGhost,
+                    isGhostDefeated);
+
+                if (lblPayoutEvidences != null)
+                    lblPayoutEvidences.text = $"Correct Evidences ({breakdown.correctEvidenceCount}/3): +${breakdown.evidenceReward}";
+                if (lblPayoutGhost != null)
+                    lblPayoutGhost.text = $"Correct Ghost Type ({(breakdown.correctGhostType ? "Yes" : "No")}): +${breakdown.ghostTypeReward}";
+                if (lblPayoutDefeat != null)
+                    lblPayoutDefeat.text = $"Ghost Defeated Bonus ({(breakdown.ghostDefeated ? "Exorcised!" : "Not Defeated")}): +${breakdown.ghostDefeatedReward}";
+                if (lblPayoutMultiplier != null)
+                    lblPayoutMultiplier.text = $"Difficulty Multiplier ({breakdown.difficulty}): {breakdown.difficultyMultiplier:0.0}x";
+                if (lblPayoutTotal != null)
+                    lblPayoutTotal.text = $"TOTAL EARNED: +${breakdown.totalEarned}   |   NEW BALANCE: ${breakdown.newBalance}";
+            }
         }
 
         // Show the UI
-        endgameOverlay.RemoveFromClassList("hidden");
+        if (endgameOverlay != null)
+        {
+            endgameOverlay.RemoveFromClassList("hidden");
+        }
     }
 
     private void OnReturnClicked()
     {
+        // Re-enable local player controller if it was disabled on match end
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)
+        {
+            var pc = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerController>();
+            if (pc != null) pc.enabled = true;
+        }
+
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
         {
-            // Offline fallback
-            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
+            UnityEngine.SceneManagement.SceneManager.LoadScene(ProgressionAndLoadoutManager.LOBBY_SCENE_NAME);
             return;
         }
 
         if (NetworkManager.Singleton.IsServer)
         {
-            if (NetworkManager.Singleton.ConnectedClientsIds.Count <= 1)
+            if (NetworkController.Instance != null)
             {
-                // Singleplayer: Disconnect fully
-                if (NetworkController.Instance != null)
-                {
-                    NetworkController.Instance.DisconnectAndReturnToMenu();
-                }
+                NetworkController.Instance.ReturnToLobbyFromMatch();
             }
             else
             {
-                // Multiplayer Host: Return to lobby (keep network alive)
-                NetworkManager.Singleton.SceneManager.LoadScene("MainMenuScene", UnityEngine.SceneManagement.LoadSceneMode.Single);
+                NetworkManager.Singleton.SceneManager.LoadScene(
+                    ProgressionAndLoadoutManager.LOBBY_SCENE_NAME,
+                    UnityEngine.SceneManagement.LoadSceneMode.Single);
             }
         }
         else if (NetworkManager.Singleton.IsClient)
         {
-            lblResultStatus.text = "Waiting for Host...";
+            if (lblResultStatus != null)
+            {
+                lblResultStatus.text = "Waiting for Host...";
+            }
         }
     }
 }
