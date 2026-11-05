@@ -108,6 +108,9 @@ public class NetworkController : MonoBehaviour
         }
         else if (sceneName == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME)
         {
+            var spawnPoint = UnityEngine.Object.FindAnyObjectByType<PlayerSpawnPoint>();
+            Vector3 basePos = spawnPoint != null ? spawnPoint.transform.position : new Vector3(0f, -0.35f, 0f);
+
             int index = 0;
             foreach (var clientId in clientsCompleted)
             {
@@ -115,7 +118,7 @@ public class NetworkController : MonoBehaviour
                 {
                     if (client.PlayerObject != null)
                     {
-                        Vector3 spawnPos = new Vector3((index % 2 == 0 ? -0.35f : 0.35f), -0.35f + (index * 0.2f), 0f);
+                        Vector3 spawnPos = basePos + new Vector3((index % 2 == 0 ? -0.2f : 0.2f), (index / 2) * 0.2f, 0f);
                         client.PlayerObject.transform.position = spawnPos;
                         var pc = client.PlayerObject.GetComponent<PlayerController>();
                         if (pc != null) pc.RestoreSanity(100f);
