@@ -20,7 +20,11 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     public override void OnNetworkSpawn()
     {
-        isLightOn.OnValueChanged += (oldVal, newVal) => ApplyLightState(newVal);
+        isLightOn.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal != newVal) GameAudioManager.PlayLightSwitch(transform.position);
+            ApplyLightState(newVal);
+        };
         ApplyLightState(isLightOn.Value);
     }
 

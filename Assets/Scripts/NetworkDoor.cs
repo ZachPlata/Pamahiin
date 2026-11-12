@@ -120,6 +120,11 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         base.OnNetworkSpawn();
         isOpen.OnValueChanged += (oldVal, newVal) =>
         {
+            if (oldVal != newVal)
+            {
+                if (newVal) GameAudioManager.PlayDoorOpen(transform.position);
+                else GameAudioManager.PlayDoorClose(transform.position);
+            }
             if (newVal && isFrontDoor)
             {
                 TutorialTooltipManager.TriggerHint(TutorialHintId.HousePower);
@@ -402,12 +407,14 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         if (IsLocked)
         {
             // Door is locked (e.g. during a Hunt)
+            GameAudioManager.PlayDoorLocked(transform.position);
             return;
         }
 
         if (requiresKey && !IsKeyFound)
         {
             // Requires front door key
+            GameAudioManager.PlayDoorLocked(transform.position);
             return;
         }
 

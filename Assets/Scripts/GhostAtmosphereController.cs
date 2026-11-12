@@ -118,6 +118,10 @@ public class GhostAtmosphereController : MonoBehaviour
                 heartbeatSource = gameObject.AddComponent<AudioSource>();
             }
         }
+        if (heartbeatClip == null)
+        {
+            heartbeatClip = GameAudioManager.GetClip("heartbeat");
+        }
 
         if (heartbeatSource != null)
         {

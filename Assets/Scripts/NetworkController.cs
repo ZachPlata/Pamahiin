@@ -86,22 +86,23 @@ public class NetworkController : MonoBehaviour
     {
         if (sceneName == ProgressionAndLoadoutManager.GAME_MAP_SCENE_NAME)
         {
-            // Find the PlayerSpawnPoint component
-            var spawnPoint = UnityEngine.Object.FindAnyObjectByType<PlayerSpawnPoint>();
-            Vector3 startPos = spawnPoint != null ? spawnPoint.transform.position : Vector3.zero;
-
-            int index = 0;
             foreach (var clientId in clientsCompleted)
             {
                 if (NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
                 {
                     if (client.PlayerObject != null)
                     {
-                        Vector3 offset = new Vector3((index % 2) * 0.08f, (index / 2) * 0.08f, 0f);
-                        client.PlayerObject.transform.position = startPos + offset;
+                        Vector3 spawnPos = PlayerSpawnPoint.GetSpawnPosition(clientId);
                         var pc = client.PlayerObject.GetComponent<PlayerController>();
-                        if (pc != null) pc.RestoreSanity(100f);
-                        index++;
+                        if (pc != null)
+                        {
+                            pc.TeleportTo(spawnPos);
+                            pc.RestoreSanity(100f);
+                        }
+                        else
+                        {
+                            client.PlayerObject.transform.position = spawnPos;
+                        }
                     }
                 }
             }
@@ -119,9 +120,16 @@ public class NetworkController : MonoBehaviour
                     if (client.PlayerObject != null)
                     {
                         Vector3 spawnPos = basePos + new Vector3((index % 2 == 0 ? -0.2f : 0.2f), (index / 2) * 0.2f, 0f);
-                        client.PlayerObject.transform.position = spawnPos;
                         var pc = client.PlayerObject.GetComponent<PlayerController>();
-                        if (pc != null) pc.RestoreSanity(100f);
+                        if (pc != null)
+                        {
+                            pc.TeleportTo(spawnPos);
+                            pc.RestoreSanity(100f);
+                        }
+                        else
+                        {
+                            client.PlayerObject.transform.position = spawnPos;
+                        }
                         index++;
                     }
                 }
@@ -362,6 +370,8 @@ public class NetworkController : MonoBehaviour
 
     public void LoadLobbyScene()
     {
+        TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
+
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
         {
             NetworkManager.Singleton.SceneManager.LoadScene(ProgressionAndLoadoutManager.LOBBY_SCENE_NAME, LoadSceneMode.Single);
@@ -374,6 +384,8 @@ public class NetworkController : MonoBehaviour
 
     public void LoadGameScene()
     {
+        TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
+
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
         {
             string targetScene = ProgressionAndLoadoutManager.Instance != null

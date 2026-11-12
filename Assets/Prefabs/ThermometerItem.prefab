@@ -57,7 +57,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: -0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 1.1589, y: 2.9129, z: 0}
-  m_LocalScale: {x: 0.0018150351, y: 0.0018150351, z: 0.0018150351}
+  m_LocalScale: {x: 0.006, y: 0.006, z: 0.006}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -111,7 +111,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 6155733172782055436, guid: ddc50e4d6c453be418a08365b418e5ef, type: 3}
+  m_Sprite: {fileID: 2107059158701142464, guid: 2df66bb32748d3c43b90208c5cfbf7d3, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -131,15 +131,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 8800200000000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e0c8747c67e554d489c33c8b2d5a066a, type: 3}
+  m_Script: {fileID: 11500000, guid: e8046514c979e4749971c6b3c4ec86f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ThermometerItem
-  ShowTopMostFoldoutHeaderGroup: 1
   itemName: Thermometer
-  offSprite: {fileID: 6155733172782055436, guid: ddc50e4d6c453be418a08365b418e5ef, type: 3}
-  normalSprite: {fileID: 4617954791097170562, guid: 9ca8913a0de41ae4ca7f91068346e1c6, type: 3}
-  coldSprite: {fileID: -8924124002153629873, guid: 681bfebfd02a90b4a90d81bcfe35c690, type: 3}
-  freezingSprite: {fileID: 6685826840038356862, guid: f1dbdb3413919334d9aaef9d50e0e435, type: 3}
+  sampleDistance: 2.5
+  refreshInterval: 0.75
 --- !u!50 &8800200000000000007
 Rigidbody2D:
   serializedVersion: 5

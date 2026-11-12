@@ -137,6 +137,13 @@ public class SpiritBoxItem : EquipmentItem
         staticAudioSource.loop = true;
         staticAudioSource.playOnAwake = false;
         staticAudioSource.volume = staticAudioVolume;
+
+        if (radioStaticAudio == null) radioStaticAudio = GameAudioManager.GetClip("radio_static");
+        if (ghostResponseAudio1 == null) ghostResponseAudio1 = GameAudioManager.GetSpiritBoxVoiceClip(1);
+        if (ghostResponseAudio2 == null) ghostResponseAudio2 = GameAudioManager.GetSpiritBoxVoiceClip(2);
+        if (ghostResponseAudio3 == null) ghostResponseAudio3 = GameAudioManager.GetSpiritBoxVoiceClip(3);
+        if (ghostResponseAudio4 == null) ghostResponseAudio4 = GameAudioManager.GetSpiritBoxVoiceClip(4);
+        if (ghostResponseAudio5 == null) ghostResponseAudio5 = GameAudioManager.GetSpiritBoxVoiceClip(5);
     }
 
     private void ConfigureAudioSource(AudioSource src)

@@ -129,6 +129,10 @@ public class GhostHandler : NetworkBehaviour
             UpdateVisibility(newState);
             if (newState != GhostHandlerState.Dormant)
             {
+                if (oldState == GhostHandlerState.Dormant)
+                {
+                    GameAudioManager.PlayGhostHuntStart(transform.position);
+                }
                 TutorialTooltipManager.TriggerHint(TutorialHintId.GhostHunt);
             }
         };
@@ -257,6 +261,7 @@ public class GhostHandler : NetworkBehaviour
         // Show the event ghost for 3 seconds
         ghostEventTimer = 3f;
         UpdateVisibility(currentState.Value);
+        GameAudioManager.PlayGhostEvent(eventGhost != null ? eventGhost.transform.position : transform.position);
 
         // Notify atmosphere controller on ALL clients via ClientRpc
         TriggerGhostEventEffectClientRpc();

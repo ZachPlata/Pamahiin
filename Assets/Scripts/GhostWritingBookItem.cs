@@ -35,6 +35,7 @@ public class GhostWritingBookItem : EquipmentItem
             baseLocalScale = transform.localScale;
             hasBaseScale = true;
         }
+        if (writingSound == null) writingSound = GameAudioManager.GetClip("book_write");
     }
 
     public override void OnNetworkSpawn()

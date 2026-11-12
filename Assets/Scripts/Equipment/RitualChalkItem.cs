@@ -201,6 +201,7 @@ public class RitualChalkItem : EquipmentItem
 
         if (placed)
         {
+            GameAudioManager.PlayChalkDraw(transform.position);
             // 1. Detach from any parent container (e.g. truck table with miniature scale or rotation)
             if (transform.parent != null)
             {

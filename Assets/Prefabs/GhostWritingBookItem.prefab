@@ -15,12 +15,27 @@ GameObject:
   - component: {fileID: 8800400000000000008}
   - component: {fileID: 8800400000000000007}
   m_Layer: 8
-  m_Name: GhostWritingBook
+  m_Name: GhostWritingBookItem
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!4 &8800400000000000003
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8800400000000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
+  m_LocalPosition: {x: 1.1583, y: 3.1201, z: 0}
+  m_LocalScale: {x: 0.006, y: 0.006, z: 0.006}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
 --- !u!114 &8800400000000000002
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -33,8 +48,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4008944430
+  GlobalObjectIdHash: 2519587087
   InScenePlacedSourceGlobalObjectIdHash: 0
+  m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
@@ -47,21 +63,26 @@ MonoBehaviour:
   AutoObjectParentSync: 1
   SyncOwnerTransformWhenParented: 1
   AllowOwnerToParent: 0
---- !u!4 &8800400000000000003
-Transform:
+--- !u!114 &8800400000000000006
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8800400000000000001}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: 1.1583, y: 3.1201, z: 0}
-  m_LocalScale: {x: 0.0056817136, y: 0.0056817136, z: 0.0056817136}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 567f7e6690383c84da3291263d9ebbf6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GhostWritingBookItem
+  ShowTopMostFoldoutHeaderGroup: 1
+  itemName: Ghost Writing Book
+  closedSprite: {fileID: 8743949072410564966, guid: b56ad8861f348804c8f44f178d9aec81, type: 3}
+  openedSprite: {fileID: 8035095589936563564, guid: 24d55691cabd45542b963b5aedc63560, type: 3}
+  writtenClosedSprite: {fileID: 8743949072410564966, guid: b56ad8861f348804c8f44f178d9aec81, type: 3}
+  writtenOpenSprite: {fileID: 8035095589936563564, guid: 8a2f2e9901cf496b8720677c1a59e3c6, type: 3}
+  inventorySprite: {fileID: -9074822151758419132, guid: 39fb13b9a3a60cd40863b66193a4e0e4, type: 3}
+  writingSound: {fileID: 8300000, guid: 8ce50217d52af2c4eb503b788d4f8bc9, type: 3}
 --- !u!212 &8800400000000000005
 SpriteRenderer:
   serializedVersion: 3
@@ -111,7 +132,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: -8924124002153629873, guid: e08a2bdab90efee43850deeb4f4a5324, type: 3}
+  m_Sprite: {fileID: 8743949072410564966, guid: b56ad8861f348804c8f44f178d9aec81, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -122,51 +143,6 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
   m_BlendShapeWeights: []
---- !u!114 &8800400000000000006
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8800400000000000001}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 368b074185f30064eb381fc5b312de8c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GhostWritingBookItem
-  ShowTopMostFoldoutHeaderGroup: 1
-  itemName: Ghost Writing Book
-  interactionRadius: 2
-  blankSprite: {fileID: -8924124002153629873, guid: e08a2bdab90efee43850deeb4f4a5324, type: 3}
-  writtenSprite: {fileID: 6685826840038356862, guid: 9633fd15763a0cc4e99c18a81cc1c4e4, type: 3}
-  writingAudioClip: {fileID: 8300000, guid: 7c6e4cb7e4f81bf47a57b26157802833, type: 3}
---- !u!50 &8800400000000000007
-Rigidbody2D:
-  serializedVersion: 5
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8800400000000000001}
-  m_BodyType: 0
-  m_Simulated: 1
-  m_UseFullKinematicContacts: 0
-  m_UseAutoMass: 0
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_GravityScale: 0
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_Interpolate: 0
-  m_SleepingMode: 1
-  m_CollisionDetection: 0
-  m_Constraints: 0
 --- !u!61 &8800400000000000008
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -205,7 +181,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 8.64, y: 7.45}
+    oldSize: {x: 8.06, y: 8.88}
     newSize: {x: 8.64, y: 7.45}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -213,4 +189,30 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 8.64, y: 7.45}
   m_EdgeRadius: 0
-
+--- !u!50 &8800400000000000007
+Rigidbody2D:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8800400000000000001}
+  m_BodyType: 0
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 0
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_GravityScale: 0
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_Interpolate: 0
+  m_SleepingMode: 1
+  m_CollisionDetection: 0
+  m_Constraints: 0

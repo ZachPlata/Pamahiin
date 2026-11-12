@@ -43,12 +43,20 @@ public class EMFReaderItem : EquipmentItem
         base.Awake();
         itemName = "EMF Reader";
         if (audioSource == null) audioSource = GetComponent<AudioSource>();
+        if (emf2Sound == null) emf2Sound = GameAudioManager.GetClip("emf_2");
+        if (emf3Sound == null) emf3Sound = GameAudioManager.GetClip("emf_3");
+        if (emf4Sound == null) emf4Sound = GameAudioManager.GetClip("emf_4");
+        if (emf5Sound == null) emf5Sound = GameAudioManager.GetClip("emf_5");
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        isPoweredOn.OnValueChanged += (oldVal, newVal) => UpdateVisuals();
+        isPoweredOn.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal != newVal) GameAudioManager.PlayFlashlightClick(transform.position);
+            UpdateVisuals();
+        };
         UpdateVisuals();
     }
 

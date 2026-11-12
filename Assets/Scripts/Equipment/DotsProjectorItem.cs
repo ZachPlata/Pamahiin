@@ -38,13 +38,24 @@ public class DotsProjectorItem : EquipmentItem
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        isPoweredOn.OnValueChanged += (oldVal, newVal) => UpdateVisuals();
+        isPoweredOn.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal != newVal) GameAudioManager.PlayFlashlightClick(transform.position);
+            UpdateVisuals();
+        };
         UpdateVisuals();
     }
 
     protected override void Update()
     {
         base.Update();
+
+        if (isPoweredOn.Value && dotsLight != null && dotsLight.enabled)
+        {
+            // 16-bit stepped laser grid shimmer
+            float stepped = Mathf.Floor((0.88f + 0.18f * Mathf.Sin(Time.time * 12f)) * 8f) / 8f;
+            dotsLight.intensity = stepped;
+        }
 
         // Rotate 90 degrees when held in hand so the projector lens and light beam point straight forward
         if (ownerClientId.Value != ulong.MaxValue && NetworkManager.Singleton != null && NetworkManager.Singleton.SpawnManager != null)

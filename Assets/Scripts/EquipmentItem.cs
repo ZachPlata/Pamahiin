@@ -49,28 +49,68 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
 
     protected virtual void Awake()
     {
-        var colliders = GetComponents<Collider2D>();
-        foreach (var col in colliders)
+        int interactLayer = LayerMask.NameToLayer("Interactable");
+        if (interactLayer >= 0)
         {
-            if (!col.isTrigger)
-            {
-                interactCollider = col;
-                break;
-            }
-        }
-        if (interactCollider == null && colliders.Length > 0)
-        {
-            interactCollider = colliders[0];
+            gameObject.layer = interactLayer;
         }
 
         spriteRenderer = GetComponent<SpriteRenderer>();
+
+        // Prefer PolygonCollider2D for clean silhouette interaction & hover outline
+        PolygonCollider2D polyCol = GetComponent<PolygonCollider2D>();
+        var boxCols = GetComponents<BoxCollider2D>();
+
+        if (polyCol == null)
+        {
+            foreach (var box in boxCols)
+            {
+                if (box != null)
+                {
+                    box.enabled = false;
+                    Destroy(box);
+                }
+            }
+            polyCol = gameObject.AddComponent<PolygonCollider2D>();
+        }
+        else
+        {
+            foreach (var box in boxCols)
+            {
+                if (box != null) box.enabled = false;
+            }
+        }
+
+        polyCol.isTrigger = true;
+        interactCollider = polyCol;
+
+        Rigidbody2D rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.gravityScale = 0f;
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
     }
 
     public override void OnNetworkSpawn()
     {
-        ownerClientId.OnValueChanged += (oldVal, newVal) => UpdateEquipState(newVal);
+        ownerClientId.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal == ulong.MaxValue && newVal != ulong.MaxValue)
+                GameAudioManager.PlayItemPickup(transform.position);
+            else if (oldVal != ulong.MaxValue && newVal == ulong.MaxValue && !isPlaced.Value)
+                GameAudioManager.PlayItemDrop(transform.position);
+            UpdateEquipState(newVal);
+        };
         isInHand.OnValueChanged += (oldVal, newVal) => OnInHandChanged(newVal);
-        isPlaced.OnValueChanged += (oldVal, newVal) => OnPlacedChanged(newVal);
+        isPlaced.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (!oldVal && newVal)
+                GameAudioManager.PlayItemPlace(transform.position);
+            OnPlacedChanged(newVal);
+        };
 
         UpdateEquipState(ownerClientId.Value);
         OnInHandChanged(isInHand.Value);
@@ -260,16 +300,10 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         Rigidbody2D rb = GetComponent<Rigidbody2D>();
         if (rb != null)
         {
-            if (!onGroundOrPlaced || isPlaced.Value)
-            {
-                rb.bodyType = RigidbodyType2D.Kinematic;
-                rb.linearVelocity = Vector2.zero;
-                rb.angularVelocity = 0f;
-            }
-            else
-            {
-                rb.bodyType = RigidbodyType2D.Dynamic;
-            }
+            rb.gravityScale = 0f;
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
         }
 
         // If local client picked it up, add to local inventory
@@ -326,16 +360,10 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         Rigidbody2D rb = GetComponent<Rigidbody2D>();
         if (rb != null)
         {
-            if (placed || ownerClientId.Value != ulong.MaxValue)
-            {
-                rb.bodyType = RigidbodyType2D.Kinematic;
-                rb.linearVelocity = Vector2.zero;
-                rb.angularVelocity = 0f;
-            }
-            else
-            {
-                rb.bodyType = RigidbodyType2D.Dynamic;
-            }
+            rb.gravityScale = 0f;
+            rb.bodyType = RigidbodyType2D.Kinematic;
+            rb.linearVelocity = Vector2.zero;
+            rb.angularVelocity = 0f;
         }
         UpdateVisuals();
     }
@@ -423,8 +451,8 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         Rigidbody2D rb = GetComponent<Rigidbody2D>();
         if (rb != null)
         {
-            // Return to dynamic physics when dropped
-            rb.bodyType = RigidbodyType2D.Dynamic;
+            rb.gravityScale = 0f;
+            rb.bodyType = RigidbodyType2D.Kinematic;
             rb.linearVelocity = Vector2.zero;
             rb.angularVelocity = 0f;
         }

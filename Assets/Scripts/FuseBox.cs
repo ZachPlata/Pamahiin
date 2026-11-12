@@ -34,7 +34,11 @@ public class FuseBox : NetworkBehaviour, IInteractable
 
     public override void OnNetworkSpawn()
     {
-        isEnabled.OnValueChanged += (oldVal, newVal) => OnFuseStateChanged(newVal);
+        isEnabled.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal != newVal) GameAudioManager.PlayFuseBox(transform.position, newVal);
+            OnFuseStateChanged(newVal);
+        };
 
         if (IsServer)
         {

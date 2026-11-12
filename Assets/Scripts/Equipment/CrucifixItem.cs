@@ -22,12 +22,23 @@ public class CrucifixItem : EquipmentItem
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        isBurned.OnValueChanged += (oldVal, newVal) => UpdateVisuals();
+        isBurned.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (!oldVal && newVal) GameAudioManager.PlayCrucifixBurn(transform.position);
+            UpdateVisuals();
+        };
     }
 
     protected override void Update()
     {
         base.Update();
+
+        if (isBurned.Value && spriteRenderer != null)
+        {
+            // 16-bit smoldering ember pulse animation on burned crucifix
+            float ember = Mathf.Floor((0.75f + 0.25f * Mathf.Sin(Time.time * 10f)) * 4f) / 4f;
+            spriteRenderer.color = new Color(1f, ember * 0.65f, ember * 0.45f, 1f);
+        }
 
         // Check if an Angered ghost is nearby to repel it (applies when placed on the ground or held)
         if (!isBurned.Value)

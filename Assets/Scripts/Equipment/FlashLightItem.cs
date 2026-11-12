@@ -42,7 +42,11 @@ public class FlashlightItem : EquipmentItem
         base.OnNetworkSpawn();
 
         // Subscribe to changes so the light toggles instantly for all clients
-        isLightOn.OnValueChanged += (oldVal, newVal) => UpdateVisuals();
+        isLightOn.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal != newVal) GameAudioManager.PlayFlashlightClick(transform.position);
+            UpdateVisuals();
+        };
         
         UpdateVisuals();
     }

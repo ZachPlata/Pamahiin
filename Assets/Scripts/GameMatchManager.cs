@@ -129,6 +129,30 @@ public class GameMatchManager : NetworkBehaviour
         Debug.Log($"Server recorded deduction '{ghostType}' from client {clientId}. Match continues until van End Game button is pressed.");
     }
 
+    public void RequestEndMatch()
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer)
+        {
+            ForceEndMatch();
+            return;
+        }
+
+        if (IsSpawned)
+        {
+            RequestEndMatchServerRpc();
+        }
+        else
+        {
+            ForceEndMatch();
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestEndMatchServerRpc()
+    {
+        ForceEndMatch();
+    }
+
     public void ForceEndMatch()
     {
         string actualGhostName = cachedTrueGhostName;
@@ -153,33 +177,44 @@ public class GameMatchManager : NetworkBehaviour
             actualGhostName = "Unknown Entity";
         }
 
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && NetworkManager.Singleton.IsServer)
         {
-            // Offline fallback
-            var revealController = UnityEngine.Object.FindAnyObjectByType<EndGameRevealController>();
-            if (revealController != null) revealController.TriggerReveal(actualGhostName);
+            EndMatchClientRpc(actualGhostName, isGhostDefeated);
             return;
         }
 
-        if (!IsServer) return;
-
-        EndMatchClientRpc(actualGhostName, isGhostDefeated);
+        ExecuteLocalEndMatchReveal(actualGhostName, isGhostDefeated);
     }
 
     [ClientRpc]
     private void EndMatchClientRpc(string trueName, bool defeated)
     {
+        ExecuteLocalEndMatchReveal(trueName, defeated);
+    }
+
+    private void ExecuteLocalEndMatchReveal(string trueName, bool defeated)
+    {
         isGhostDefeated = defeated;
 
         // Lock player controls
-        if (NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)
         {
             var pc = NetworkManager.Singleton.LocalClient.PlayerObject.GetComponent<PlayerController>();
             if (pc != null) pc.enabled = false;
         }
+        else if (PlayerController.LocalInstance != null)
+        {
+            PlayerController.LocalInstance.enabled = false;
+        }
 
-        // Trigger the UI Reveal
+        // Trigger the UI Reveal via event and direct controller lookup
         OnMatchEnded?.Invoke(trueName);
+
+        var revealController = UnityEngine.Object.FindAnyObjectByType<EndGameRevealController>();
+        if (revealController != null)
+        {
+            revealController.TriggerReveal(trueName);
+        }
     }
 
     public string GetLocalDeduction()

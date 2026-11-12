@@ -57,7 +57,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 1.1613, y: 2.9896, z: 0}
-  m_LocalScale: {x: 0.0044225464, y: 0.0044225464, z: 0.0044225464}
+  m_LocalScale: {x: 0.022, y: 0.022, z: 0.022}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8800500000000000010}
@@ -112,7 +112,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 2639757766709338495, guid: f144ff2bf08d47949878b94270aa6b1d, type: 3}
+  m_Sprite: {fileID: 7987747796165673510, guid: c9aac32ef90955244aa61af085b83537, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -132,10 +132,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 8800500000000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e5d071b832a17324e91c4829c3f1d096, type: 3}
+  m_Script: {fileID: 11500000, guid: 30330846c749b4448988d6cf38ddcd38, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VideoCameraItem
-  ShowTopMostFoldoutHeaderGroup: 1
   itemName: Video Camera
   feedCamera: {fileID: 8800500000000000011}
 --- !u!50 &8800500000000000007

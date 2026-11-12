@@ -57,7 +57,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 1.1583, y: 3.1605, z: 0}
-  m_LocalScale: {x: 0.008568717, y: 0.008568717, z: 0.008568717}
+  m_LocalScale: {x: 0.008, y: 0.008, z: 0.008}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -111,7 +111,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: -2278641151287433651, guid: 959ab7113b8681f47ac6bfab50f7f2b9, type: 3}
+  m_Sprite: {fileID: 6341378640433706392, guid: 0ffb87303ef337e4980e2c3254ceb93d, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -131,11 +131,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 8800700000000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d5d06d0779833a44a8b7ca88081e409d, type: 3}
+  m_Script: {fileID: 11500000, guid: 5f2ef5f4f13d98f4f901cf4e05662b3a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RitualChalkItem
-  ShowTopMostFoldoutHeaderGroup: 1
   itemName: Ritual Chalk
+  itemSprite: {fileID: 6341378640433706392, guid: 0ffb87303ef337e4980e2c3254ceb93d, type: 3}
+  diagramSprite: {fileID: -6069969547628609273, guid: 5a40ef2e0a331a34aaa2ee02cf159284, type: 3}
 --- !u!50 &8800700000000000007
 Rigidbody2D:
   serializedVersion: 5

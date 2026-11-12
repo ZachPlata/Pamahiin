@@ -161,4 +161,13 @@ public class PlayerInventory : NetworkBehaviour
             }
         }
     }
+
+    public void ClearAllSlots()
+    {
+        for (int i = 0; i < MaxSlots; i++)
+        {
+            slots[i] = null;
+        }
+        OnInventoryUpdated?.Invoke();
+    }
 }

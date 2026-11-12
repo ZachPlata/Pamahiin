@@ -50,12 +50,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 474187885
-  InScenePlacedSourceGlobalObjectIdHash: 1209922130
+  InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
-  m_InScenePlaced: 1
+  m_InScenePlaced: 0
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 0
   SpawnWithObservers: 1
@@ -76,7 +76,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DotsProjectorItem
   ShowTopMostFoldoutHeaderGroup: 1
-  itemName: Equipment
+  itemName: D.O.T.S. Projector
   projectionRadius: 3
   coneAngle: 60
   dotsLight: {fileID: 7472760412513084792}

@@ -126,6 +126,7 @@ public class PlayerController : NetworkBehaviour
         {
             LocalInstance = this;
             localCamera = Camera.main;
+            StartCoroutine(DelayedTeleportToSpawn());
             if (ItemHoverIndicator.Instance == null)
             {
                 new GameObject("ItemHoverIndicator").AddComponent<ItemHoverIndicator>();
@@ -446,6 +447,7 @@ public class PlayerController : NetworkBehaviour
     {
         if (!alive)
         {
+            GameAudioManager.PlayGhostKill(transform.position);
             if (IsOwner)
             {
                 ItemHoverIndicator.Instance?.Hide();
@@ -520,27 +522,49 @@ public class PlayerController : NetworkBehaviour
     {
         if (Vector2.Distance(transform.position, mousePosition) > maxReachRadius) return null;
 
-        // Use a very small precise radius for accurate hit detection
-        Collider2D[] hits = Physics2D.OverlapCircleAll(mousePosition, 0.05f, interactLayer);
+        // Check both interactLayer and all colliders at cursor so items/buttons work even if layer is Default
+        Collider2D[] hits = Physics2D.OverlapCircleAll(mousePosition, 0.06f);
         
         IInteractable bestInteractable = null;
         float bestDistance = float.MaxValue;
+        bool bestIsEquipmentOrKey = false;
 
         foreach (var hit in hits)
         {
+            if (hit == null) continue;
+
             var equipment = hit.GetComponent<EquipmentItem>();
-            if (equipment != null && equipment.InteractCollider != null && equipment.InteractCollider != hit)
+            if (equipment != null)
             {
-                continue; // Ignore any extra colliders on the item (like huge AoE triggers)
+                if (!equipment.IsOnGround && !equipment.IsPlaced)
+                {
+                    continue; // Ignore items currently held in a player's hand/inventory
+                }
+                if (equipment.InteractCollider != null && equipment.InteractCollider != hit)
+                {
+                    continue; // Ignore any extra colliders on the item (like huge AoE triggers)
+                }
             }
 
             var interactable = hit.GetComponent<IInteractable>();
+            if (interactable == null)
+            {
+                interactable = hit.GetComponentInParent<IInteractable>();
+            }
+
             if (interactable != null)
             {
-                // Priority: The object whose center is closest to the mouse cursor.
-                // This ensures small items on top of large interactables (like monitors) get priority.
+                bool isEquipOrKey = (interactable is EquipmentItem) || (interactable is FrontDoorKeyItem);
                 float dist = Vector2.Distance(mousePosition, hit.transform.position);
-                if (dist < bestDistance)
+
+                // Prioritize small pickup items over large background triggers, then closest center to mouse
+                if (isEquipOrKey && !bestIsEquipmentOrKey)
+                {
+                    bestIsEquipmentOrKey = true;
+                    bestDistance = dist;
+                    bestInteractable = interactable;
+                }
+                else if (isEquipOrKey == bestIsEquipmentOrKey && dist < bestDistance)
                 {
                     bestDistance = dist;
                     bestInteractable = interactable;
@@ -567,7 +591,10 @@ public class PlayerController : NetworkBehaviour
 
     private void UpdateItemHoverIndicator()
     {
-        if (ItemHoverIndicator.Instance == null) return;
+        if (ItemHoverIndicator.Instance == null)
+        {
+            new GameObject("ItemHoverIndicator").AddComponent<ItemHoverIndicator>();
+        }
 
         if (IsInteractionBlocked || !isAlive.Value)
         {
@@ -586,7 +613,9 @@ public class PlayerController : NetworkBehaviour
 
                     if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
                     {
-                        ItemHoverIndicator.Instance.Show(equipment.gameObject, equipment.ItemName);
+                        int stackCount = CountStackedEquipment(equipment);
+                        string displayLabel = $"{equipment.ItemName} x{stackCount}";
+                        ItemHoverIndicator.Instance.Show(equipment.gameObject, displayLabel);
                         return;
                     }
                 }
@@ -598,7 +627,18 @@ public class PlayerController : NetworkBehaviour
 
                 if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
                 {
-                    ItemHoverIndicator.Instance.Show(keyItem.gameObject, "Front Door Key");
+                    ItemHoverIndicator.Instance.Show(keyItem.gameObject, "Front Door Key x1");
+                    return;
+                }
+            }
+            else if (currentlyHoveredInteractable is TruckEndGameButton endBtn)
+            {
+                float distToMouse = Vector2.Distance(transform.position, mousePosition);
+                float distToItem = Vector2.Distance(transform.position, endBtn.transform.position);
+
+                if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
+                {
+                    ItemHoverIndicator.Instance.Show(endBtn.gameObject, endBtn.GetInteractText());
                     return;
                 }
             }
@@ -607,11 +647,89 @@ public class PlayerController : NetworkBehaviour
         ItemHoverIndicator.Instance.Hide();
     }
 
+    private static int CountStackedEquipment(EquipmentItem target)
+    {
+        if (target == null) return 1;
+
+        int count = 0;
+        Vector2 targetPos = target.transform.position;
+        System.Type targetType = target.GetType();
+
+        // Check nearby colliders first for fast stack counting
+        Collider2D[] nearby = Physics2D.OverlapCircleAll(targetPos, 0.06f);
+        HashSet<EquipmentItem> counted = new HashSet<EquipmentItem>();
+
+        foreach (var col in nearby)
+        {
+            if (col == null) continue;
+            var eq = col.GetComponent<EquipmentItem>();
+            if (eq != null && !counted.Contains(eq) && (eq.IsOnGround || eq.IsPlaced))
+            {
+                if (eq.GetType() == targetType || eq.ItemName == target.ItemName)
+                {
+                    counted.Add(eq);
+                    count++;
+                }
+            }
+        }
+
+        return Mathf.Max(1, count);
+    }
+
+    private void OnEnable()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedLocal;
+    }
+
     private void OnDisable()
     {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedLocal;
         if (IsOwner)
         {
             ItemHoverIndicator.Instance?.Hide();
         }
+    }
+
+    private void OnSceneLoadedLocal(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+    {
+        if (IsOwner && IsSpawned)
+        {
+            StartCoroutine(DelayedTeleportToSpawn());
+        }
+    }
+
+    public void TeleportToSpawnPoint()
+    {
+        Vector3 spawnPos = PlayerSpawnPoint.GetSpawnPosition(OwnerClientId);
+        TeleportTo(spawnPos);
+    }
+
+    public void TeleportTo(Vector3 position)
+    {
+        transform.position = position;
+
+        if (rb != null)
+        {
+            rb.position = position;
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        if (TryGetComponent<ClientNetworkTransform>(out var clientNetTransform))
+        {
+            clientNetTransform.Teleport(position, transform.rotation, transform.localScale);
+        }
+        else if (TryGetComponent<Unity.Netcode.Components.NetworkTransform>(out var netTransform))
+        {
+            netTransform.Teleport(position, transform.rotation, transform.localScale);
+        }
+    }
+
+    private System.Collections.IEnumerator DelayedTeleportToSpawn()
+    {
+        PixelScenePostProcessor.ApplyPixelArtToScene();
+        TeleportToSpawnPoint();
+        yield return null;
+        PixelScenePostProcessor.ApplyPixelArtToScene();
+        TeleportToSpawnPoint();
     }
 }

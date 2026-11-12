@@ -57,7 +57,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 1.1585, y: 2.8669, z: 0}
-  m_LocalScale: {x: 0.008023051, y: 0.008023051, z: 0.008023051}
+  m_LocalScale: {x: 0.006, y: 0.006, z: 0.006}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -111,7 +111,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 785499402298806944, guid: bd29622be3325284c9038e733b2e373a, type: 3}
+  m_Sprite: {fileID: -477188781946213628, guid: 8a84c004458e50c4a8ea3997e9c96b28, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -131,20 +131,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 8800100000000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: baa40dc38f12f6f44a2a042c72129a97, type: 3}
+  m_Script: {fileID: 11500000, guid: eb1360b0664a01e448f13bd9387e23e4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EMFReaderItem
-  ShowTopMostFoldoutHeaderGroup: 1
   itemName: EMF Reader
-  detectionRadius: 2
-  offSprite: {fileID: 785499402298806944, guid: bd29622be3325284c9038e733b2e373a, type: 3}
-  levelSprites:
-  - {fileID: 785499402298806944, guid: bd29622be3325284c9038e733b2e373a, type: 3}
-  - {fileID: -1832959656649744731, guid: 03c9beebda28b0644a4d603505bc02fc, type: 3}
-  - {fileID: 2875946095179923514, guid: e784a02102fc8534ca0040c800e26b4b, type: 3}
-  - {fileID: -3533490007097023977, guid: 95174d3b0b813654ab364f472df54be2, type: 3}
-  - {fileID: 2345354251500912345, guid: f144ff2bf08d47949878b94270aa6b1d, type: 3}
-  beepAudioClip: {fileID: 8300000, guid: 8175f50d0c6d3694ca4c64fb02f14d55, type: 3}
+  scanRadius: 6
 --- !u!50 &8800100000000000007
 Rigidbody2D:
   serializedVersion: 5

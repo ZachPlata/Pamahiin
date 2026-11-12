@@ -39,7 +39,11 @@ public class ThermometerItem : EquipmentItem
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
-        isPoweredOn.OnValueChanged += (oldVal, newVal) => UpdateVisuals();
+        isPoweredOn.OnValueChanged += (oldVal, newVal) =>
+        {
+            if (oldVal != newVal) GameAudioManager.PlayFlashlightClick(transform.position);
+            UpdateVisuals();
+        };
         UpdateVisuals();
     }
 

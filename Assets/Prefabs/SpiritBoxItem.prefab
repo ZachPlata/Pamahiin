@@ -57,7 +57,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 1.1583, y: 2.9502, z: 0}
-  m_LocalScale: {x: 0.008568717, y: 0.008568717, z: 0.008568717}
+  m_LocalScale: {x: 0.006, y: 0.006, z: 0.006}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -111,7 +111,7 @@ SpriteRenderer:
   m_SortingLayer: 1
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 5832541078678791871, guid: 72dc6ff5f5a5da246a90ffda9d565f97, type: 3}
+  m_Sprite: {fileID: -4931896247934457251, guid: ab964d69b04d531499df68d7d747c27b, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -131,17 +131,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 8800300000000000001}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eca7314cfab399848a048231ab3f383f, type: 3}
+  m_Script: {fileID: 11500000, guid: 4da497d54cfe769429ddce84c076e434, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpiritBoxItem
-  ShowTopMostFoldoutHeaderGroup: 1
   itemName: Spirit Box
-  responseRadius: 3
-  offSprite: {fileID: 5832541078678791871, guid: 72dc6ff5f5a5da246a90ffda9d565f97, type: 3}
-  staticSprite: {fileID: -1832959656649744731, guid: 17f8d388d0681f94b986e54b14b338a0, type: 3}
-  responseSprite: {fileID: 2875946095179923514, guid: 95186c45163cb554084fa839317a40a9, type: 3}
-  staticAudioClip: {fileID: 8300000, guid: 4f13bf26bd1bf7044a62ba464ceba25c, type: 3}
-  ghostResponseAudioClip: {fileID: 8300000, guid: e5f2a2a8c28c149419cd504124d57c5e, type: 3}
+  activatedSprite: {fileID: 971049136066107825, guid: 871ce9efe5bd44349b91ef0514fc4dce, type: 3}
+  deactivatedSprite: {fileID: -4931896247934457251, guid: ab964d69b04d531499df68d7d747c27b, type: 3}
 --- !u!50 &8800300000000000007
 Rigidbody2D:
   serializedVersion: 5

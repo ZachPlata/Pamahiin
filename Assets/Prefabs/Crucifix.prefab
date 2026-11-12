@@ -29,7 +29,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0.7071068, w: 0.7071068}
   m_LocalPosition: {x: 1.157, y: 3.1711, z: 0}
-  m_LocalScale: {x: 0.039550498, y: 0.039550498, z: 0.039550498}
+  m_LocalScale: {x: 0.006, y: 0.006, z: 0.006}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -52,7 +52,7 @@ MonoBehaviour:
   Ownership: 1
   AlwaysReplicateAsRoot: 0
   SynchronizeTransform: 1
-  m_InScenePlaced: 1
+  m_InScenePlaced: 0
   ActiveSceneSynchronization: 0
   SceneMigrationSynchronization: 0
   SpawnWithObservers: 1
@@ -73,10 +73,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CrucifixItem
   ShowTopMostFoldoutHeaderGroup: 1
-  itemName: Equipment
+  itemName: Crucifix
   blockRadius: 3
-  normalSprite: {fileID: 3253179991209410550, guid: 9e2d3f7f38f888e4380ea7f3f75fec88, type: 3}
-  burnedSprite: {fileID: 3714604012407003233, guid: a00659a0f7f8a1649871804a770a75b2, type: 3}
+  normalSprite: {fileID: 5943631175392605505, guid: 255647dcb85305e4c9e57858cff415b2, type: 3}
+  burnedSprite: {fileID: 792701828351416493, guid: 373a0387bbc3d2343b0d45857d9a9946, type: 3}
 --- !u!212 &1357475140720177329
 SpriteRenderer:
   serializedVersion: 3

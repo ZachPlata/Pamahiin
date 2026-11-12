@@ -24,6 +24,7 @@ public class SanityPillsItem : EquipmentItem
         EnsureProperCollider();
 
         audioSource = GetComponent<AudioSource>();
+        if (consumeAudioClip == null) consumeAudioClip = GameAudioManager.GetClip("sanity_pills");
     }
 
     private void EnsureProperCollider()
