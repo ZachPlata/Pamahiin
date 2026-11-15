@@ -365,7 +365,7 @@
 
                         <ui:Label text="Purchase ghost hunting gear to spawn inside the van:" class="instruction-text lobby-tight-instruction" />
 
-                        <ui:ScrollView name="loadout-shop-list" class="loadout-shop-scroll" />
+                        <ui:ScrollView name="loadout-shop-list" class="loadout-shop-scroll" vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

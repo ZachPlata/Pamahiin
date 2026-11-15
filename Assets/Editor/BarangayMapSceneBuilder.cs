@@ -1050,6 +1050,13 @@ public static class BarangayMapSceneBuilder
         var tpDown = downStair.AddComponent<StairTeleporter>();
         tpUp.Configure(tpDown, upSpawn, "Basement");
         tpDown.Configure(tpUp, downSpawn, "Main Floor");
+        tpUp.EnsureMidSpriteBackupNode();
+        tpDown.EnsureMidSpriteBackupNode();
+
+        Transform upMid = upStair.transform.Find("MidStairTeleporterNode");
+        if (upMid != null) upMid.gameObject.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
+        Transform downMid = downStair.transform.Find("MidStairTeleporterNode");
+        if (downMid != null) downMid.gameObject.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
     }
 
     private static void BuildHideZones(Transform houseRoot, Transform basementRoot)

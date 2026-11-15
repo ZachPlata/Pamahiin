@@ -60,6 +60,12 @@ public class DeveloperConsoleManager : MonoBehaviour
         currencyBalanceLabel = root.Q<Label>("CurrencyBalanceLabel");
         currencyAmountInput = root.Q<TextField>("CurrencyAmountInput");
 
+        isConsoleOpen = false;
+        if (container != null)
+        {
+            container.style.display = DisplayStyle.None;
+        }
+
         if (currencyAmountInput != null)
         {
             currencyAmountInput.RegisterValueChangedCallback(evt =>

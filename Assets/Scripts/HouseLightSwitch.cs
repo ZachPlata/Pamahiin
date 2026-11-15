@@ -25,6 +25,12 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public bool IsOn => isLightOn.Value;
+    public bool IsEffectivelyOn => isLightOn.Value && HasFusePower();
+
+    private static bool HasFusePower()
+    {
+        return FuseBox.Instance == null || FuseBox.Instance.IsEnabled;
+    }
 
     private void Awake()
     {
@@ -33,20 +39,46 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     private void OnEnable()
     {
+        FuseBox.OnPowerStateChanged += HandleFusePowerChanged;
         UpdateIndicatorLightScale();
-        UpdateIndicatorLightVisual(isLightOn.Value);
+        UpdateIndicatorLightVisual(IsEffectivelyOn);
+    }
+
+    private void OnDisable()
+    {
+        FuseBox.OnPowerStateChanged -= HandleFusePowerChanged;
     }
 
     public override void OnNetworkSpawn()
     {
         EnsureSwitchSetup();
 
-        isLightOn.OnValueChanged += (oldVal, newVal) =>
-        {
-            if (oldVal != newVal) GameAudioManager.PlayLightSwitch(transform.position);
-            ApplyLightState(newVal);
-        };
-        ApplyLightState(isLightOn.Value);
+        isLightOn.OnValueChanged += HandleSwitchStateChanged;
+        ApplyLightState(IsEffectivelyOn);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        isLightOn.OnValueChanged -= HandleSwitchStateChanged;
+    }
+
+    private void HandleSwitchStateChanged(bool oldVal, bool newVal)
+    {
+        if (oldVal != newVal) GameAudioManager.PlayLightSwitch(transform.position);
+        ApplyLightState(IsEffectivelyOn);
+    }
+
+    private void HandleFusePowerChanged(bool hasPower)
+    {
+        ApplyLightState(isLightOn.Value && hasPower);
+    }
+
+    /// <summary>
+    /// Re-evaluates whether controlled lights should emit based on switch status and fuse box power.
+    /// </summary>
+    public void RefreshLightState()
+    {
+        ApplyLightState(IsEffectivelyOn);
     }
 
     /// <summary>
@@ -131,7 +163,7 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
         indicatorLight.enabled = true;
 
         UpdateIndicatorLightScale();
-        UpdateIndicatorLightVisual(isLightOn.Value);
+        UpdateIndicatorLightVisual(IsEffectivelyOn);
     }
 
     private void UpdateIndicatorLightScale()
@@ -218,11 +250,11 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     /// <summary>
     /// Triggers a flicker effect on this light during a ghost hunt.
-    /// Only flickers lights that are currently ON.
+    /// Only flickers lights that are currently ON and powered.
     /// </summary>
     public void HuntFlicker()
     {
-        if (!isLightOn.Value) return;
+        if (!IsEffectivelyOn) return;
         FlickerEffect(0.5f);
     }
 
@@ -281,7 +313,7 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     private System.Collections.IEnumerator FlickerRoutine(float duration)
     {
         float timer = 0f;
-        while (timer < duration)
+        while (timer < duration && IsEffectivelyOn)
         {
             // Rapidly toggle lights locally without affecting the networked state
             bool randomState = Random.value > 0.5f;
@@ -294,7 +326,8 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
             timer += 0.1f; // Rough estimation to save performance
         }
         
-        // Restore actual state
-        ApplyLightState(isLightOn.Value);
+        // Restore actual effective state
+        ApplyLightState(IsEffectivelyOn);
+        currentFlickerRoutine = null;
     }
 }

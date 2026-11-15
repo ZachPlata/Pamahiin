@@ -142,6 +142,13 @@
     background-color: var(--pm-bg-void);
     border-width: 2px;
     border-color: var(--pm-border-brass);
+    -unity-background-image-tint-color: var(--pm-border-brass-hi);
+}
+
+.unity-toggle:checked .unity-toggle__checkmark,
+.unity-toggle__input:checked .unity-toggle__checkmark {
+    border-color: var(--pm-border-brass-hi);
+    -unity-background-image-tint-color: var(--pm-border-brass-hi);
 }
 
 .unity-scroller--vertical {

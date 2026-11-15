@@ -34,9 +34,9 @@
 .journal-tab {
     background-color: rgb(75, 55, 35);
     color: rgb(215, 195, 160);
-    font-size: 8px;
+    font-size: 7px;
     -unity-font-style: normal;
-    padding: 7px 9px;
+    padding: 6px 8px;
     border-radius: 0px;
     border-top-left-radius: 0px;
     border-top-right-radius: 0px;
@@ -116,23 +116,24 @@
 
 /* ================= TYPOGRAPHY ================= */
 .page-title {
-    font-size: 24px;
+    font-size: 15px;
     color: rgb(45, 35, 25);
     -unity-font-style: normal;
+    white-space: normal;
     margin-bottom: 8px;
     -unity-text-align: middle-center;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
     border-bottom-width: 1px;
     border-bottom-color: rgb(180, 160, 130);
     padding-bottom: 6px;
 }
 
 .instruction-text {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(95, 80, 65);
     -unity-font-style: normal;
     white-space: normal;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
     -unity-text-align: middle-center;
 }
 
@@ -247,7 +248,7 @@
     border-right-color: rgb(146, 124, 96);
     border-bottom-color: rgb(146, 124, 96);
     border-radius: 0px;
-    padding: 8px 14px;
+    padding: 8px 12px;
     margin-bottom: 6px;
     transition-duration: 0.08s;
 }
@@ -264,12 +265,16 @@
     font-size: 8px;
     color: rgb(45, 35, 25);
     -unity-font-style: normal;
+    white-space: normal;
+    flex-shrink: 1;
 }
 
 .toc-item-page {
-    font-size: 9px;
+    font-size: 8px;
     color: rgb(130, 60, 40);
     -unity-font-style: normal;
+    flex-shrink: 0;
+    margin-left: 6px;
 }
 
 .protocol-box {
@@ -777,16 +782,45 @@
 /* ================= SPREAD 6: EVIDENCE & DEDUCTION ================= */
 .evidence-list {
     flex-grow: 1;
+    justify-content: flex-start;
+    padding-top: 6px;
 }
 
 .evidence-toggle {
-    margin-bottom: 14px;
-    font-size: 10px;
-    color: rgb(50, 40, 30);
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background-color: rgba(215, 200, 175, 0.58);
+    border-width: 1px;
+    border-color: rgb(175, 155, 125);
+    font-size: 11px;
+    color: rgb(45, 35, 25);
+    align-items: center;
+}
+
+.evidence-toggle:hover {
+    background-color: rgba(230, 215, 185, 0.85);
+    border-color: rgb(140, 105, 65);
 }
 
 .evidence-toggle > .unity-toggle__label {
-    min-width: 200px;
+    min-width: 260px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    -unity-text-align: middle-left;
+}
+
+.evidence-toggle .unity-toggle__checkmark {
+    width: 22px;
+    height: 22px;
+    margin-right: 4px;
+    border-color: rgb(166, 132, 74);
+    -unity-background-image-tint-color: rgb(224, 191, 118);
+}
+
+.evidence-toggle:checked .unity-toggle__checkmark,
+.evidence-toggle .unity-toggle__input:checked .unity-toggle__checkmark {
+    border-color: rgb(224, 191, 118);
+    -unity-background-image-tint-color: rgb(224, 191, 118);
 }
 
 .deduction-tight-instruction {
@@ -797,6 +831,7 @@
 .deduction-status-text {
     margin-top: 8px;
     margin-bottom: 0;
+    font-size: 9px;
     color: rgb(120, 45, 35);
     -unity-font-style: normal;
 }
@@ -810,8 +845,8 @@
 .close-button {
     background-color: rgb(100, 90, 80);
     color: white;
-    font-size: 10px;
-    padding: 8px 24px;
+    font-size: 9px;
+    padding: 7px 18px;
     border-radius: 0px;
     margin-top: 8px;
 }
@@ -848,9 +883,9 @@
     flex-shrink: 0;
     background-color: rgb(210, 200, 180);
     color: rgb(50, 40, 30);
-    font-size: 9px;
+    font-size: 8px;
     -unity-font-style: normal;
-    padding: 6px 8px;
+    padding: 6px 6px;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(100, 80, 50);
@@ -911,19 +946,20 @@
     border-color: rgb(70, 50, 30);
     border-bottom-left-radius: 0px;
     border-bottom-right-radius: 0px;
-    padding: 8px 18px;
+    padding: 7px 14px;
     width: 960px;
 }
 
 .nav-button {
     background-color: rgb(90, 65, 45);
     color: rgb(235, 220, 190);
-    font-size: 9px;
+    font-size: 8px;
     -unity-font-style: normal;
-    padding: 6px 14px;
+    padding: 5px 10px;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(130, 95, 65);
+    flex-shrink: 0;
     transition-duration: 0.15s;
 }
 
@@ -933,9 +969,12 @@
 }
 
 .page-indicator-label {
-    font-size: 10px;
+    font-size: 8px;
     color: rgb(220, 195, 150);
     -unity-font-style: normal;
+    -unity-text-align: middle-center;
+    flex-shrink: 1;
+    margin: 0 6px;
 }
 
 /* ================= SPREAD 9: LOBBY, MULTIPLAYER & EQUIPMENT LOADOUT ================= */
@@ -955,12 +994,12 @@
     border-width: 1px;
     border-color: rgb(175, 155, 125);
     border-radius: 0px;
-    padding: 8px 10px;
-    margin-bottom: 8px;
+    padding: 7px 9px;
+    margin-bottom: 6px;
 }
 
 .lobby-section-heading {
-    font-size: 9px;
+    font-size: 8px;
     color: rgb(85, 45, 25);
     -unity-font-style: normal;
     margin-bottom: 4px;
@@ -975,9 +1014,11 @@
 .lobby-small-btn {
     background-color: rgb(95, 70, 45);
     color: rgb(245, 235, 210);
-    font-size: 9px;
+    font-size: 8px;
     -unity-font-style: normal;
-    padding: 4px 10px;
+    padding: 4px 8px;
+    margin: 0;
+    flex-shrink: 0;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(65, 45, 30);
@@ -988,11 +1029,15 @@
 }
 
 .lobby-map-label {
-    font-size: 9px;
+    font-size: 8px;
     color: rgb(40, 30, 20);
     -unity-font-style: normal;
     -unity-text-align: middle-center;
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    white-space: normal;
+    padding: 0 6px;
 }
 
 .lobby-diff-row {
@@ -1004,11 +1049,13 @@
 .lobby-diff-btn {
     white-space: normal;
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
     background-color: rgb(210, 198, 175);
     color: rgb(55, 40, 25);
-    font-size: 8px;
+    font-size: 7px;
     -unity-font-style: normal;
-    padding: 5px 4px;
+    padding: 5px 3px;
     margin: 0 2px;
     border-radius: 0px;
     border-width: 1px;
@@ -1026,19 +1073,20 @@
 }
 
 .lobby-sub-note {
-    font-size: 8px;
+    font-size: 7px;
     color: rgb(90, 70, 50);
     -unity-font-style: normal;
     -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .lobby-action-btn {
     white-space: normal;
     background-color: rgb(70, 50, 35);
     color: rgb(245, 225, 185);
-    font-size: 9px;
+    font-size: 8px;
     -unity-font-style: normal;
-    padding: 6px 10px;
+    padding: 6px 8px;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(120, 90, 60);
@@ -1053,15 +1101,16 @@
 .lobby-party-code-badge {
     background-color: rgb(38, 30, 24);
     color: rgb(255, 215, 110);
-    font-size: 10px;
+    font-size: 8px;
     -unity-font-style: normal;
     -unity-text-align: middle-center;
-    padding: 5px 8px;
+    padding: 5px 6px;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(150, 115, 65);
     margin-bottom: 6px;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
+    white-space: normal;
 }
 
 .lobby-join-row {
@@ -1073,23 +1122,32 @@
 
 .lobby-code-input {
     flex-grow: 1;
-    font-size: 9px;
+    flex-shrink: 1;
+    min-width: 0;
+    font-size: 8px;
     color: rgb(35, 25, 15);
     margin-right: 6px;
 }
 
 .lobby-code-input > .unity-base-field__label {
-    min-width: 68px;
+    min-width: 78px;
+    font-size: 8px;
     color: rgb(65, 45, 30);
     -unity-font-style: normal;
+}
+
+.lobby-code-input > .unity-base-text-field__input {
+    font-size: 9px;
+    padding: 4px 6px;
 }
 
 .lobby-join-btn {
     background-color: rgb(50, 90, 55);
     color: white;
-    font-size: 9px;
+    font-size: 8px;
     -unity-font-style: normal;
-    padding: 5px 12px;
+    padding: 5px 10px;
+    flex-shrink: 0;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(35, 65, 40);
@@ -1100,24 +1158,26 @@
 }
 
 .lobby-players-label {
-    font-size: 8px;
+    font-size: 7px;
     color: rgb(45, 35, 25);
     -unity-font-style: normal;
+    white-space: normal;
     margin-top: 2px;
 }
 
 .lobby-status-label {
-    font-size: 8px;
+    font-size: 7px;
     color: rgb(110, 55, 30);
     -unity-font-style: normal;
+    white-space: normal;
 }
 
 .lobby-start-contract-btn {
     background-color: rgb(140, 35, 30);
     color: rgb(255, 240, 210);
-    font-size: 10px;
+    font-size: 9px;
     -unity-font-style: normal;
-    padding: 10px 16px;
+    padding: 9px 14px;
     border-radius: 0px;
     border-width: 2px;
     border-color: rgb(90, 20, 15);
@@ -1138,24 +1198,26 @@
     border-width: 1px;
     border-color: rgb(150, 115, 65);
     border-radius: 0px;
-    padding: 7px 12px;
-    margin-bottom: 6px;
+    padding: 6px 10px;
+    margin-bottom: 5px;
+    flex-shrink: 0;
 }
 
 .lobby-currency-label {
-    font-size: 10px;
+    font-size: 9px;
     color: rgb(135, 225, 125);
     -unity-font-style: normal;
 }
 
 .lobby-loadout-value-label {
-    font-size: 9px;
+    font-size: 8px;
     color: rgb(225, 205, 165);
     -unity-font-style: normal;
 }
 
 .lobby-tight-instruction {
     margin-bottom: 5px;
+    flex-shrink: 0;
 }
 
 .lobby-player-legend {
@@ -1163,6 +1225,7 @@
     flex-wrap: wrap;
     align-items: center;
     margin-bottom: 5px;
+    flex-shrink: 0;
 }
 
 .lobby-legend-pill {
@@ -1193,7 +1256,13 @@
 
 .loadout-shop-scroll {
     flex-grow: 1;
-    max-height: 382px;
+    flex-shrink: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+.loadout-shop-scroll .unity-scroll-view__content-container {
+    padding-right: 4px;
 }
 
 .loadout-item-row {
@@ -1204,34 +1273,43 @@
     border-width: 1px;
     border-color: rgb(180, 160, 130);
     border-radius: 0px;
-    padding: 5px 8px;
+    padding: 6px 8px;
     margin-bottom: 4px;
+    flex-shrink: 0;
 }
 
 .loadout-item-info {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: 6px;
 }
 
 .loadout-item-title {
-    font-size: 9px;
+    font-size: 8px;
     color: rgb(45, 32, 20);
     -unity-font-style: normal;
+    white-space: normal;
+    margin-bottom: 2px;
 }
 
 .loadout-item-sub {
-    font-size: 8px;
+    font-size: 7px;
     color: rgb(100, 80, 60);
+    white-space: normal;
 }
 
 .loadout-item-controls {
     flex-direction: row;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .loadout-contrib-row {
-    flex-direction: row;
-    align-items: center;
-    margin-right: 4px;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    margin-right: 6px;
 }
 
 .loadout-contrib-pill {
@@ -1240,8 +1318,9 @@
     background-color: rgba(36, 28, 22, 0.92);
     border-width: 1px;
     border-radius: 0px;
-    padding: 1px 5px;
-    margin-right: 3px;
+    padding: 1px 4px;
+    margin-right: 0;
+    margin-bottom: 2px;
 }
 
 .loadout-contrib-dot {
@@ -1260,10 +1339,10 @@
 }
 
 .loadout-qty-label {
-    font-size: 9px;
+    font-size: 8px;
     color: rgb(45, 32, 20);
     -unity-font-style: normal;
-    min-width: 44px;
+    min-width: 40px;
     -unity-text-align: middle-center;
 }
 
@@ -1272,14 +1351,33 @@
     color: white;
     font-size: 9px;
     -unity-font-style: normal;
-    width: 26px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
     border-radius: 0px;
     border-width: 1px;
     border-color: rgb(65, 45, 30);
     margin: 0 2px;
+    -unity-text-align: middle-center;
 }
 
 .loadout-qty-btn:hover {
     background-color: rgb(130, 95, 60);
+}
+
+/* Crisp compact scrollbars inside journal */
+.journal-container .unity-scroller--vertical {
+    width: 12px;
+}
+
+.journal-container .unity-scroller__low-button,
+.journal-container .unity-scroller__high-button {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    margin: 0;
+}
+
+.journal-container .unity-scroller__slider .unity-base-slider__dragger {
+    width: 10px;
 }
