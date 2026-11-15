@@ -194,16 +194,26 @@
     height: 100%;
     background-image: url('project://database/Assets/UI/TruckDashboard/cctv_overlay.png');
     -unity-background-scale-mode: stretch-to-fill;
-    opacity: 0.75;
+    opacity: 0.32;
 }
 
 .control-button {
     margin-top: 10px;
+    margin-left: 5px;
+    margin-right: 5px;
     background-color: rgb(50, 50, 50);
     color: white;
     padding: 6px 14px;
     font-size: 14px;
     border-radius: 3px;
+}
+
+.control-button:hover {
+    background-color: rgb(75, 75, 75);
+}
+
+.control-button:disabled {
+    opacity: 0.45;
 }
 
 .btn-nv-active {

@@ -117,8 +117,8 @@ public class SpiritBoxItem : EquipmentItem
         if (audioSource == null)
         {
             audioSource = gameObject.AddComponent<AudioSource>();
-            ConfigureAudioSource(audioSource);
         }
+        ConfigureAudioSource(audioSource);
 
         // Dedicated looping static audio source
         if (staticAudioSource == null)
@@ -131,9 +131,9 @@ public class SpiritBoxItem : EquipmentItem
             else
             {
                 staticAudioSource = gameObject.AddComponent<AudioSource>();
-                ConfigureAudioSource(staticAudioSource);
             }
         }
+        ConfigureAudioSource(staticAudioSource);
         staticAudioSource.loop = true;
         staticAudioSource.playOnAwake = false;
         staticAudioSource.volume = staticAudioVolume;
@@ -148,10 +148,7 @@ public class SpiritBoxItem : EquipmentItem
 
     private void ConfigureAudioSource(AudioSource src)
     {
-        src.spatialBlend = 0.8f; // Spatialized world audio so nearby teammates hear it
-        src.minDistance = 2f;
-        src.maxDistance = 15f;
-        src.rolloffMode = AudioRolloffMode.Linear;
+        GameAudioManager.ConfigureProximityAudioSource(src, 0.45f, 2.8f, 1.0f);
         src.playOnAwake = false;
     }
 
@@ -174,13 +171,24 @@ public class SpiritBoxItem : EquipmentItem
         }
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
         UpdateStaticAudio();
 
         if (IsHeldByLocalPlayer)
         {
             CloseLocalDialogue();
+        }
+    }
+
+    protected override void Update()
+    {
+        base.Update();
+        if (staticAudioSource != null && IsPoweredOn && staticAudioSource.isPlaying)
+        {
+            float floorMult = GameAudioManager.GetFloorAttenuation(transform.position, 0f);
+            staticAudioSource.volume = GameAudioManager.GetEffectiveSfxVolume(staticAudioVolume * floorMult);
         }
     }
 
@@ -196,7 +204,8 @@ public class SpiritBoxItem : EquipmentItem
                 staticAudioSource.clip = radioStaticAudio;
             }
             staticAudioSource.loop = true;
-            staticAudioSource.volume = staticAudioVolume;
+            float floorMult = GameAudioManager.GetFloorAttenuation(transform.position, 0f);
+            staticAudioSource.volume = GameAudioManager.GetEffectiveSfxVolume(staticAudioVolume * floorMult);
             if (!staticAudioSource.isPlaying)
             {
                 staticAudioSource.Play();
@@ -228,14 +237,7 @@ public class SpiritBoxItem : EquipmentItem
         {
             if (newVal)
             {
-                if (IsInsideGhostRoom())
-                {
-                    OpenLocalDialogue();
-                }
-                else
-                {
-                    CloseLocalDialogue();
-                }
+                OpenLocalDialogue();
             }
             else
             {
@@ -247,20 +249,14 @@ public class SpiritBoxItem : EquipmentItem
     /// <summary>
     /// Left Click toggle when held in hand.
     /// Turns on the Spirit Box (opens dialogue), or turns it off (cancels and closes dialogue).
-    /// Strictly only opens dialogue when inside the GhostRoomMarker.
+    /// Can be toggled anywhere; ghost responses still require being in the ghost room.
     /// </summary>
     public override void UsePrimary()
     {
         if (!IsPoweredOn)
         {
-            if (!IsInsideGhostRoom())
-            {
-                Debug.Log("[SpiritBoxItem] Location check failed: Spirit Box can only be used inside the Ghost Room.");
-                return;
-            }
-
-            // Power ON
-            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            // Power ON (allowed anywhere)
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
             {
                 TogglePowerRpc();
             }
@@ -268,6 +264,7 @@ public class SpiritBoxItem : EquipmentItem
             {
                 localFallbackPower = true;
                 UpdateVisuals();
+                UpdateStaticAudio();
             }
             OpenLocalDialogue();
         }
@@ -283,7 +280,7 @@ public class SpiritBoxItem : EquipmentItem
     /// </summary>
     public void TurnOffAndCancel()
     {
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
         {
             SetPowerRpc(false);
         }
@@ -310,12 +307,6 @@ public class SpiritBoxItem : EquipmentItem
 
     public void OpenLocalDialogue()
     {
-        if (!IsInsideGhostRoom())
-        {
-            Debug.Log("[SpiritBoxItem] Cannot open dialogue: Spirit Box is not inside the GhostRoomMarker bounds.");
-            return;
-        }
-
         EnsureDialogueUI();
         if (SpiritBoxDialogueUI.Instance != null)
         {
@@ -361,7 +352,7 @@ public class SpiritBoxItem : EquipmentItem
     {
         if (questionIndex < 0 || questionIndex >= 5) return;
 
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
         {
             AskQuestionRpc(questionIndex);
         }
@@ -399,7 +390,7 @@ public class SpiritBoxItem : EquipmentItem
             return false;
         }
 
-        // 2. Strict location check: strictly inside the GhostRoomMarker bounds
+        // 2. Responses only come when inside the activated GhostRoomMarker bounds
         if (!IsInsideGhostRoom())
         {
             return false;
@@ -416,7 +407,11 @@ public class SpiritBoxItem : EquipmentItem
             AudioClip clip = GetResponseClip(questionIndex);
             if (clip != null)
             {
-                audioSource.PlayOneShot(clip);
+                float floorMult = GameAudioManager.GetFloorAttenuation(transform.position, 0f);
+                if (floorMult > 0.01f)
+                {
+                    audioSource.PlayOneShot(clip, GameAudioManager.GetEffectiveSfxVolume(floorMult));
+                }
             }
         }
 

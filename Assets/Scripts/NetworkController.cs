@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEngine;
@@ -19,6 +20,9 @@ public class NetworkController : MonoBehaviour
     private const string PARTY_PREF_PREFIX = "Pamahiin_PartyCode_";
     private const string PARTY_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int LAN_DISCOVERY_PORT = 47777;
+    private const string MSG_LOADOUT_REQ = "Pamahiin_LoadoutReq";
+    private const string MSG_LOADOUT_SYNC = "Pamahiin_LoadoutSync";
+    private const string MSG_LOADOUT_ACK = "Pamahiin_LoadoutAck";
 
     private ushort activeHostPort = 7777;
     private UdpClient lanResponderUdp;
@@ -62,8 +66,15 @@ public class NetworkController : MonoBehaviour
         {
             if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
             {
-                NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= OnSceneLoaded;
-                NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += OnSceneLoaded;
+                if (NetworkManager.Singleton.SceneManager != null)
+                {
+                    NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= OnSceneLoaded;
+                    NetworkManager.Singleton.SceneManager.OnLoadEventCompleted += OnSceneLoaded;
+                    NetworkManager.Singleton.SceneManager.OnSynchronizeComplete -= OnClientSynchronizeComplete;
+                    NetworkManager.Singleton.SceneManager.OnSynchronizeComplete += OnClientSynchronizeComplete;
+                }
+                RegisterServerLobbyMessagingHandlers();
+                ProgressionAndLoadoutManager.EnsureInstance().InitializeServerLobbyLedger();
             }
             OnPartyStateChanged?.Invoke();
         };
@@ -74,18 +85,51 @@ public class NetworkController : MonoBehaviour
 
     private void OnClientConnected(ulong clientId)
     {
+        var nm = NetworkManager.Singleton;
+        if (nm != null && nm.IsListening)
+        {
+            if (nm.IsServer)
+            {
+                ProgressionAndLoadoutManager.EnsureInstance().ServerOnClientConnected(clientId);
+                BroadcastLobbyLoadoutSync();
+            }
+            else if (clientId == nm.LocalClientId)
+            {
+                RegisterClientLobbyMessagingHandlers();
+                ProgressionAndLoadoutManager.EnsureInstance().OnJoinedMultiplayerLobbyAsClient();
+                SendLobbyLoadoutRequestToServer(0, string.Empty);
+            }
+        }
         OnPartyStateChanged?.Invoke();
     }
 
     private void OnClientDisconnected(ulong clientId)
     {
+        var nm = NetworkManager.Singleton;
+        if (nm != null)
+        {
+            if (nm.IsServer)
+            {
+                ProgressionAndLoadoutManager.Instance?.ServerOnClientDisconnected(clientId);
+                if (!nm.ShutdownInProgress) BroadcastLobbyLoadoutSync();
+            }
+            else if (clientId == nm.LocalClientId)
+            {
+                ProgressionAndLoadoutManager.Instance?.OnLeftMultiplayerLobbyAsClient();
+            }
+        }
         OnPartyStateChanged?.Invoke();
     }
 
     private void OnSceneLoaded(string sceneName, LoadSceneMode loadSceneMode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
     {
-        if (sceneName == ProgressionAndLoadoutManager.GAME_MAP_SCENE_NAME)
+        if (ProgressionAndLoadoutManager.IsGameplayMapScene(sceneName))
         {
+            if (LoadingScreenManager.IsLoadingVisible)
+            {
+                LoadingScreenManager.Instance.SetProgress(0.72f, "Deploying van equipment...");
+            }
+
             foreach (var clientId in clientsCompleted)
             {
                 if (NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
@@ -96,19 +140,29 @@ public class NetworkController : MonoBehaviour
                         var pc = client.PlayerObject.GetComponent<PlayerController>();
                         if (pc != null)
                         {
-                            pc.TeleportTo(spawnPos);
+                            pc.ServerTeleportTo(spawnPos);
                             pc.RestoreSanity(100f);
                         }
-                        else
+                        else if (client.PlayerObject.IsOwner)
                         {
                             client.PlayerObject.transform.position = spawnPos;
                         }
                     }
                 }
             }
+
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                StartServerEquipmentSpawnRoutine();
+            }
         }
         else if (sceneName == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME)
         {
+            if (LoadingScreenManager.IsLoadingVisible)
+            {
+                LoadingScreenManager.Instance.SetProgress(0.72f, "Restoring Safe House armory...");
+            }
+
             var spawnPoint = UnityEngine.Object.FindAnyObjectByType<PlayerSpawnPoint>();
             Vector3 basePos = spawnPoint != null ? spawnPoint.transform.position : new Vector3(0f, -0.35f, 0f);
 
@@ -123,16 +177,26 @@ public class NetworkController : MonoBehaviour
                         var pc = client.PlayerObject.GetComponent<PlayerController>();
                         if (pc != null)
                         {
-                            pc.TeleportTo(spawnPos);
+                            if (client.PlayerObject.IsOwner)
+                            {
+                                pc.enabled = true;
+                            }
+                            pc.ServerTeleportTo(spawnPos);
                             pc.RestoreSanity(100f);
                         }
-                        else
+                        else if (client.PlayerObject.IsOwner)
                         {
                             client.PlayerObject.transform.position = spawnPos;
                         }
                         index++;
                     }
                 }
+            }
+
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                BroadcastLobbyLoadoutSync();
+                StartServerEquipmentSpawnRoutine();
             }
         }
     }
@@ -315,7 +379,7 @@ public class NetworkController : MonoBehaviour
         }
 
         SetConnectionAddress(targetIp, targetPort);
-        bool started = NetworkManager.Singleton != null && NetworkManager.Singleton.StartClient();
+        bool started = StartClientAndRegisterLobbyHandlers();
         LastStatusMessage = started
             ? $"Connecting to Party [{code}] ({targetIp}:{targetPort})..."
             : $"Failed to connect to Party [{code}].";
@@ -332,19 +396,61 @@ public class NetworkController : MonoBehaviour
 
         string targetIp = string.IsNullOrEmpty(ipInput) ? defaultIpAddress : ipInput;
         SetConnectionAddress(targetIp, defaultPort);
-        NetworkManager.Singleton.StartClient();
+        StartClientAndRegisterLobbyHandlers();
+    }
+
+    private bool StartClientAndRegisterLobbyHandlers()
+    {
+        if (NetworkManager.Singleton == null) return false;
+        bool started = NetworkManager.Singleton.StartClient();
+        if (started)
+        {
+            RegisterClientLobbyMessagingHandlers();
+        }
+        return started;
     }
 
     public void DisconnectAndReturnToMenu()
     {
+        isTransitioningToGameScene = false;
+        if (activeMatchIntermissionRoutine != null)
+        {
+            StopCoroutine(activeMatchIntermissionRoutine);
+            activeMatchIntermissionRoutine = null;
+        }
+        if (activeClientIntermissionFailsafeRoutine != null)
+        {
+            StopCoroutine(activeClientIntermissionFailsafeRoutine);
+            activeClientIntermissionFailsafeRoutine = null;
+        }
+        EndGameRevealController.ClearPendingReveal();
+        LoadingScreenManager.Instance?.HideIntermission(0.15f);
         StopLanResponder();
         CurrentPartyCode = string.Empty;
         IsMultiplayerPartyOpen = false;
 
+        string activeScene = SceneManager.GetActiveScene().name;
+        bool inGameplayMatch = ProgressionAndLoadoutManager.IsGameplayMapScene(activeScene);
+
         if (NetworkManager.Singleton != null)
         {
+            if (inGameplayMatch && (NetworkManager.Singleton.IsServer || !NetworkManager.Singleton.IsListening))
+            {
+                // Ending a match early via Pause -> End Game consumes/clears the match gear so P2 items never persist into P1's save
+                ProgressionAndLoadoutManager.Instance?.EnsureMatchLoadoutConsumedOnExit();
+            }
+
+            if (NetworkManager.Singleton.IsClient && !NetworkManager.Singleton.IsServer)
+            {
+                ProgressionAndLoadoutManager.Instance?.OnLeftMultiplayerLobbyAsClient();
+            }
             NetworkManager.Singleton.Shutdown();
         }
+        else if (inGameplayMatch)
+        {
+            ProgressionAndLoadoutManager.Instance?.EnsureMatchLoadoutConsumedOnExit();
+        }
+
         SceneManager.LoadScene(ProgressionAndLoadoutManager.MAIN_MENU_SCENE_NAME);
     }
 
@@ -352,10 +458,15 @@ public class NetworkController : MonoBehaviour
     {
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
         {
+            ProgressionAndLoadoutManager.Instance?.EnsureMatchLoadoutConsumedOnExit();
             LoadLobbyScene();
         }
         else
         {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+            {
+                ProgressionAndLoadoutManager.Instance?.EnsureMatchLoadoutConsumedOnExit();
+            }
             EnterLobbyMap();
         }
     }
@@ -370,6 +481,29 @@ public class NetworkController : MonoBehaviour
 
     public void LoadLobbyScene()
     {
+        isTransitioningToGameScene = false;
+        if (activeMatchIntermissionRoutine != null)
+        {
+            StopCoroutine(activeMatchIntermissionRoutine);
+            activeMatchIntermissionRoutine = null;
+        }
+
+        if (EndGameRevealController.HasPendingReveal)
+        {
+            if (LoadingScreenManager.IsLoadingVisible)
+            {
+                LoadingScreenManager.Instance.SetProgress(0.58f, "Returning to Safe House...");
+            }
+        }
+        else
+        {
+            LoadingScreenManager.Instance?.HideIntermission(0.2f);
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        {
+            TruckGearSpawner.CleanupAllGhostOrbs();
+        }
         TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
 
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
@@ -379,21 +513,125 @@ public class NetworkController : MonoBehaviour
         else
         {
             SceneManager.LoadScene(ProgressionAndLoadoutManager.LOBBY_SCENE_NAME);
+            if (LoadingScreenManager.IsLoadingVisible)
+            {
+                StartCoroutine(OfflineWaitForEquipmentThenHideRoutine());
+            }
         }
     }
 
     public void LoadGameScene()
     {
-        TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
+        if (isTransitioningToGameScene) return;
 
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        bool isListening = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        if (isListening && !NetworkManager.Singleton.IsServer)
         {
-            string targetScene = ProgressionAndLoadoutManager.Instance != null
-                ? ProgressionAndLoadoutManager.Instance.GetSelectedSceneName()
-                : ProgressionAndLoadoutManager.GAME_MAP_SCENE_NAME;
+            return;
+        }
 
+        isTransitioningToGameScene = true;
+
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        string targetScene = mgr != null
+            ? mgr.GetSelectedSceneName()
+            : ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
+        string mapDisplayName = mgr != null
+            ? mgr.GetSelectedMapDisplayName()
+            : "Barangay San Nicolas — 6 Tanglewood Drive";
+        string difficultyName = mgr != null
+            ? mgr.SelectedDifficulty.ToString().ToUpperInvariant()
+            : "AMATEUR";
+
+        ShowMatchIntermissionOverlay(mapDisplayName, difficultyName);
+        if (isListening && NetworkManager.Singleton.IsServer)
+        {
+            BroadcastMatchLoadingIntermission(mapDisplayName, difficultyName);
+        }
+
+        if (activeMatchIntermissionRoutine != null)
+        {
+            StopCoroutine(activeMatchIntermissionRoutine);
+        }
+        activeMatchIntermissionRoutine = StartCoroutine(LoadGameSceneIntermissionRoutine(targetScene));
+    }
+
+    private void ShowMatchIntermissionOverlay(string mapDisplayName, string difficultyName)
+    {
+        var loadingMgr = LoadingScreenManager.EnsureInstance();
+        if (loadingMgr == null) return;
+
+        string subtitle = string.IsNullOrEmpty(difficultyName)
+            ? mapDisplayName
+            : $"{mapDisplayName}  •  {difficultyName}";
+        loadingMgr.ShowIntermission(
+            "TRAVELING TO INVESTIGATION SITE",
+            subtitle,
+            tag: "PAMAHIIN // FIELD DISPATCH");
+        loadingMgr.SetProgress(0.18f, "Preparing Jeepney dispatch & van manifest...");
+    }
+
+    private IEnumerator LoadGameSceneIntermissionRoutine(string targetScene)
+    {
+        var loadingMgr = LoadingScreenManager.Instance;
+        float minHold = 2.0f;
+        float elapsed = 0f;
+        while (elapsed < minHold)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            if (loadingMgr != null)
+            {
+                loadingMgr.SetProgress(
+                    Mathf.Lerp(0.18f, 0.45f, Mathf.Clamp01(elapsed / minHold)),
+                    "Loading Barangay transit route...");
+            }
+            yield return null;
+        }
+
+        TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
+        ProgressionAndLoadoutManager.Instance?.MarkMatchLoadoutActive();
+
+        if (loadingMgr != null)
+        {
+            loadingMgr.SetProgress(0.55f, "Entering investigation sector...");
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
+        {
             // NGO synchronized scene loading across all connected clients
             NetworkManager.Singleton.SceneManager.LoadScene(targetScene, LoadSceneMode.Single);
+        }
+        else
+        {
+            SceneManager.LoadScene(targetScene);
+            StartCoroutine(OfflineWaitForEquipmentThenHideRoutine());
+        }
+
+        activeMatchIntermissionRoutine = null;
+        isTransitioningToGameScene = false;
+    }
+
+    private IEnumerator OfflineWaitForEquipmentThenHideRoutine()
+    {
+        yield return null;
+        yield return null;
+
+        float elapsed = 0f;
+        while (elapsed < 3.0f)
+        {
+            if (TruckGearSpawner.Instance != null && TruckGearSpawner.Instance.HasSpawnedLoadout)
+            {
+                break;
+            }
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            LoadingScreenManager.Instance.SetProgress(1f, "Equipment manifest ready.");
+            yield return new WaitForSecondsRealtime(0.18f);
+            FinishLoadingIntermission("Equipment manifest ready.");
         }
     }
 
@@ -510,4 +748,557 @@ public class NetworkController : MonoBehaviour
         catch { }
         return null;
     }
+
+    #region Lightweight Lobby Loadout Sync Messaging
+
+    private const string MSG_VAN_GEAR_MANIFEST = "Pamahiin_VanGearManifest";
+    private const string MSG_VAN_GEAR_RESYNC = "Pamahiin_VanGearResync";
+    private const string MSG_MATCH_LOADING_INTERMISSION = "Pamahiin_MatchLoadingIntermission";
+
+    private Coroutine activeServerEquipmentSpawnRoutine;
+    private Coroutine activeClientGearVerifyRoutine;
+    private Coroutine activeClientFallbackCheckRoutine;
+    private Coroutine activeMatchIntermissionRoutine;
+    private Coroutine activeClientIntermissionFailsafeRoutine;
+    private bool hasReceivedVanManifestThisScene;
+    private bool isTransitioningToGameScene;
+
+    private void StartServerEquipmentSpawnRoutine()
+    {
+        if (activeServerEquipmentSpawnRoutine != null)
+        {
+            StopCoroutine(activeServerEquipmentSpawnRoutine);
+        }
+        activeServerEquipmentSpawnRoutine = StartCoroutine(SpawnSceneEquipmentWhenReadyRoutine());
+    }
+
+    private IEnumerator SpawnSceneEquipmentWhenReadyRoutine()
+    {
+        // Wait briefly past OnLoadEventCompleted so every client's SynchronizeSceneNetworkObjects and local hooks have settled.
+        yield return null;
+        yield return new WaitForEndOfFrame();
+
+        activeServerEquipmentSpawnRoutine = null;
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer)
+        {
+            FinishLoadingIntermission("Ready.");
+            yield break;
+        }
+
+        var spawner = TruckGearSpawner.EnsureSpawnerAndSpawnOnServer();
+        if (spawner != null)
+        {
+            BroadcastVanGearManifest();
+        }
+
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            LoadingScreenManager.Instance.SetProgress(1f, "Van equipment ready.");
+            yield return new WaitForSecondsRealtime(0.2f);
+            FinishLoadingIntermission("Van equipment ready.");
+        }
+    }
+
+    private void FinishLoadingIntermission(string statusText)
+    {
+        if (EndGameRevealController.HasPendingReveal &&
+            SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME)
+        {
+            EndGameRevealController.TryPresentPendingReveal();
+        }
+
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            LoadingScreenManager.Instance.SetProgress(1f, statusText);
+            LoadingScreenManager.Instance.HideIntermission(0.38f);
+        }
+    }
+
+    private void OnClientSynchronizeComplete(ulong clientId)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer || clientId == NetworkManager.ServerClientId) return;
+
+        if (TruckGearSpawner.Instance != null && TruckGearSpawner.Instance.HasSpawnedLoadout)
+        {
+            StartCoroutine(SendManifestToClientDelayedRoutine(clientId));
+        }
+    }
+
+    private IEnumerator SendManifestToClientDelayedRoutine(ulong clientId)
+    {
+        yield return null;
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer) yield break;
+        if (!nm.ConnectedClients.ContainsKey(clientId)) yield break;
+
+        SendVanGearManifestToClients(new[] { clientId });
+    }
+
+    private void RegisterServerLobbyMessagingHandlers()
+    {
+        var cm = NetworkManager.Singleton != null ? NetworkManager.Singleton.CustomMessagingManager : null;
+        if (cm == null) return;
+        cm.UnregisterNamedMessageHandler(MSG_LOADOUT_REQ);
+        cm.RegisterNamedMessageHandler(MSG_LOADOUT_REQ, OnLoadoutRequestReceived);
+        cm.UnregisterNamedMessageHandler(MSG_VAN_GEAR_RESYNC);
+        cm.RegisterNamedMessageHandler(MSG_VAN_GEAR_RESYNC, OnVanGearResyncReceived);
+    }
+
+    private void RegisterClientLobbyMessagingHandlers()
+    {
+        var nm = NetworkManager.Singleton;
+        var cm = nm != null ? nm.CustomMessagingManager : null;
+        if (cm != null)
+        {
+            cm.UnregisterNamedMessageHandler(MSG_LOADOUT_SYNC);
+            cm.RegisterNamedMessageHandler(MSG_LOADOUT_SYNC, OnLoadoutSyncReceived);
+            cm.UnregisterNamedMessageHandler(MSG_LOADOUT_ACK);
+            cm.RegisterNamedMessageHandler(MSG_LOADOUT_ACK, OnLoadoutAckReceived);
+            cm.UnregisterNamedMessageHandler(MSG_VAN_GEAR_MANIFEST);
+            cm.RegisterNamedMessageHandler(MSG_VAN_GEAR_MANIFEST, OnVanGearManifestReceived);
+            cm.UnregisterNamedMessageHandler(MSG_MATCH_LOADING_INTERMISSION);
+            cm.RegisterNamedMessageHandler(MSG_MATCH_LOADING_INTERMISSION, OnMatchLoadingIntermissionReceived);
+        }
+
+        if (nm != null && nm.SceneManager != null)
+        {
+            nm.SceneManager.OnSceneEvent -= OnClientNetworkSceneEvent;
+            nm.SceneManager.OnSceneEvent += OnClientNetworkSceneEvent;
+        }
+    }
+
+    private void BroadcastMatchLoadingIntermission(string mapDisplayName, string difficultyName)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer || nm.ShutdownInProgress || nm.CustomMessagingManager == null) return;
+
+        List<ulong> remoteClients = CollectRemoteClientIds(nm);
+        if (remoteClients.Count == 0) return;
+
+        using (var writer = new FastBufferWriter(256, Allocator.Temp, 2048))
+        {
+            writer.WriteValueSafe(mapDisplayName ?? string.Empty);
+            writer.WriteValueSafe(difficultyName ?? string.Empty);
+            nm.CustomMessagingManager.SendNamedMessage(MSG_MATCH_LOADING_INTERMISSION, remoteClients, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void OnMatchLoadingIntermissionReceived(ulong senderClientId, FastBufferReader reader)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer) return;
+
+        reader.ReadValueSafe(out string mapDisplayName);
+        reader.ReadValueSafe(out string difficultyName);
+        ShowMatchIntermissionOverlay(mapDisplayName, difficultyName);
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            LoadingScreenManager.Instance.SetProgress(0.28f, "Host initiated deployment...");
+        }
+
+        if (activeClientIntermissionFailsafeRoutine != null)
+        {
+            StopCoroutine(activeClientIntermissionFailsafeRoutine);
+        }
+        activeClientIntermissionFailsafeRoutine = StartCoroutine(ClientIntermissionFailsafeRoutine());
+    }
+
+    private IEnumerator ClientIntermissionFailsafeRoutine()
+    {
+        yield return new WaitForSecondsRealtime(12f);
+        activeClientIntermissionFailsafeRoutine = null;
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            FinishLoadingIntermission("Ready.");
+        }
+    }
+
+    private void OnClientNetworkSceneEvent(SceneEvent sceneEvent)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || nm.IsServer) return;
+        if (sceneEvent.ClientId != nm.LocalClientId) return;
+
+        if (sceneEvent.SceneEventType == SceneEventType.Load)
+        {
+            hasReceivedVanManifestThisScene = false;
+            if (activeClientGearVerifyRoutine != null) StopCoroutine(activeClientGearVerifyRoutine);
+            if (activeClientFallbackCheckRoutine != null) StopCoroutine(activeClientFallbackCheckRoutine);
+            if (LoadingScreenManager.IsLoadingVisible)
+            {
+                string loadMsg = EndGameRevealController.HasPendingReveal
+                    ? "Returning to Safe House Lobby..."
+                    : "Traveling to investigation site...";
+                LoadingScreenManager.Instance.SetProgress(0.55f, loadMsg);
+            }
+            return;
+        }
+
+        if (sceneEvent.SceneEventType == SceneEventType.LoadComplete ||
+            sceneEvent.SceneEventType == SceneEventType.SynchronizeComplete)
+        {
+            if (LoadingScreenManager.IsLoadingVisible)
+            {
+                string syncMsg = EndGameRevealController.HasPendingReveal
+                    ? "Restoring Safe House armory..."
+                    : "Synchronizing van equipment...";
+                LoadingScreenManager.Instance.SetProgress(0.80f, syncMsg);
+            }
+            if (activeClientFallbackCheckRoutine != null)
+            {
+                StopCoroutine(activeClientFallbackCheckRoutine);
+            }
+            activeClientFallbackCheckRoutine = StartCoroutine(ClientFallbackVanGearPresenceCheckRoutine());
+        }
+    }
+
+    private IEnumerator ClientFallbackVanGearPresenceCheckRoutine()
+    {
+        yield return new WaitForSecondsRealtime(0.9f);
+        activeClientFallbackCheckRoutine = null;
+
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || nm.IsServer) yield break;
+        if (hasReceivedVanManifestThisScene)
+        {
+            if (activeClientGearVerifyRoutine == null)
+            {
+                FinishLoadingIntermission("Van equipment ready.");
+            }
+            yield break;
+        }
+
+        string activeScene = SceneManager.GetActiveScene().name;
+        if (ProgressionAndLoadoutManager.IsGameplayMapScene(activeScene) ||
+            activeScene == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME)
+        {
+            // Ask server for the manifest if client somehow missed it or finished late
+            SendVanGearResyncRequest(Array.Empty<ulong>());
+        }
+
+        yield return new WaitForSecondsRealtime(0.8f);
+        string finalScene = SceneManager.GetActiveScene().name;
+        if (LoadingScreenManager.IsLoadingVisible &&
+            (ProgressionAndLoadoutManager.IsGameplayMapScene(finalScene) || finalScene == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME))
+        {
+            FinishLoadingIntermission("Arrival complete.");
+        }
+    }
+
+    public void SendLobbyLoadoutRequestToServer(byte op, string equipmentId)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsClient || nm.CustomMessagingManager == null) return;
+
+        using (var writer = new FastBufferWriter(128, Allocator.Temp, 1024))
+        {
+            writer.WriteValueSafe(op);
+            writer.WriteValueSafe(equipmentId ?? string.Empty);
+            nm.CustomMessagingManager.SendNamedMessage(MSG_LOADOUT_REQ, NetworkManager.ServerClientId, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    public void BroadcastLobbyLoadoutSync()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer) return;
+
+        List<ulong> remoteClients = CollectRemoteClientIds(nm);
+        SendLobbyLoadoutSyncToClients(remoteClients);
+    }
+
+    private static List<ulong> CollectRemoteClientIds(NetworkManager nm)
+    {
+        var remoteClients = new List<ulong>();
+        foreach (var cid in nm.ConnectedClientsIds)
+        {
+            if (cid != NetworkManager.ServerClientId)
+            {
+                remoteClients.Add(cid);
+            }
+        }
+        return remoteClients;
+    }
+
+    private void SendLobbyLoadoutSyncToClients(IReadOnlyList<ulong> targetClientIds)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer || nm.ShutdownInProgress || nm.CustomMessagingManager == null) return;
+        if (targetClientIds == null || targetClientIds.Count == 0) return;
+
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        using (var writer = new FastBufferWriter(512, Allocator.Temp, 4096))
+        {
+            mgr.WriteSyncSnapshot(writer);
+            nm.CustomMessagingManager.SendNamedMessage(MSG_LOADOUT_SYNC, targetClientIds, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void SendLoadoutAckToClient(ulong clientId, byte op, string equipmentId, bool approved)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer || nm.CustomMessagingManager == null) return;
+
+        using (var writer = new FastBufferWriter(128, Allocator.Temp, 1024))
+        {
+            writer.WriteValueSafe(op);
+            writer.WriteValueSafe(equipmentId ?? string.Empty);
+            writer.WriteValueSafe(approved);
+            nm.CustomMessagingManager.SendNamedMessage(MSG_LOADOUT_ACK, clientId, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void OnLoadoutRequestReceived(ulong senderClientId, FastBufferReader reader)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsServer) return;
+
+        reader.ReadValueSafe(out byte op);
+        reader.ReadValueSafe(out string equipmentId);
+
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        mgr.ServerOnClientConnected(senderClientId);
+
+        if (op == 0)
+        {
+            if (senderClientId != NetworkManager.ServerClientId)
+            {
+                SendLobbyLoadoutSyncToClients(new[] { senderClientId });
+            }
+            return;
+        }
+
+        if (op == 1)
+        {
+            bool approved = mgr.ServerProcessBuyRequest(senderClientId, equipmentId);
+            SendLoadoutAckToClient(senderClientId, op, equipmentId, approved);
+            BroadcastLobbyLoadoutSync();
+            return;
+        }
+
+        if (op == 2)
+        {
+            bool approved = mgr.ServerProcessRemoveRequest(senderClientId, equipmentId);
+            SendLoadoutAckToClient(senderClientId, op, equipmentId, approved);
+            BroadcastLobbyLoadoutSync();
+            return;
+        }
+
+        if (op == 3)
+        {
+            bool approved = mgr.ServerProcessReliefFlashlightRequest(senderClientId);
+            SendLoadoutAckToClient(senderClientId, op, equipmentId, approved);
+            BroadcastLobbyLoadoutSync();
+        }
+    }
+
+    private void OnLoadoutSyncReceived(ulong senderClientId, FastBufferReader reader)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer) return;
+        ProgressionAndLoadoutManager.EnsureInstance().ApplySyncSnapshot(reader);
+    }
+
+    private void OnLoadoutAckReceived(ulong senderClientId, FastBufferReader reader)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer) return;
+        reader.ReadValueSafe(out byte op);
+        reader.ReadValueSafe(out string equipmentId);
+        reader.ReadValueSafe(out bool approved);
+        ProgressionAndLoadoutManager.EnsureInstance().HandleClientPurchaseAck(op, equipmentId, approved);
+    }
+
+    private void BroadcastVanGearManifest()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer) return;
+
+        List<ulong> remoteClients = CollectRemoteClientIds(nm);
+        SendVanGearManifestToClients(remoteClients);
+    }
+
+    private void SendVanGearManifestToClients(IReadOnlyList<ulong> targetClientIds)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer || nm.ShutdownInProgress || nm.CustomMessagingManager == null) return;
+        if (targetClientIds == null || targetClientIds.Count == 0) return;
+
+        List<ulong> activeIds = TruckGearSpawner.GetActiveSpawnedEquipmentNetworkIds();
+        int cap = Mathf.Min(activeIds.Count, ushort.MaxValue);
+        using (var writer = new FastBufferWriter(64 + cap * 8, Allocator.Temp, 4096))
+        {
+            writer.WriteValueSafe((ushort)cap);
+            for (int i = 0; i < cap; i++)
+            {
+                writer.WriteValueSafe(activeIds[i]);
+            }
+            nm.CustomMessagingManager.SendNamedMessage(MSG_VAN_GEAR_MANIFEST, targetClientIds, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void OnVanGearManifestReceived(ulong senderClientId, FastBufferReader reader)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || nm.IsServer) return;
+
+        reader.ReadValueSafe(out ushort count);
+        ulong[] expectedIds = new ulong[count];
+        for (int i = 0; i < count; i++)
+        {
+            reader.ReadValueSafe(out expectedIds[i]);
+        }
+
+        hasReceivedVanManifestThisScene = true;
+        if (activeClientGearVerifyRoutine != null)
+        {
+            StopCoroutine(activeClientGearVerifyRoutine);
+        }
+        activeClientGearVerifyRoutine = StartCoroutine(VerifyClientVanGearRoutine(expectedIds));
+    }
+
+    private IEnumerator VerifyClientVanGearRoutine(ulong[] expectedIds)
+    {
+        if (expectedIds == null || expectedIds.Length == 0)
+        {
+            activeClientGearVerifyRoutine = null;
+            if (activeClientIntermissionFailsafeRoutine != null)
+            {
+                StopCoroutine(activeClientIntermissionFailsafeRoutine);
+                activeClientIntermissionFailsafeRoutine = null;
+            }
+            FinishLoadingIntermission("Van equipment ready.");
+            yield break;
+        }
+
+        float[] delays = { 0.25f, 0.75f };
+        for (int attempt = 0; attempt < delays.Length; attempt++)
+        {
+            yield return new WaitForSecondsRealtime(delays[attempt]);
+
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsListening || nm.IsServer || nm.SpawnManager == null)
+            {
+                activeClientGearVerifyRoutine = null;
+                yield break;
+            }
+
+            List<ulong> missing = CollectMissingNetworkObjectIds(nm, expectedIds);
+            if (missing.Count == 0)
+            {
+                activeClientGearVerifyRoutine = null;
+                if (activeClientIntermissionFailsafeRoutine != null)
+                {
+                    StopCoroutine(activeClientIntermissionFailsafeRoutine);
+                    activeClientIntermissionFailsafeRoutine = null;
+                }
+                FinishLoadingIntermission("Van equipment ready.");
+                yield break;
+            }
+
+            SendVanGearResyncRequest(missing.ToArray());
+        }
+
+        activeClientGearVerifyRoutine = null;
+        if (activeClientIntermissionFailsafeRoutine != null)
+        {
+            StopCoroutine(activeClientIntermissionFailsafeRoutine);
+            activeClientIntermissionFailsafeRoutine = null;
+        }
+        FinishLoadingIntermission("Arrival complete.");
+    }
+
+    private static List<ulong> CollectMissingNetworkObjectIds(NetworkManager nm, ulong[] expectedIds)
+    {
+        var missing = new List<ulong>();
+        for (int i = 0; i < expectedIds.Length; i++)
+        {
+            if (!nm.SpawnManager.SpawnedObjects.TryGetValue(expectedIds[i], out var obj) || obj == null)
+            {
+                missing.Add(expectedIds[i]);
+            }
+        }
+        return missing;
+    }
+
+    private void SendVanGearResyncRequest(ulong[] missingIds)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsClient || nm.CustomMessagingManager == null) return;
+
+        ushort count = (ushort)(missingIds != null ? Mathf.Min(missingIds.Length, ushort.MaxValue) : 0);
+        using (var writer = new FastBufferWriter(64 + count * 8, Allocator.Temp, 4096))
+        {
+            writer.WriteValueSafe(count);
+            for (int i = 0; i < count; i++)
+            {
+                writer.WriteValueSafe(missingIds[i]);
+            }
+            nm.CustomMessagingManager.SendNamedMessage(MSG_VAN_GEAR_RESYNC, NetworkManager.ServerClientId, writer, NetworkDelivery.ReliableSequenced);
+        }
+    }
+
+    private void OnVanGearResyncReceived(ulong senderClientId, FastBufferReader reader)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer) return;
+
+        reader.ReadValueSafe(out ushort missingCount);
+        if (missingCount == 0)
+        {
+            SendVanGearManifestToClients(new[] { senderClientId });
+            return;
+        }
+
+        ulong[] requestedIds = new ulong[missingCount];
+        for (int i = 0; i < missingCount; i++)
+        {
+            reader.ReadValueSafe(out requestedIds[i]);
+        }
+        StartCoroutine(ReshowEquipmentToClientRoutine(senderClientId, requestedIds));
+    }
+
+    private IEnumerator ReshowEquipmentToClientRoutine(ulong clientId, ulong[] objectIds)
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || !nm.IsListening || !nm.IsServer || nm.SpawnManager == null) yield break;
+        if (!nm.ConnectedClients.ContainsKey(clientId)) yield break;
+
+        var toHide = new List<NetworkObject>();
+        var toShow = new List<NetworkObject>();
+        for (int i = 0; i < objectIds.Length; i++)
+        {
+            if (nm.SpawnManager.SpawnedObjects.TryGetValue(objectIds[i], out var netObj) && netObj != null && netObj.IsSpawned)
+            {
+                toShow.Add(netObj);
+                if (netObj.IsNetworkVisibleTo(clientId))
+                {
+                    toHide.Add(netObj);
+                }
+            }
+        }
+
+        if (toHide.Count > 0)
+        {
+            NetworkObject.NetworkHide(toHide, clientId);
+            yield return null;
+        }
+
+        if (nm == null || !nm.IsListening || !nm.IsServer || !nm.ConnectedClients.ContainsKey(clientId)) yield break;
+
+        // Prune any objects destroyed while waiting 1 frame before reshowing
+        for (int i = toShow.Count - 1; i >= 0; i--)
+        {
+            if (toShow[i] == null || !toShow[i].IsSpawned)
+            {
+                toShow.RemoveAt(i);
+            }
+        }
+
+        if (toShow.Count > 0)
+        {
+            NetworkObject.NetworkShow(toShow, clientId);
+        }
+    }
+
+    #endregion
 }

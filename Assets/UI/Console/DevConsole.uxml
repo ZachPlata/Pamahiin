@@ -59,6 +59,25 @@
                         <ui:Button name="RestoreFuseBoxBtn" text="Restore Fuse Box" class="dev-console-button" />
                         <ui:Button name="ToggleFpsBtn" text="Toggle FPS Display" class="dev-console-button" />
                         <ui:Button name="ToggleTimescaleBtn" text="Toggle Slow Motion" class="dev-console-button" />
+                        <ui:Label text="--- Currency &amp; Progression ---" class="column-header" />
+                        <ui:Label name="CurrencyBalanceLabel" text="Balance: $250" class="dev-balance-label" />
+                        <ui:VisualElement class="dev-currency-row">
+                            <ui:Button name="DevRemove500Btn" text="-$500" class="dev-console-button dev-currency-btn btn-danger" />
+                            <ui:Button name="DevRemove100Btn" text="-$100" class="dev-console-button dev-currency-btn btn-warning" />
+                            <ui:Button name="DevAdd100Btn" text="+$100" class="dev-console-button dev-currency-btn btn-primary" />
+                            <ui:Button name="DevAdd500Btn" text="+$500" class="dev-console-button dev-currency-btn btn-primary" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="dev-currency-row">
+                            <ui:TextField name="CurrencyAmountInput" value="100" class="dev-currency-input" />
+                            <ui:Button name="AddCurrencyBtn" text="+ Add" class="dev-console-button dev-currency-btn btn-primary" />
+                            <ui:Button name="RemoveCurrencyBtn" text="- Remove" class="dev-console-button dev-currency-btn btn-danger" />
+                        </ui:VisualElement>
+                        <ui:Button name="ResetProgressionBtn" text="Reset Progression ($250)" class="dev-console-button btn-warning" />
+                        <ui:Label text="--- Weather ---" class="column-header" />
+                        <ui:Button name="WeatherNightBtn" text="Weather: Night" class="dev-console-button" />
+                        <ui:Button name="WeatherFogBtn" text="Weather: Foggy" class="dev-console-button" />
+                        <ui:Button name="WeatherRainBtn" text="Weather: Rainstorm" class="dev-console-button" />
+                        <ui:Button name="ToggleRedMoonBtn" text="Toggle Red Moon" class="dev-console-button" />
                     </ui:VisualElement>
 
                 </ui:VisualElement>

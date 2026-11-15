@@ -6,6 +6,7 @@ using Unity.Netcode;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
+[DefaultExecutionOrder(-10)]
 [RequireComponent(typeof(UIDocument))]
 public class TruckDashboardController : MonoBehaviour, IInteractable
 {
@@ -37,6 +38,9 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     private Label cctvCamIdLabel;
     private Label cctvNvBadge;
     private Label cctvTimestamp;
+    private Label cctvHudSub;
+    private Button btnPrevCamera;
+    private Button btnNextCamera;
     private Button btnToggleNv;
     private ScrollView sanityList;
     private VisualElement activityBar;
@@ -45,11 +49,11 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     private float updateTimer = 0f;
     private bool isDashboardOpen = false;
     private int closedFrame = -1;
+    private bool createdRuntimeRenderTexture = false;
 
     // CCTV Night Vision
     private bool isCCTVNightVisionOn = false;
     private Light2D cctvNightVisionLight;
-    private Light2D cctvGlobalLight;
     private Volume cctvVolume;
     private VisualElement cctvNvColorFilter;
     private float cctvRecBlinkTimer = 0f;
@@ -59,7 +63,8 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     public static bool IsOpen => Instance != null && Instance.isDashboardOpen;
     public static bool WasOpenThisFrame => IsOpen || (Instance != null && Instance.closedFrame == Time.frameCount);
     public bool IsDashboardOpen => isDashboardOpen;
-    public Camera ActiveCamera => (allCameras.Count > 0 && currentCameraIndex < allCameras.Count) ? allCameras[currentCameraIndex] : null;
+    public bool IsCCTVNightVisionOn => isCCTVNightVisionOn;
+    public Camera ActiveCamera => (allCameras.Count > 0 && currentCameraIndex >= 0 && currentCameraIndex < allCameras.Count) ? allCameras[currentCameraIndex] : null;
 
     private RoofFader[] cachedRoofFaders;
     private List<RoofFader> activeHiddenFaders = new List<RoofFader>();
@@ -76,62 +81,189 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         uiDocument = GetComponent<UIDocument>();
         if (houseCameras != null)
         {
-            allCameras.AddRange(houseCameras);
+            for (int i = 0; i < houseCameras.Length; i++)
+            {
+                if (houseCameras[i] != null && !allCameras.Contains(houseCameras[i]))
+                {
+                    allCameras.Add(houseCameras[i]);
+                }
+            }
         }
+        EnsureRenderTexture();
 
         // Collect all sorting layer IDs so 2D lights illuminate Floors, Walls, Items, etc.
         int[] allSortingLayerIds = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
+        int cctvLayer = VideoCameraItem.ResolveCCTVLayer();
 
-        // 1. Setup unscaled dynamic CCTV IR Point Light for night vision
+        // 1. Setup unscaled dynamic CCTV IR Point Light isolated to the CCTVOnly layer
         GameObject lightObj = new GameObject("CCTV_IR_Light");
+        lightObj.layer = cctvLayer;
         lightObj.hideFlags = HideFlags.HideInHierarchy;
         lightObj.transform.SetParent(null);
         lightObj.transform.localScale = Vector3.one;
         cctvNightVisionLight = lightObj.AddComponent<Light2D>();
-        cctvNightVisionLight.lightType = Light2D.LightType.Point;
-        cctvNightVisionLight.color = Color.white;
-        cctvNightVisionLight.intensity = 2.5f;
-        cctvNightVisionLight.pointLightOuterRadius = 45f;
-        cctvNightVisionLight.pointLightInnerRadius = 0f;
-        cctvNightVisionLight.pointLightInnerAngle = 360f;
-        cctvNightVisionLight.pointLightOuterAngle = 360f;
-        cctvNightVisionLight.shadowsEnabled = false;
-        cctvNightVisionLight.targetSortingLayers = allSortingLayerIds;
+        VideoCameraItem.ApplyNightVisionLightSettings(
+            cctvNightVisionLight,
+            VideoCameraItem.NightVisionLightOuterRadius,
+            allSortingLayerIds);
         cctvNightVisionLight.enabled = false;
 
-        // 2. Setup unscaled dynamic CCTV Global IR Light for unlit rooms
-        GameObject globalLightObj = new GameObject("CCTV_IR_GlobalLight");
-        globalLightObj.hideFlags = HideFlags.HideInHierarchy;
-        globalLightObj.transform.SetParent(null);
-        globalLightObj.transform.localScale = Vector3.one;
-        cctvGlobalLight = globalLightObj.AddComponent<Light2D>();
-        cctvGlobalLight.lightType = Light2D.LightType.Global;
-        cctvGlobalLight.color = Color.white;
-        cctvGlobalLight.intensity = 1.2f;
-        cctvGlobalLight.targetSortingLayers = allSortingLayerIds;
-        cctvGlobalLight.enabled = false;
-
-        // 3. Setup CCTV B&W / Night Vision Volume
+        // 2. Setup CCTV B&W / Night Vision Volume isolated to the CCTVOnly layer
         GameObject volumeObj = new GameObject("CCTV_NV_Volume");
+        volumeObj.layer = cctvLayer;
         volumeObj.hideFlags = HideFlags.HideInHierarchy;
         volumeObj.transform.SetParent(null);
         volumeObj.transform.localScale = Vector3.one;
         cctvVolume = volumeObj.AddComponent<Volume>();
         cctvVolume.isGlobal = true;
         cctvVolume.priority = 350;
+        cctvVolume.sharedProfile = VideoCameraItem.CreateNightVisionVolumeProfile();
+        cctvVolume.weight = 0f;
+        cctvVolume.enabled = false;
 
-        VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
-        if (profile.Add<ColorAdjustments>(true))
+        IsolateNonCCTVCamera(Camera.main);
+    }
+
+    private void Start()
+    {
+        IsolateNonCCTVCamera(Camera.main);
+        VideoCameraItem.SyncMainCameraGhostOrbsMask();
+    }
+
+    private void IsolateNonCCTVCamera(Camera cam)
+    {
+        if (cam == null) return;
+        int cctvLayer = VideoCameraItem.ResolveCCTVLayer();
+        cam.cullingMask &= ~(1 << cctvLayer);
+
+        var camData = cam.GetComponent<UniversalAdditionalCameraData>();
+        if (camData != null)
         {
-            if (profile.TryGet(out ColorAdjustments colorAdj))
+            camData.volumeLayerMask &= ~(1 << cctvLayer);
+        }
+    }
+
+    private void EnsureRenderTexture()
+    {
+        if (cctvRenderTexture == null)
+        {
+            cctvRenderTexture = new RenderTexture(640, 480, 24);
+            cctvRenderTexture.name = "CCTV_AutoRT";
+            cctvRenderTexture.filterMode = FilterMode.Point;
+            cctvRenderTexture.Create();
+            createdRuntimeRenderTexture = true;
+        }
+        else if (!cctvRenderTexture.IsCreated())
+        {
+            cctvRenderTexture.Create();
+        }
+    }
+
+    private void EnsureCameraPostProcessing(Camera cam)
+    {
+        if (cam == null) return;
+        int cctvLayer = VideoCameraItem.ResolveCCTVLayer();
+        cam.cullingMask |= (1 << cctvLayer);
+
+        var camData = cam.GetComponent<UniversalAdditionalCameraData>();
+        if (camData == null) camData = cam.gameObject.AddComponent<UniversalAdditionalCameraData>();
+        camData.renderPostProcessing = true;
+        camData.volumeLayerMask = (1 << cctvLayer);
+        cam.SetVolumeFrameworkUpdateMode(VolumeFrameworkUpdateMode.EveryFrame);
+    }
+
+    private void PruneNullCameras()
+    {
+        for (int i = allCameras.Count - 1; i >= 0; i--)
+        {
+            if (allCameras[i] == null)
             {
-                colorAdj.saturation.Override(-100f);
-                colorAdj.postExposure.Override(1.6f);
-                colorAdj.contrast.Override(25f);
+                allCameras.RemoveAt(i);
+                if (i < currentCameraIndex) currentCameraIndex--;
             }
         }
-        cctvVolume.sharedProfile = profile;
-        cctvVolume.weight = 0f;
+        if (allCameras.Count == 0)
+        {
+            currentCameraIndex = 0;
+        }
+        else
+        {
+            currentCameraIndex = Mathf.Clamp(currentCameraIndex, 0, allCameras.Count - 1);
+        }
+    }
+
+    private void DisableAllCCTVCameras()
+    {
+        for (int i = 0; i < allCameras.Count; i++)
+        {
+            if (allCameras[i] != null)
+            {
+                allCameras[i].enabled = false;
+                allCameras[i].targetTexture = null;
+            }
+        }
+    }
+
+    private Vector3 GetActiveCCTVLightPosition(Camera cam, VideoCameraItem videoCam = null)
+    {
+        if (videoCam == null && cam != null)
+        {
+            videoCam = cam.GetComponentInParent<VideoCameraItem>();
+        }
+        if (videoCam != null)
+        {
+            return videoCam.GetCCTVNightVisionLightPosition();
+        }
+        if (cam != null)
+        {
+            return new Vector3(cam.transform.position.x, cam.transform.position.y, 0f);
+        }
+        return Vector3.zero;
+    }
+
+    private void SyncNightVisionRenderState()
+    {
+        Camera activeCam = ActiveCamera;
+        bool nvRenderActive = isDashboardOpen && isCCTVNightVisionOn && activeCam != null;
+
+        if (nvRenderActive)
+        {
+            EnsureCameraPostProcessing(activeCam);
+
+            var videoCam = activeCam.GetComponentInParent<VideoCameraItem>();
+            if (videoCam != null)
+            {
+                videoCam.SyncCCTVCameraWorldPose();
+            }
+
+            if (cctvNightVisionLight != null)
+            {
+                cctvNightVisionLight.transform.SetPositionAndRotation(
+                    GetActiveCCTVLightPosition(activeCam, videoCam),
+                    Quaternion.identity);
+                cctvNightVisionLight.enabled = true;
+            }
+
+            if (cctvVolume != null)
+            {
+                cctvVolume.enabled = true;
+                cctvVolume.weight = 1f;
+            }
+        }
+        else
+        {
+            DisableCCTVNightVisionPass();
+        }
+    }
+
+    private void DisableCCTVNightVisionPass()
+    {
+        if (cctvVolume != null)
+        {
+            cctvVolume.weight = 0f;
+            cctvVolume.enabled = false;
+        }
+        if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;
     }
 
     private void OnDestroy()
@@ -139,9 +271,20 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
         RestoreActiveHiddenFaders();
+        DisableAllCCTVCameras();
+        DisableCCTVNightVisionPass();
         if (cctvNightVisionLight != null) Destroy(cctvNightVisionLight.gameObject);
-        if (cctvGlobalLight != null) Destroy(cctvGlobalLight.gameObject);
-        if (cctvVolume != null) Destroy(cctvVolume.gameObject);
+        if (cctvVolume != null)
+        {
+            if (cctvVolume.sharedProfile != null) Destroy(cctvVolume.sharedProfile);
+            Destroy(cctvVolume.gameObject);
+        }
+        if (createdRuntimeRenderTexture && cctvRenderTexture != null)
+        {
+            cctvRenderTexture.Release();
+            Destroy(cctvRenderTexture);
+            cctvRenderTexture = null;
+        }
         if (Instance == this) Instance = null;
     }
 
@@ -150,9 +293,8 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
         RestoreActiveHiddenFaders();
-        if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;
-        if (cctvGlobalLight != null) cctvGlobalLight.enabled = false;
-        if (cctvVolume != null) cctvVolume.weight = 0f;
+        DisableAllCCTVCameras();
+        DisableCCTVNightVisionPass();
     }
 
     private void EnsureRoofFaders()
@@ -208,50 +350,115 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         }
     }
 
+    private void LateUpdate()
+    {
+        Camera activeCam = ActiveCamera;
+        bool nvRenderActive = isDashboardOpen && isCCTVNightVisionOn && activeCam != null;
+
+        if (isDashboardOpen && activeCam != null)
+        {
+            var videoCam = activeCam.GetComponentInParent<VideoCameraItem>();
+            if (videoCam != null)
+            {
+                videoCam.SyncCCTVCameraWorldPose();
+            }
+
+            if (nvRenderActive && cctvNightVisionLight != null)
+            {
+                cctvNightVisionLight.transform.SetPositionAndRotation(
+                    GetActiveCCTVLightPosition(activeCam, videoCam),
+                    Quaternion.identity);
+                cctvNightVisionLight.enabled = true;
+            }
+        }
+
+        if (!nvRenderActive)
+        {
+            DisableCCTVNightVisionPass();
+        }
+    }
+
     private void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
     {
-        if (allCameras.Count > 0 && currentCameraIndex < allCameras.Count && cam == allCameras[currentCameraIndex])
+        Camera activeCam = ActiveCamera;
+        if (!isDashboardOpen || activeCam == null || cam != activeCam)
         {
-            // Temporarily hide the roof for this camera's render view if the camera is inside the house
-            ApplyRoofFaderForCamera(cam, true);
-
-            if (isCCTVNightVisionOn)
+            // Guarantee roof hiding & CCTV layers NEVER bleed onto Main Camera or other Game cameras
+            RestoreActiveHiddenFaders();
+            if (cam != null && cam.cameraType == CameraType.Game && !allCameras.Contains(cam))
             {
-                if (cctvVolume != null) cctvVolume.weight = 1f;
-                if (cctvGlobalLight != null) cctvGlobalLight.enabled = true;
-                if (cctvNightVisionLight != null)
-                {
-                    cctvNightVisionLight.transform.position = new Vector3(cam.transform.position.x, cam.transform.position.y, 0f);
-                    cctvNightVisionLight.enabled = true;
-                }
-                cam.backgroundColor = new Color(0.12f, 0.12f, 0.12f);
+                IsolateNonCCTVCamera(cam);
             }
+            if (!isDashboardOpen || !isCCTVNightVisionOn || activeCam == null)
+            {
+                DisableCCTVNightVisionPass();
+            }
+            return;
+        }
+
+        EnsureCameraPostProcessing(cam);
+
+        var videoCam = cam.GetComponentInParent<VideoCameraItem>();
+        if (videoCam != null)
+        {
+            videoCam.SyncCCTVCameraWorldPose();
+        }
+
+        // Temporarily hide the roof for this camera's render view if the camera is inside the house
+        ApplyRoofFaderForCamera(cam, true);
+
+        if (isCCTVNightVisionOn)
+        {
+            if (cctvVolume != null)
+            {
+                cctvVolume.enabled = true;
+                cctvVolume.weight = 1f;
+            }
+            if (cctvNightVisionLight != null)
+            {
+                cctvNightVisionLight.transform.SetPositionAndRotation(
+                    GetActiveCCTVLightPosition(cam, videoCam),
+                    Quaternion.identity);
+                cctvNightVisionLight.enabled = true;
+            }
+            cam.backgroundColor = VideoCameraItem.NightVisionBackgroundColor;
+        }
+        else
+        {
+            DisableCCTVNightVisionPass();
+            cam.backgroundColor = Color.black;
         }
     }
 
     private void OnEndCameraRendering(ScriptableRenderContext ctx, Camera cam)
     {
-        if (allCameras.Count > 0 && currentCameraIndex < allCameras.Count && cam == allCameras[currentCameraIndex])
+        Camera activeCam = ActiveCamera;
+        if (activeCam != null && cam == activeCam)
         {
-            // Restore roof renderers immediately after CCTV camera finishes rendering
+            // Restore roof renderers & camera background immediately after CCTV pass.
+            // Keep CCTV_IR_Light & CCTV_NV_Volume active across LateUpdate() while CCTV NV stays enabled.
             ApplyRoofFaderForCamera(cam, false);
-
-            if (cctvVolume != null) cctvVolume.weight = 0f;
-            if (cctvGlobalLight != null) cctvGlobalLight.enabled = false;
-            if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;
             cam.backgroundColor = Color.black;
+            if (!isDashboardOpen || !isCCTVNightVisionOn)
+            {
+                DisableCCTVNightVisionPass();
+            }
         }
     }
 
     public void RegisterDynamicCamera(Camera cam)
     {
-        if (cam != null && !allCameras.Contains(cam))
+        if (cam == null) return;
+        var videoCam = cam.GetComponentInParent<VideoCameraItem>();
+        if (videoCam != null && !videoCam.IsAvailableForCCTV) return;
+
+        PruneNullCameras();
+        EnsureRenderTexture();
+
+        if (!allCameras.Contains(cam))
         {
             allCameras.Add(cam);
-            var camData = cam.GetComponent<UniversalAdditionalCameraData>();
-            if (camData == null) camData = cam.gameObject.AddComponent<UniversalAdditionalCameraData>();
-            camData.renderPostProcessing = true;
-            camData.volumeLayerMask = ~0;
+            EnsureCameraPostProcessing(cam);
             UpdateCameraSource();
             UpdateNoSignalState();
         }
@@ -259,19 +466,55 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     public void UnregisterDynamicCamera(Camera cam)
     {
-        if (cam != null && allCameras.Contains(cam))
+        if (cam == null) return;
+        int removedIndex = allCameras.IndexOf(cam);
+        if (removedIndex >= 0)
         {
-            allCameras.Remove(cam);
-            if (currentCameraIndex >= allCameras.Count) currentCameraIndex = 0;
+            allCameras.RemoveAt(removedIndex);
+            cam.enabled = false;
+            cam.targetTexture = null;
+            if (removedIndex < currentCameraIndex) currentCameraIndex--;
+            PruneNullCameras();
             UpdateCameraSource();
             UpdateNoSignalState();
         }
     }
 
+    private void RefreshDynamicCameras()
+    {
+        PruneNullCameras();
+        var videoItems = Object.FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
+        for (int i = 0; i < videoItems.Length; i++)
+        {
+            var item = videoItems[i];
+            if (item == null || item.CctvCamera == null) continue;
+
+            if (item.IsAvailableForCCTV)
+            {
+                item.SyncCCTVCameraWorldPose();
+                if (!allCameras.Contains(item.CctvCamera))
+                {
+                    allCameras.Add(item.CctvCamera);
+                    EnsureCameraPostProcessing(item.CctvCamera);
+                }
+            }
+            else if (allCameras.Contains(item.CctvCamera))
+            {
+                allCameras.Remove(item.CctvCamera);
+                item.CctvCamera.enabled = false;
+                item.CctvCamera.targetTexture = null;
+            }
+        }
+        PruneNullCameras();
+    }
+
     private void UpdateNoSignalState()
     {
         if (noSignalLabel == null || cctvContainer == null) return;
-        
+
+        PruneNullCameras();
+        EnsureRenderTexture();
+
         if (allCameras.Count > 0 && cctvRenderTexture != null)
         {
             noSignalLabel.style.display = DisplayStyle.None;
@@ -318,29 +561,23 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         cctvCamIdLabel = root.Q<Label>("cctv-hud-cam-id");
         cctvNvBadge = root.Q<Label>("cctv-nv-badge");
         cctvTimestamp = root.Q<Label>("cctv-timestamp");
+        cctvHudSub = root.Q<Label>("cctv-hud-sub");
+        btnPrevCamera = root.Q<Button>("btn-prev-camera");
+        btnNextCamera = root.Q<Button>("btn-next-camera");
         btnToggleNv = root.Q<Button>("btn-toggle-nv");
         cctvNvColorFilter = root.Q<VisualElement>("cctv-nv-color-filter");
         
-        // Auto-create a RenderTexture if one isn't assigned in the Inspector
-        if (cctvRenderTexture == null)
-        {
-            cctvRenderTexture = new RenderTexture(640, 480, 16);
-            cctvRenderTexture.name = "CCTV_AutoRT";
-        }
+        EnsureRenderTexture();
 
-        // Enable post-processing on all cameras so volume effects apply
+        // Enable post-processing on all pre-configured cameras so volume effects apply
+        PruneNullCameras();
         for (int i = 0; i < allCameras.Count; i++)
         {
-            if (allCameras[i] != null)
-            {
-                var camData = allCameras[i].GetComponent<UniversalAdditionalCameraData>();
-                if (camData == null) camData = allCameras[i].gameObject.AddComponent<UniversalAdditionalCameraData>();
-                camData.renderPostProcessing = true;
-                camData.volumeLayerMask = ~0;
-            }
+            EnsureCameraPostProcessing(allCameras[i]);
         }
-        
-        root.Q<Button>("btn-next-camera").clicked += SwitchToNextCamera;
+
+        if (btnPrevCamera != null) btnPrevCamera.clicked += SwitchToPreviousCamera;
+        if (btnNextCamera != null) btnNextCamera.clicked += SwitchToNextCamera;
         
         if (btnToggleNv != null)
         {
@@ -356,14 +593,17 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
         // Default view
         ShowView(viewCctv, tabCctv);
-        
+
+        // Hide on start before disabling cameras
+        root.style.display = DisplayStyle.None;
+        isDashboardOpen = false;
+
+        RefreshDynamicCameras();
         UpdateCameraSource();
         UpdateNoSignalState();
         ApplyNightVisionState();
-        
-        // Hide on start
-        root.style.display = DisplayStyle.None;
-        isDashboardOpen = false;
+        IsolateNonCCTVCamera(Camera.main);
+        VideoCameraItem.SyncMainCameraGhostOrbsMask();
     }
 
     private void ShowView(VisualElement view, Button tab)
@@ -384,33 +624,80 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         tab.AddToClassList("active-tab");
     }
 
+    private void SwitchToPreviousCamera()
+    {
+        PruneNullCameras();
+        if (allCameras.Count == 0) return;
+
+        currentCameraIndex = (currentCameraIndex - 1 + allCameras.Count) % allCameras.Count;
+        UpdateCameraSource();
+        UpdateNoSignalState();
+    }
+
     private void SwitchToNextCamera()
     {
+        PruneNullCameras();
         if (allCameras.Count == 0) return;
-        
+
         currentCameraIndex = (currentCameraIndex + 1) % allCameras.Count;
         UpdateCameraSource();
+        UpdateNoSignalState();
+    }
+
+    private string GetCameraDisplayName(Camera cam)
+    {
+        if (cam == null) return "UNKNOWN";
+        var videoCam = cam.GetComponentInParent<VideoCameraItem>();
+        if (videoCam != null)
+        {
+            if (videoCam.IsPlaced) return "VIDEO CAMERA (PLACED)";
+            if (videoCam.CurrentHolderClientId != ulong.MaxValue) return $"VIDEO CAMERA (P{videoCam.CurrentHolderClientId})";
+            return "VIDEO CAMERA";
+        }
+        return cam.name.ToUpper();
+    }
+
+    private void UpdateCameraNavButtons()
+    {
+        bool canSwitch = allCameras.Count > 1;
+        btnPrevCamera?.SetEnabled(canSwitch);
+        btnNextCamera?.SetEnabled(canSwitch);
     }
 
     private void UpdateCameraSource()
     {
-        if (allCameras.Count == 0) return;
+        PruneNullCameras();
+        EnsureRenderTexture();
+        UpdateCameraNavButtons();
+
+        if (allCameras.Count == 0)
+        {
+            if (cctvScreenTitle != null) cctvScreenTitle.text = "NO CAMERA SIGNAL";
+            if (cctvCamIdLabel != null) cctvCamIdLabel.text = "NO SIGNAL";
+            if (cctvHudSub != null) cctvHudSub.text = "NO SIGNAL";
+            ApplyNightVisionState();
+            return;
+        }
 
         for (int i = 0; i < allCameras.Count; i++)
         {
-            if (allCameras[i] != null)
-            {
-                allCameras[i].targetTexture = (i == currentCameraIndex) ? cctvRenderTexture : null;
-                allCameras[i].gameObject.SetActive(i == currentCameraIndex);
-            }
+            Camera cam = allCameras[i];
+            if (cam == null) continue;
+
+            bool isActive = isDashboardOpen && i == currentCameraIndex;
+            if (!cam.gameObject.activeSelf) cam.gameObject.SetActive(true);
+            cam.targetTexture = isActive ? cctvRenderTexture : null;
+            cam.enabled = isActive;
         }
 
-        if (currentCameraIndex < allCameras.Count && allCameras[currentCameraIndex] != null)
+        Camera activeCam = ActiveCamera;
+        if (activeCam != null)
         {
-            string camName = allCameras[currentCameraIndex].name.ToUpper();
-            string formattedTitle = $"CAM 0{currentCameraIndex + 1}: {camName}";
+            string camName = GetCameraDisplayName(activeCam);
+            string formattedTitle = $"CAM {currentCameraIndex + 1:00} / {allCameras.Count:00} - {camName}";
             if (cctvScreenTitle != null) cctvScreenTitle.text = formattedTitle;
             if (cctvCamIdLabel != null) cctvCamIdLabel.text = formattedTitle;
+            if (cctvHudSub != null) cctvHudSub.text = $"CH-{currentCameraIndex + 1:00} FEED  |  FPS: 30  |  SIGNAL: OPTIMAL";
         }
 
         ApplyNightVisionState();
@@ -477,35 +764,25 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
             }
         }
 
-        // 4. Update camera feeds (both handheld cameras and house cameras)
-        if (allCameras.Count > 0 && currentCameraIndex < allCameras.Count)
+        // 4. Update active camera feed (both dynamic VideoCameraItem feeds and any scene house cameras)
+        Camera currentCam = ActiveCamera;
+        if (currentCam != null)
         {
-            Camera currentCam = allCameras[currentCameraIndex];
-            if (currentCam != null)
+            EnsureCameraPostProcessing(currentCam);
+
+            // Ensure Ghost Orbs layer is only rendered on CCTV when Night Vision is ON
+            int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
+            if (ghostOrbLayer != -1)
             {
-                var camData = currentCam.GetComponent<UniversalAdditionalCameraData>();
-                if (camData == null) camData = currentCam.gameObject.AddComponent<UniversalAdditionalCameraData>();
-                camData.renderPostProcessing = true;
-                camData.volumeLayerMask = ~0;
-
-                // If this is a dynamic VideoCameraItem, notify it
-                VideoCameraItem videoCam = currentCam.GetComponentInParent<VideoCameraItem>();
-                if (videoCam != null)
-                {
-                    videoCam.SetCCTVNightVision(isCCTVNightVisionOn);
-                }
-
-                // Ensure Ghost Orbs layer is culled during night vision on ALL cameras
-                int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
-                if (ghostOrbLayer != -1)
-                {
-                    if (isCCTVNightVisionOn)
-                        currentCam.cullingMask |= (1 << ghostOrbLayer);
-                    else
-                        currentCam.cullingMask &= ~(1 << ghostOrbLayer);
-                }
+                if (isCCTVNightVisionOn)
+                    currentCam.cullingMask |= (1 << ghostOrbLayer);
+                else
+                    currentCam.cullingMask &= ~(1 << ghostOrbLayer);
             }
         }
+
+        // 5. Sync Light2D & Volume state so Light2D.LateUpdate() generates mesh & boundingSphere cleanly
+        SyncNightVisionRenderState();
     }
 
     public void Interact()
@@ -523,15 +800,27 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     private void ToggleDashboard()
     {
         isDashboardOpen = !isDashboardOpen;
-        
+
         if (isDashboardOpen)
         {
             uiDocument.rootVisualElement.style.display = DisplayStyle.Flex;
+            IsolateNonCCTVCamera(Camera.main);
+            VideoCameraItem.SyncMainCameraGhostOrbsMask();
+            RefreshDynamicCameras();
+            UpdateCameraSource();
+            UpdateNoSignalState();
+            UpdateSanityMonitor();
+            UpdateActivityMonitor();
+            updateTimer = 0f;
         }
         else
         {
             closedFrame = Time.frameCount;
             uiDocument.rootVisualElement.style.display = DisplayStyle.None;
+            UpdateCameraSource();
+            UpdateNoSignalState();
+            RestoreActiveHiddenFaders();
+            SyncNightVisionRenderState();
         }
 
         // Disable collider while UI is open to prevent accidental clicks passing through
@@ -567,29 +856,28 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
                 }
             }
 
-            // CCTV session timer
+            // Live timestamp & CCTV clock
+            int totalSec = Mathf.FloorToInt(Time.timeSinceLevelLoad);
             if (cctvTimer != null)
             {
-                int totalSec = Mathf.FloorToInt(Time.timeSinceLevelLoad);
                 int h = totalSec / 3600;
                 int m = (totalSec % 3600) / 60;
                 int s = totalSec % 60;
                 cctvTimer.text = $"{h:00}:{m:00}:{s:00}";
             }
 
-            // Live timestamp
             if (cctvTimestamp != null)
             {
                 cctvTimestamp.text = System.DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss");
             }
-        }
 
-        updateTimer += Time.deltaTime;
-        if (updateTimer >= 0.5f) // Update stats every 0.5 seconds
-        {
-            updateTimer = 0f;
-            UpdateSanityMonitor();
-            UpdateActivityMonitor();
+            updateTimer += Time.deltaTime;
+            if (updateTimer >= 0.5f) // Rebuild dashboard lists only while dashboard is open
+            {
+                updateTimer = 0f;
+                UpdateSanityMonitor();
+                UpdateActivityMonitor();
+            }
         }
     }
 

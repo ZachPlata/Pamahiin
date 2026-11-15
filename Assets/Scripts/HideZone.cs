@@ -20,6 +20,12 @@ public class HideZone : MonoBehaviour
         {
             col.isTrigger = true;
         }
+
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.enabled = false;
+        }
     }
 
     private void OnTriggerEnter2D(Collider2D other)

@@ -9,6 +9,7 @@
                 <ui:Button name="tab-lobby" text="MULTIPLAYER &amp; LOBBY" class="journal-tab lobby-special-tab" />
                 <ui:Button name="tab-cover" text="COVER" class="journal-tab" />
                 <ui:Button name="tab-toc" text="CONTENTS" class="journal-tab active-tab" />
+                <ui:Button name="tab-blueprint" text="BLUEPRINT" class="journal-tab" />
                 <ui:Button name="tab-equip" text="EQUIPMENT" class="journal-tab" />
                 <ui:Button name="tab-ghosts" text="ENTITIES" class="journal-tab" />
                 <ui:Button name="tab-evidence" text="DEDUCTION" class="journal-tab" />
@@ -39,29 +40,33 @@
                         <ui:Label text="Select any topic to jump directly to its page:" class="instruction-text" />
 
                         <ui:VisualElement class="toc-list">
-                            <ui:Button name="btn-toc-equip1" class="toc-item-button">
-                                <ui:Label text="01. Primary Investigation Tools" class="toc-item-text" />
+                            <ui:Button name="btn-toc-blueprint" class="toc-item-button">
+                                <ui:Label text="01. Case Briefing &amp; Map Blueprint" class="toc-item-text" />
                                 <ui:Label text="Page 2  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-equip2" class="toc-item-button">
-                                <ui:Label text="02. Optical &amp; Defensive Equipment" class="toc-item-text" />
+                            <ui:Button name="btn-toc-equip1" class="toc-item-button">
+                                <ui:Label text="02. Primary Investigation Tools" class="toc-item-text" />
                                 <ui:Label text="Page 3  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-tikbalang" class="toc-item-button">
-                                <ui:Label text="03. Entity Dossier: Tikbalang" class="toc-item-text" />
+                            <ui:Button name="btn-toc-equip2" class="toc-item-button">
+                                <ui:Label text="03. Optical &amp; Defensive Equipment" class="toc-item-text" />
                                 <ui:Label text="Page 4  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-kapre" class="toc-item-button">
-                                <ui:Label text="04. Entity Dossier: Kapre" class="toc-item-text" />
+                            <ui:Button name="btn-toc-tikbalang" class="toc-item-button">
+                                <ui:Label text="04. Entity Dossier: Tikbalang" class="toc-item-text" />
                                 <ui:Label text="Page 5  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-manananggal" class="toc-item-button">
-                                <ui:Label text="05. Entity Dossier: Manananggal" class="toc-item-text" />
+                            <ui:Button name="btn-toc-kapre" class="toc-item-button">
+                                <ui:Label text="05. Entity Dossier: Kapre" class="toc-item-text" />
                                 <ui:Label text="Page 6  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-evidence" class="toc-item-button">
-                                <ui:Label text="06. Evidence Checklist &amp; Deduction" class="toc-item-text" />
+                            <ui:Button name="btn-toc-manananggal" class="toc-item-button">
+                                <ui:Label text="06. Entity Dossier: Manananggal" class="toc-item-text" />
                                 <ui:Label text="Page 7  ▶" class="toc-item-page" />
+                            </ui:Button>
+                            <ui:Button name="btn-toc-evidence" class="toc-item-button">
+                                <ui:Label text="07. Evidence Checklist &amp; Deduction" class="toc-item-text" />
+                                <ui:Label text="Page 8  ▶" class="toc-item-page" />
                             </ui:Button>
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -81,8 +86,51 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 2: EQUIPMENT PART 1 ================= -->
+                <!-- ================= SPREAD 2: CASE BRIEFING & MAP BLUEPRINT ================= -->
                 <ui:VisualElement name="spread-2" class="journal-spread hidden-spread">
+                    <!-- Left Page: Ghost Identity & Case Background -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Case Briefing" class="page-title" />
+
+                        <ui:VisualElement class="case-meta-row">
+                            <ui:VisualElement class="case-meta-badge">
+                                <ui:Label text="CASE FILE:" class="case-meta-key" />
+                                <ui:Label name="lbl-case-id" text="BSN-0000" class="case-meta-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="case-meta-badge case-meta-badge-last">
+                                <ui:Label text="CONTRACT:" class="case-meta-key" />
+                                <ui:Label name="lbl-case-difficulty" text="AMATEUR (1.0x)" class="case-meta-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="case-section-card">
+                            <ui:Label text="SUBJECT / GHOST NAME:" class="case-field-label" />
+                            <ui:Label name="lbl-case-ghost-name" text="Investigating..." class="case-ghost-name" />
+                        </ui:VisualElement>
+
+                        <ui:VisualElement class="case-section-card case-bg-card">
+                            <ui:Label text="BACKGROUND &amp; HAUNTING REPORT:" class="case-field-label" />
+                            <ui:Label name="lbl-case-bg-title" text="Barangay Incident Record" class="case-bg-subtitle" />
+                            <ui:Label name="lbl-case-ghost-bg" text="Retrieving Barangay San Nicolas civil records and witness statements..." class="case-ghost-background" />
+                        </ui:VisualElement>
+
+                        <ui:Label text="Identity is compiled from local barangay records. Use evidence tools inside the house to determine the true entity." class="case-footer-note" />
+                    </ui:VisualElement>
+
+                    <!-- Right Page: Map Name & General Blueprint -->
+                    <ui:VisualElement class="journal-page right-page">
+                        <ui:Label name="lbl-blueprint-map-name" text="Barangay San Nicolas — 6 Tanglewood Drive" class="page-title blueprint-map-title" />
+                        <ui:Label name="lbl-blueprint-subtitle" text="General Floor Plan (Main Floor &amp; Basement)" class="instruction-text blueprint-subtitle" />
+
+                        <ui:VisualElement name="blueprint-frame" class="blueprint-frame">
+                            <ui:VisualElement name="blueprint-image" class="blueprint-image blueprint-barangay" />
+                            <ui:Label name="lbl-blueprint-unavailable" text="No floor plan available for this location." class="blueprint-unavailable hidden" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- ================= SPREAD 3: EQUIPMENT PART 1 ================= -->
+                <ui:VisualElement name="spread-3" class="journal-spread hidden-spread">
                     <!-- Left Page: EMF & Spirit Box -->
                     <ui:VisualElement class="journal-page left-page">
                         <ui:Label text="Equipment Manual" class="page-title" />
@@ -130,8 +178,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 3: EQUIPMENT PART 2 ================= -->
-                <ui:VisualElement name="spread-3" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 4: EQUIPMENT PART 2 ================= -->
+                <ui:VisualElement name="spread-4" class="journal-spread hidden-spread">
                     <!-- Left Page: DOTS & Video Camera -->
                     <ui:VisualElement class="journal-page left-page">
                         <ui:Label text="Equipment Manual" class="page-title" />
@@ -179,8 +227,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 4: GHOST 1 - TIKBALANG ================= -->
-                <ui:VisualElement name="spread-4" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 5: GHOST 1 - TIKBALANG ================= -->
+                <ui:VisualElement name="spread-5" class="journal-spread hidden-spread">
                     <!-- Left Page: Illustration -->
                     <ui:VisualElement class="journal-page left-page ghost-art-page">
                         <ui:VisualElement class="ghost-art-frame">
@@ -216,8 +264,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 5: GHOST 2 - KAPRE ================= -->
-                <ui:VisualElement name="spread-5" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 6: GHOST 2 - KAPRE ================= -->
+                <ui:VisualElement name="spread-6" class="journal-spread hidden-spread">
                     <!-- Left Page: Illustration -->
                     <ui:VisualElement class="journal-page left-page ghost-art-page">
                         <ui:VisualElement class="ghost-art-frame">
@@ -253,8 +301,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 6: GHOST 3 - MANANANGGAL ================= -->
-                <ui:VisualElement name="spread-6" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 7: GHOST 3 - MANANANGGAL ================= -->
+                <ui:VisualElement name="spread-7" class="journal-spread hidden-spread">
                     <!-- Left Page: Illustration -->
                     <ui:VisualElement class="journal-page left-page ghost-art-page">
                         <ui:VisualElement class="ghost-art-frame">
@@ -291,8 +339,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 7: EVIDENCE CHECKLIST & DEDUCTION ================= -->
-                <ui:VisualElement name="spread-7" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 8: EVIDENCE CHECKLIST & DEDUCTION ================= -->
+                <ui:VisualElement name="spread-8" class="journal-spread hidden-spread">
                     <!-- Left Page: Evidence Checklist -->
                     <ui:VisualElement class="journal-page left-page">
                         <ui:Label text="Evidence Collected" class="page-title" />
@@ -327,8 +375,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 8: LOBBY, MULTIPLAYER & EQUIPMENT SHOP ================= -->
-                <ui:VisualElement name="spread-8" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 9: LOBBY, MULTIPLAYER & EQUIPMENT SHOP ================= -->
+                <ui:VisualElement name="spread-9" class="journal-spread hidden-spread">
                     <!-- Left Page: Map, Difficulty & Multiplayer Party -->
                     <ui:VisualElement class="journal-page left-page">
                         <ui:Label text="Contract &amp; Multiplayer" class="page-title" />
@@ -382,6 +430,8 @@
                             <ui:Label name="lbl-loadout-summary" text="Van Loadout: 1 Item ($20)" class="lobby-loadout-value-label" />
                         </ui:VisualElement>
 
+                        <ui:VisualElement name="lobby-player-legend" class="lobby-player-legend" />
+
                         <ui:Label text="Purchase ghost hunting gear to spawn inside the van:" class="instruction-text lobby-tight-instruction" />
 
                         <ui:ScrollView name="loadout-shop-list" class="loadout-shop-scroll" />
@@ -393,7 +443,7 @@
             <!-- Bottom Navigation Bar -->
             <ui:VisualElement class="journal-nav-bar">
                 <ui:Button name="btn-prev-page" text="◀ Previous Page" class="nav-button" />
-                <ui:Label name="lbl-page-indicator" text="Page 1 of 7" class="page-indicator-label" />
+                <ui:Label name="lbl-page-indicator" text="Page 1 of 8" class="page-indicator-label" />
                 <ui:Button name="btn-toc-jump" text="📖 Table of Contents" class="nav-button" />
                 <ui:Button name="btn-next-page" text="Next Page ▶" class="nav-button" />
             </ui:VisualElement>

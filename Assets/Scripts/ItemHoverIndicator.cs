@@ -12,7 +12,6 @@ public class ItemHoverIndicator : MonoBehaviour
     [Header("Visual Settings")]
     [SerializeField] private Color borderColor = new Color(0.12f, 1f, 0.35f, 1f);
     [SerializeField] private float borderWidth = 0.005f;
-    [SerializeField] private float padding = 0.006f;
 
     private LineRenderer lineRenderer;
     private TextMeshPro nameText;
@@ -29,6 +28,22 @@ public class ItemHoverIndicator : MonoBehaviour
     private static Sprite defaultBgSprite;
     private static Texture2D guiWhiteTex;
     private GUIStyle labelTextStyle;
+    private Camera cachedMainCam;
+    private bool isShowing = false;
+    private GUIContent cachedGuiContent;
+    private string cachedGuiContentText = "";
+    private Vector2 cachedLabelSize;
+
+    // Reusable buffers & transform dirty state to prevent per-frame PolygonCollider allocations
+    private readonly System.Collections.Generic.List<Vector2> reusableLocalPts = new System.Collections.Generic.List<Vector2>(32);
+    private Vector3[] reusableWorldPts = System.Array.Empty<Vector3>();
+    private PolygonCollider2D cachedPolyTarget;
+    private int cachedPolyBestPathIdx = -1;
+    private Vector3 lastTargetPos;
+    private Quaternion lastTargetRot;
+    private Vector3 lastTargetScale;
+    private float lastCamOrtho = -1f;
+    private GameObject lastTransformTarget;
 
     private void Awake()
     {
@@ -141,24 +156,47 @@ public class ItemHoverIndicator : MonoBehaviour
             return;
         }
 
+        bool sameTarget = isShowing && currentTarget == itemObj;
         currentTarget = itemObj;
+        isShowing = true;
         currentDisplayName = displayName ?? "";
-        targetSpriteRenderer = itemObj.GetComponentInChildren<SpriteRenderer>();
-        targetPolygonCollider = itemObj.GetComponent<PolygonCollider2D>();
-        if (targetPolygonCollider == null)
-        {
-            targetPolygonCollider = itemObj.GetComponentInChildren<PolygonCollider2D>();
-        }
-        targetFallbackCollider = itemObj.GetComponent<Collider2D>();
 
-        if (nameText != null)
+        if (!sameTarget)
+        {
+            targetSpriteRenderer = itemObj.GetComponentInChildren<SpriteRenderer>();
+            targetPolygonCollider = itemObj.GetComponent<PolygonCollider2D>();
+            if (targetPolygonCollider == null)
+            {
+                targetPolygonCollider = itemObj.GetComponentInChildren<PolygonCollider2D>();
+            }
+            targetFallbackCollider = SelectEnabledFallbackCollider(itemObj);
+            lastTransformTarget = null;
+        }
+
+        if (nameText != null && nameText.text != currentDisplayName)
         {
             nameText.text = currentDisplayName;
         }
 
-        if (lineRenderer != null) lineRenderer.enabled = true;
+        if (lineRenderer != null && !lineRenderer.enabled) lineRenderer.enabled = true;
 
-        UpdateIndicatorTransform();
+        if (!sameTarget)
+        {
+            UpdateIndicatorTransform();
+        }
+    }
+
+    private static Collider2D SelectEnabledFallbackCollider(GameObject itemObj)
+    {
+        Collider2D[] cols = itemObj.GetComponents<Collider2D>();
+        Collider2D firstEnabled = null;
+        for (int i = 0; i < cols.Length; i++)
+        {
+            if (cols[i] == null || !cols[i].enabled) continue;
+            if (cols[i] is BoxCollider2D) return cols[i];
+            if (firstEnabled == null) firstEnabled = cols[i];
+        }
+        return firstEnabled ?? itemObj.GetComponent<Collider2D>();
     }
 
     /// <summary>
@@ -166,22 +204,33 @@ public class ItemHoverIndicator : MonoBehaviour
     /// </summary>
     public void Hide()
     {
+        isShowing = false;
         currentTarget = null;
         targetSpriteRenderer = null;
         targetPolygonCollider = null;
         targetFallbackCollider = null;
+        cachedPolyTarget = null;
+        cachedPolyBestPathIdx = -1;
+        lastTransformTarget = null;
         currentDisplayName = "";
 
-        if (lineRenderer != null) lineRenderer.enabled = false;
-        if (nameText != null) nameText.enabled = false;
-        if (bgObject != null) bgObject.SetActive(false);
+        if (lineRenderer != null && lineRenderer.enabled) lineRenderer.enabled = false;
+        if (nameText != null && nameText.enabled) nameText.enabled = false;
+        if (bgObject != null && bgObject.activeSelf) bgObject.SetActive(false);
+    }
+
+    private Camera ResolveMainCamera()
+    {
+        if (cachedMainCam != null && cachedMainCam.isActiveAndEnabled) return cachedMainCam;
+        cachedMainCam = Camera.main;
+        return cachedMainCam;
     }
 
     private void LateUpdate()
     {
         if (currentTarget == null || !currentTarget.activeInHierarchy)
         {
-            Hide();
+            if (isShowing) Hide();
             return;
         }
 
@@ -192,8 +241,25 @@ public class ItemHoverIndicator : MonoBehaviour
     {
         if (currentTarget == null) return;
 
-        Camera cam = Camera.main;
+        Camera cam = ResolveMainCamera();
         float ortho = (cam != null && cam.orthographic) ? cam.orthographicSize : 0.4f;
+
+        Transform targetTr = currentTarget.transform;
+        if (lastTransformTarget == currentTarget &&
+            lastTargetPos == targetTr.position &&
+            lastTargetRot == targetTr.rotation &&
+            lastTargetScale == targetTr.lossyScale &&
+            Mathf.Abs(lastCamOrtho - ortho) < 0.0005f)
+        {
+            return;
+        }
+
+        lastTransformTarget = currentTarget;
+        lastTargetPos = targetTr.position;
+        lastTargetRot = targetTr.rotation;
+        lastTargetScale = targetTr.lossyScale;
+        lastCamOrtho = ortho;
+
         float dynamicBorderWidth = Mathf.Clamp(ortho * 0.009f, 0.002f, 0.012f);
         float worldPad = Mathf.Clamp(ortho * 0.008f, 0.0015f, 0.015f);
 
@@ -203,59 +269,68 @@ public class ItemHoverIndicator : MonoBehaviour
             lineRenderer.endWidth = dynamicBorderWidth;
         }
 
-        // 1. Prefer tracing the PolygonCollider2D contour if present
+        // 1. Prefer tracing the PolygonCollider2D contour if present (zero per-frame GetPath allocations)
         if (targetPolygonCollider != null && targetPolygonCollider.pathCount > 0)
         {
-            int bestPathIdx = 0;
-            int maxPts = 0;
-            for (int p = 0; p < targetPolygonCollider.pathCount; p++)
+            if (cachedPolyTarget != targetPolygonCollider || cachedPolyBestPathIdx < 0 || cachedPolyBestPathIdx >= targetPolygonCollider.pathCount)
             {
-                var candidate = targetPolygonCollider.GetPath(p);
-                if (candidate != null && candidate.Length > maxPts)
+                cachedPolyTarget = targetPolygonCollider;
+                cachedPolyBestPathIdx = 0;
+                int maxPts = 0;
+                for (int p = 0; p < targetPolygonCollider.pathCount; p++)
                 {
-                    maxPts = candidate.Length;
-                    bestPathIdx = p;
+                    targetPolygonCollider.GetPath(p, reusableLocalPts);
+                    if (reusableLocalPts.Count > maxPts)
+                    {
+                        maxPts = reusableLocalPts.Count;
+                        cachedPolyBestPathIdx = p;
+                    }
                 }
             }
 
-            Vector2[] localPts = targetPolygonCollider.GetPath(bestPathIdx);
-            if (localPts != null && localPts.Length >= 3)
+            targetPolygonCollider.GetPath(cachedPolyBestPathIdx, reusableLocalPts);
+            int ptCount = reusableLocalPts.Count;
+            if (ptCount >= 3)
             {
+                if (reusableWorldPts.Length != ptCount)
+                {
+                    reusableWorldPts = new Vector3[ptCount];
+                }
+
                 Transform t = targetPolygonCollider.transform;
                 Vector2 offset = targetPolygonCollider.offset;
 
                 // Compute polygon centroid in world space for subtle outward border padding
                 Vector3 worldCentroid = Vector3.zero;
-                Vector3[] worldPts = new Vector3[localPts.Length];
-                for (int i = 0; i < localPts.Length; i++)
+                for (int i = 0; i < ptCount; i++)
                 {
-                    Vector3 wp = t.TransformPoint(localPts[i] + offset);
+                    Vector3 wp = t.TransformPoint(reusableLocalPts[i] + offset);
                     wp.z = 0f;
-                    worldPts[i] = wp;
+                    reusableWorldPts[i] = wp;
                     worldCentroid += wp;
                 }
-                worldCentroid /= localPts.Length;
+                worldCentroid /= ptCount;
 
                 float minX = float.MaxValue, maxX = float.MinValue;
                 float topY = float.MinValue;
 
-                for (int i = 0; i < worldPts.Length; i++)
+                for (int i = 0; i < ptCount; i++)
                 {
-                    Vector3 dir = worldPts[i] - worldCentroid;
+                    Vector3 dir = reusableWorldPts[i] - worldCentroid;
                     if (dir.sqrMagnitude > 0.0000001f)
                     {
-                        worldPts[i] += dir.normalized * (worldPad * 0.5f);
+                        reusableWorldPts[i] += dir.normalized * (worldPad * 0.5f);
                     }
-                    if (worldPts[i].x < minX) minX = worldPts[i].x;
-                    if (worldPts[i].x > maxX) maxX = worldPts[i].x;
-                    if (worldPts[i].y > topY) topY = worldPts[i].y;
+                    if (reusableWorldPts[i].x < minX) minX = reusableWorldPts[i].x;
+                    if (reusableWorldPts[i].x > maxX) maxX = reusableWorldPts[i].x;
+                    if (reusableWorldPts[i].y > topY) topY = reusableWorldPts[i].y;
                 }
 
                 if (lineRenderer != null && lineRenderer.enabled)
                 {
                     lineRenderer.loop = true;
-                    lineRenderer.positionCount = worldPts.Length;
-                    lineRenderer.SetPositions(worldPts);
+                    lineRenderer.positionCount = ptCount;
+                    lineRenderer.SetPositions(reusableWorldPts);
                 }
 
                 topCenterWorldPos = new Vector3((minX + maxX) * 0.5f, topY, 0f);
@@ -312,10 +387,10 @@ public class ItemHoverIndicator : MonoBehaviour
 
     private void OnGUI()
     {
-        if (currentTarget == null || !currentTarget.activeInHierarchy || string.IsNullOrEmpty(currentDisplayName))
+        if (!isShowing || currentTarget == null || !currentTarget.activeInHierarchy || string.IsNullOrEmpty(currentDisplayName))
             return;
 
-        Camera cam = Camera.main;
+        Camera cam = ResolveMainCamera();
         if (cam == null) return;
 
         Vector3 screenPos = cam.WorldToScreenPoint(topCenterWorldPos);
@@ -333,10 +408,15 @@ public class ItemHoverIndicator : MonoBehaviour
             labelTextStyle.normal.textColor = new Color(0.88f, 1f, 0.90f, 1f);
         }
 
-        GUIContent content = new GUIContent(currentDisplayName);
-        Vector2 textSize = labelTextStyle.CalcSize(content);
-        float boxWidth = Mathf.Max(76f, textSize.x + 18f);
-        float boxHeight = Mathf.Max(24f, textSize.y + 8f);
+        if (cachedGuiContent == null || cachedGuiContentText != currentDisplayName)
+        {
+            cachedGuiContentText = currentDisplayName;
+            cachedGuiContent = new GUIContent(currentDisplayName);
+            cachedLabelSize = labelTextStyle.CalcSize(cachedGuiContent);
+        }
+
+        float boxWidth = Mathf.Max(76f, cachedLabelSize.x + 18f);
+        float boxHeight = Mathf.Max(24f, cachedLabelSize.y + 8f);
 
         float guiX = screenPos.x - boxWidth * 0.5f;
         float guiY = (Screen.height - screenPos.y) - boxHeight - 6f;
@@ -358,10 +438,10 @@ public class ItemHoverIndicator : MonoBehaviour
 
         GUI.color = Color.black;
         Rect shadowRect = new Rect(innerRect.x + 1f, innerRect.y + 1f, innerRect.width, innerRect.height);
-        GUI.Label(shadowRect, content, labelTextStyle);
+        GUI.Label(shadowRect, cachedGuiContent, labelTextStyle);
 
         GUI.color = Color.white;
-        GUI.Label(innerRect, content, labelTextStyle);
+        GUI.Label(innerRect, cachedGuiContent, labelTextStyle);
 
         GUI.color = prevColor;
     }

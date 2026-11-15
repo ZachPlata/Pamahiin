@@ -36,6 +36,12 @@ public class GhostHandler : NetworkBehaviour
     public System.Collections.Generic.List<EvidenceType> currentEvidence = new System.Collections.Generic.List<EvidenceType>();
     public GameObject ghostOrbPrefab;
 
+    private GhostOrbSystem activeGhostOrb;
+    private bool hasActivated = false;
+
+    /// <summary>The single native Ghost Orb spawned for this ghost (null if none).</summary>
+    public GhostOrbSystem ActiveGhostOrb => activeGhostOrb;
+
     public string ghostName = "Unknown";
 
     public bool HasEvidence(EvidenceType type)
@@ -104,6 +110,35 @@ public class GhostHandler : NetworkBehaviour
     private float huntLightFlickerTimer = 0f;
     private float huntFuseTripTimer = 0f;
 
+    public override void OnNetworkDespawn()
+    {
+        DespawnActiveOrb();
+        base.OnNetworkDespawn();
+    }
+
+    public override void OnDestroy()
+    {
+        DespawnActiveOrb();
+        base.OnDestroy();
+    }
+
+    private void DespawnActiveOrb()
+    {
+        if (activeGhostOrb == null) return;
+
+        var orbNet = activeGhostOrb.GetComponent<NetworkObject>();
+        if (orbNet != null && orbNet.IsSpawned)
+        {
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+                orbNet.Despawn(true);
+        }
+        else if (orbNet == null || !orbNet.IsSpawned)
+        {
+            Destroy(activeGhostOrb.gameObject);
+        }
+        activeGhostOrb = null;
+    }
+
     public override void OnNetworkSpawn()
     {
         if (IsServer)
@@ -154,6 +189,13 @@ public class GhostHandler : NetworkBehaviour
     public void ActivateGhost()
     {
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !IsServer) return;
+
+        if (hasActivated)
+        {
+            Debug.LogWarning("GhostHandler: ActivateGhost already ran; ignoring duplicate activation.");
+            return;
+        }
+        hasActivated = true;
 
         Debug.Log("GhostHandler: ActivateGhost triggered!");
 
@@ -208,6 +250,15 @@ public class GhostHandler : NetworkBehaviour
         // Spawn Ghost Orbs natively if applicable
         if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null && ghostroomMarker != null)
         {
+            if (activeGhostOrb == null)
+            {
+                // Reuse any live orb already in the scene instead of spawning a duplicate
+                activeGhostOrb = FindAnyObjectByType<GhostOrbSystem>();
+            }
+        }
+
+        if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null && ghostroomMarker != null && activeGhostOrb == null)
+        {
             Vector3 spawnPos = ghostroomMarker.bounds.center;
             if (!ghostroomMarker.OverlapPoint(spawnPos))
             {
@@ -219,7 +270,11 @@ public class GhostHandler : NetworkBehaviour
             if (orbNetwork != null) orbNetwork.Spawn();
             
             var orbSystem = orb.GetComponent<GhostOrbSystem>();
-            if (orbSystem != null) orbSystem.Initialize(ghostroomMarker);
+            if (orbSystem != null)
+            {
+                orbSystem.Initialize(ghostroomMarker);
+                activeGhostOrb = orbSystem;
+            }
         }
     }
 
@@ -369,7 +424,8 @@ public class GhostHandler : NetworkBehaviour
             }
         }
 
-        currentHuntDuration = isFromFailedExorcism ? (huntDurationMax * 1.5f) : Random.Range(huntDurationMin, huntDurationMax);
+        currentHuntDuration = (isFromFailedExorcism ? (huntDurationMax * 1.5f) : Random.Range(huntDurationMin, huntDurationMax))
+            * WeatherManager.GetHuntDurationMultiplier();
         huntTimer = 0f;
         huntLightFlickerTimer = 0f;
         huntFuseTripTimer = 0f;
@@ -396,19 +452,35 @@ public class GhostHandler : NetworkBehaviour
     public void EndHunt()
     {
         if (!IsServer) return;
+        if (currentState.Value == GhostHandlerState.Dormant && !isExorcismFailedHunt.Value) return;
 
         if (isExorcismFailedHunt.Value)
         {
             isExorcismFailedHunt.Value = false;
             TriggerRedEnvironmentClientRpc(false);
         }
-        
+
+        if (hunterGhost != null)
+        {
+            hunterGhost.OnHuntEnded();
+        }
+
         // Reset ghost to the center of the ghost room when hunt ends so it doesn't stay in the hallway
         if (ghostroomMarker != null && hunterGhost != null)
         {
+            Vector3 targetPos = ghostroomMarker.bounds.center;
+            if (UnityEngine.AI.NavMesh.SamplePosition(targetPos, out UnityEngine.AI.NavMeshHit hit, 5f, UnityEngine.AI.NavMesh.AllAreas))
+            {
+                targetPos = hit.position;
+            }
+
             var agent = hunterGhost.GetComponent<UnityEngine.AI.NavMeshAgent>();
-            if (agent != null && agent.isOnNavMesh) agent.Warp(ghostroomMarker.bounds.center);
-            else hunterGhost.transform.position = ghostroomMarker.bounds.center;
+            if (agent != null)
+            {
+                if (agent.isOnNavMesh) agent.Warp(targetPos);
+                agent.enabled = false;
+            }
+            hunterGhost.transform.position = targetPos;
         }
 
         SetDoorsLocked(false);

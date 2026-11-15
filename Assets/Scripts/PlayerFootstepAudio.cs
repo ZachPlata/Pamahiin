@@ -76,6 +76,7 @@ public class PlayerFootstepAudio : MonoBehaviour
         if (audioSource != null)
         {
             audioSource.playOnAwake = false;
+            GameAudioManager.ConfigureProximityAudioSource(audioSource, 0.45f, 3.0f, 1.0f);
         }
 
         contactFilter = new ContactFilter2D();
@@ -119,7 +120,11 @@ public class PlayerFootstepAudio : MonoBehaviour
             }
         }
 
-        // 4. Play the footstep
+        // 4. Play the footstep (duck outdoors during heavy thunderstorm, mute across floors)
+        volume *= WeatherManager.GetFootstepWeatherMultiplier(transform.position);
+        volume *= GameAudioManager.GetFloorAttenuation(transform.position, 0f);
+        if (volume <= 0.005f) return;
+
         audioSource.PlayOneShot(clip, Mathf.Clamp01(volume));
 
         // 5. Horror flavor: Rare extra wooden floorboard creak

@@ -27,6 +27,26 @@ public class PlayerHUDManager : MonoBehaviour
     private Button btnEndGame;
     private PlayerController localPlayerController;
 
+    // Dirty-state caches so we don't mutate UI Toolkit styles/text every frame unnecessarily
+    private int lastSortingOrder = -1;
+    private bool? lastHudRootVisible;
+    private bool? lastDeadState;
+    private bool? lastHoldingNvCam;
+    private int lastNvClockSecond = -1;
+    private readonly bool?[] lastPowerVisible = new bool?[PlayerInventory.MaxSlots];
+    private readonly bool?[] lastPowerOn = new bool?[PlayerInventory.MaxSlots];
+    private readonly bool?[] lastEmfVisible = new bool?[PlayerInventory.MaxSlots];
+    private readonly int[] lastEmfLevel = new int[] { -1, -1, -1, -1 };
+    private readonly bool?[] lastTempVisible = new bool?[PlayerInventory.MaxSlots];
+    private readonly int[] lastTempTenths = new int[] { int.MinValue, int.MinValue, int.MinValue, int.MinValue };
+
+    private static readonly Color[] EmfColors = { Color.green, Color.green, Color.yellow, new Color(1f, 0.5f, 0f), Color.red };
+    private static readonly StyleColor PowerOnStyle = new StyleColor(Color.green);
+    private static readonly StyleColor PowerOffStyle = new StyleColor(Color.red);
+    private static readonly StyleColor EmfOffStyle = new StyleColor(Color.gray);
+    private static readonly StyleColor TempColdStyle = new StyleColor(Color.cyan);
+    private static readonly StyleColor TempNormalStyle = new StyleColor(Color.white);
+
     private void OnEnable()
     {
         if (hudDocument == null || hudDocument.rootVisualElement == null) return;
@@ -81,18 +101,13 @@ public class PlayerHUDManager : MonoBehaviour
 
     private void Update()
     {
-        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene")
+        bool isMainMenu = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene";
+        if (hudDocument != null && hudDocument.rootVisualElement != null && lastHudRootVisible != !isMainMenu)
         {
-            if (hudDocument != null && hudDocument.rootVisualElement != null)
-            {
-                hudDocument.rootVisualElement.style.display = DisplayStyle.None;
-            }
-            return;
+            lastHudRootVisible = !isMainMenu;
+            hudDocument.rootVisualElement.style.display = isMainMenu ? DisplayStyle.None : DisplayStyle.Flex;
         }
-        else if (hudDocument != null && hudDocument.rootVisualElement != null)
-        {
-            hudDocument.rootVisualElement.style.display = DisplayStyle.Flex;
-        }
+        if (isMainMenu) return;
 
         if (localInventory == null || localPlayerController == null)
         {
@@ -102,19 +117,28 @@ public class PlayerHUDManager : MonoBehaviour
         if (deathOverlay != null)
         {
             bool isDead = localPlayerController != null && !localPlayerController.IsAlive;
-            if (isDead)
+            if (lastDeadState != isDead)
             {
-                if (hudDocument != null) hudDocument.sortingOrder = 100;
-                deathOverlay.RemoveFromClassList("death-overlay-hidden");
-                deathOverlay.style.display = DisplayStyle.Flex;
-                UnityEngine.Cursor.lockState = CursorLockMode.None;
-                UnityEngine.Cursor.visible = true;
-            }
-            else
-            {
-                if (hudDocument != null) hudDocument.sortingOrder = 1;
-                deathOverlay.AddToClassList("death-overlay-hidden");
-                deathOverlay.style.display = DisplayStyle.None;
+                lastDeadState = isDead;
+                int desiredOrder = isDead ? 100 : 1;
+                if (hudDocument != null && lastSortingOrder != desiredOrder)
+                {
+                    lastSortingOrder = desiredOrder;
+                    hudDocument.sortingOrder = desiredOrder;
+                }
+
+                if (isDead)
+                {
+                    deathOverlay.RemoveFromClassList("death-overlay-hidden");
+                    deathOverlay.style.display = DisplayStyle.Flex;
+                    UnityEngine.Cursor.lockState = CursorLockMode.None;
+                    UnityEngine.Cursor.visible = true;
+                }
+                else
+                {
+                    deathOverlay.AddToClassList("death-overlay-hidden");
+                    deathOverlay.style.display = DisplayStyle.None;
+                }
             }
         }
 
@@ -128,63 +152,75 @@ public class PlayerHUDManager : MonoBehaviour
         for (int i = 0; i < PlayerInventory.MaxSlots; i++)
         {
             var item = localInventory.slots[i];
-            
-            // Power Indicator logic
-            if (item != null && (item is FlashlightItem || item is VideoCameraItem || item is DotsProjectorItem || item is SpiritBoxItem || item is ThermometerItem))
+
+            // Power Indicator logic (update style only when visibility or power changes)
+            bool showPower = item != null && (item is FlashlightItem || item is VideoCameraItem || item is DotsProjectorItem || item is SpiritBoxItem || item is ThermometerItem);
+            if (powerIndicators[i] != null)
             {
-                if (powerIndicators[i] != null)
+                if (lastPowerVisible[i] != showPower)
                 {
-                    powerIndicators[i].style.display = DisplayStyle.Flex;
-                    powerIndicators[i].style.backgroundColor = item.IsPoweredOn ? new StyleColor(Color.green) : new StyleColor(Color.red);
+                    lastPowerVisible[i] = showPower;
+                    powerIndicators[i].style.display = showPower ? DisplayStyle.Flex : DisplayStyle.None;
+                    if (!showPower) lastPowerOn[i] = null;
+                }
+
+                if (showPower)
+                {
+                    bool isOn = item.IsPoweredOn;
+                    if (lastPowerOn[i] != isOn)
+                    {
+                        lastPowerOn[i] = isOn;
+                        powerIndicators[i].style.backgroundColor = isOn ? PowerOnStyle : PowerOffStyle;
+                    }
                 }
             }
-            else
+
+            // EMF Reader logic (update only when container visibility or EMF level changes)
+            EMFReaderItem emfReader = item as EMFReaderItem;
+            bool showEmf = emfReader != null;
+            if (emfContainers[i] != null && lastEmfVisible[i] != showEmf)
             {
-                if (powerIndicators[i] != null) powerIndicators[i].style.display = DisplayStyle.None;
+                lastEmfVisible[i] = showEmf;
+                emfContainers[i].style.display = showEmf ? DisplayStyle.Flex : DisplayStyle.None;
+                if (!showEmf) lastEmfLevel[i] = -1;
             }
 
-            // EMF Reader logic
-            if (item != null && item is EMFReaderItem emfReader)
+            if (showEmf)
             {
-                if (emfContainers[i] != null) emfContainers[i].style.display = DisplayStyle.Flex;
-                
                 int emfLevel = emfReader.CurrentEmfLevel;
-                Color[] colors = new Color[] { Color.green, Color.green, Color.yellow, new Color(1f, 0.5f, 0f), Color.red };
-                
-                for (int j = 0; j < 5; j++)
+                if (lastEmfLevel[i] != emfLevel)
                 {
-                    if (emfDots[i, j] != null)
+                    lastEmfLevel[i] = emfLevel;
+                    for (int j = 0; j < 5; j++)
                     {
-                        if (j < emfLevel)
+                        if (emfDots[i, j] != null)
                         {
-                            emfDots[i, j].style.backgroundColor = new StyleColor(colors[j]);
-                        }
-                        else
-                        {
-                            emfDots[i, j].style.backgroundColor = new StyleColor(Color.gray);
+                            emfDots[i, j].style.backgroundColor = j < emfLevel ? new StyleColor(EmfColors[j]) : EmfOffStyle;
                         }
                     }
                 }
             }
-            else
+
+            // Thermometer logic (update only when visibility or rounded tenth-degree value changes)
+            ThermometerItem thermometer = item as ThermometerItem;
+            bool showTemp = thermometer != null && thermometer.IsPoweredOn;
+            if (temperatureContainers[i] != null && lastTempVisible[i] != showTemp)
             {
-                if (emfContainers[i] != null) emfContainers[i].style.display = DisplayStyle.None;
+                lastTempVisible[i] = showTemp;
+                temperatureContainers[i].style.display = showTemp ? DisplayStyle.Flex : DisplayStyle.None;
+                if (!showTemp) lastTempTenths[i] = int.MinValue;
             }
 
-            // Thermometer logic
-            if (item != null && item is ThermometerItem thermometer && thermometer.IsPoweredOn)
+            if (showTemp && temperatureTexts[i] != null)
             {
-                if (temperatureContainers[i] != null) temperatureContainers[i].style.display = DisplayStyle.Flex;
-                if (temperatureTexts[i] != null)
+                float temp = thermometer.DisplayedTemperature;
+                int tenths = Mathf.RoundToInt(temp * 10f);
+                if (lastTempTenths[i] != tenths)
                 {
-                    float temp = thermometer.DisplayedTemperature;
-                    temperatureTexts[i].text = $"{temp:F1}°C";
-                    temperatureTexts[i].style.color = temp < 0f ? new StyleColor(Color.cyan) : new StyleColor(Color.white);
+                    lastTempTenths[i] = tenths;
+                    temperatureTexts[i].text = $"{(tenths * 0.1f):F1}°C";
+                    temperatureTexts[i].style.color = tenths < 0 ? TempColdStyle : TempNormalStyle;
                 }
-            }
-            else
-            {
-                if (temperatureContainers[i] != null) temperatureContainers[i].style.display = DisplayStyle.None;
             }
         }
 
@@ -201,10 +237,15 @@ public class PlayerHUDManager : MonoBehaviour
 
         if (nvOverlay != null)
         {
+            if (lastHoldingNvCam != isHoldingCamWithNV)
+            {
+                lastHoldingNvCam = isHoldingCamWithNV;
+                if (isHoldingCamWithNV) nvOverlay.RemoveFromClassList("nv-overlay-hidden");
+                else nvOverlay.AddToClassList("nv-overlay-hidden");
+            }
+
             if (isHoldingCamWithNV)
             {
-                nvOverlay.RemoveFromClassList("nv-overlay-hidden");
-                
                 // Blink REC indicator
                 nvRecBlinkTimer += Time.deltaTime;
                 if (nvRecBlinkTimer >= 0.5f)
@@ -218,25 +259,23 @@ public class PlayerHUDManager : MonoBehaviour
                     }
                 }
 
-                // Live timer (session time formatted as HH:mm:ss)
-                if (nvTimer != null)
+                // Update timer & clock text once per second instead of allocating strings every frame
+                int totalSeconds = Mathf.FloorToInt(Time.timeSinceLevelLoad);
+                if (totalSeconds != lastNvClockSecond)
                 {
-                    int totalSeconds = Mathf.FloorToInt(Time.timeSinceLevelLoad);
-                    int hours = totalSeconds / 3600;
-                    int minutes = (totalSeconds % 3600) / 60;
-                    int seconds = totalSeconds % 60;
-                    nvTimer.text = $"{hours:00}:{minutes:00}:{seconds:00}";
+                    lastNvClockSecond = totalSeconds;
+                    if (nvTimer != null)
+                    {
+                        int hours = totalSeconds / 3600;
+                        int minutes = (totalSeconds % 3600) / 60;
+                        int seconds = totalSeconds % 60;
+                        nvTimer.text = $"{hours:00}:{minutes:00}:{seconds:00}";
+                    }
+                    if (nvTimestamp != null)
+                    {
+                        nvTimestamp.text = System.DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss");
+                    }
                 }
-
-                // Live timestamp
-                if (nvTimestamp != null)
-                {
-                    nvTimestamp.text = System.DateTime.Now.ToString("yyyy-MM-dd  HH:mm:ss");
-                }
-            }
-            else
-            {
-                nvOverlay.AddToClassList("nv-overlay-hidden");
             }
         }
     }

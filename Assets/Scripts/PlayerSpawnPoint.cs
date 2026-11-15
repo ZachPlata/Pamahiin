@@ -166,7 +166,7 @@ public class PlayerSpawnPoint : MonoBehaviour
     {
         if (activeSpawnPoints.Count == 0)
         {
-            var found = Object.FindObjectsByType<PlayerSpawnPoint>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var found = Object.FindObjectsByType<PlayerSpawnPoint>(FindObjectsInactive.Include);
             foreach (var sp in found)
             {
                 if (sp != null && sp.gameObject.activeInHierarchy && !activeSpawnPoints.Contains(sp))

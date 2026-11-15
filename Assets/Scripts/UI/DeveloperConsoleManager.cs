@@ -18,6 +18,8 @@ public class DeveloperConsoleManager : MonoBehaviour
 
     private VisualElement container;
     private Label statusLabel;
+    private Label currencyBalanceLabel;
+    private TextField currencyAmountInput;
     private bool isConsoleOpen = false;
     private int closedFrame = -1;
 
@@ -33,6 +35,11 @@ public class DeveloperConsoleManager : MonoBehaviour
             return;
         }
         Instance = this;
+
+        if (consoleDocument == null)
+        {
+            consoleDocument = GetComponent<UIDocument>();
+        }
     }
 
     private void OnDestroy()
@@ -42,6 +49,7 @@ public class DeveloperConsoleManager : MonoBehaviour
 
     private void OnEnable()
     {
+        if (consoleDocument == null) consoleDocument = GetComponent<UIDocument>();
         if (consoleDocument == null || consoleDocument.rootVisualElement == null) return;
 
         consoleDocument.sortingOrder = 100;
@@ -49,6 +57,20 @@ public class DeveloperConsoleManager : MonoBehaviour
 
         container = root.Q<VisualElement>("DevConsoleContainer");
         statusLabel = root.Q<Label>("DevStatusLabel");
+        currencyBalanceLabel = root.Q<Label>("CurrencyBalanceLabel");
+        currencyAmountInput = root.Q<TextField>("CurrencyAmountInput");
+
+        if (currencyAmountInput != null)
+        {
+            currencyAmountInput.RegisterValueChangedCallback(evt =>
+            {
+                string sanitized = SanitizePositiveDigits(evt.newValue);
+                if (sanitized != evt.newValue)
+                {
+                    currencyAmountInput.SetValueWithoutNotify(sanitized);
+                }
+            });
+        }
 
         // Close button
         var closeBtn = root.Q<Button>("CloseConsoleBtn");
@@ -86,6 +108,33 @@ public class DeveloperConsoleManager : MonoBehaviour
         BindBtn(root, "RestoreFuseBoxBtn", OnRestoreFuseBox);
         BindBtn(root, "ToggleFpsBtn", OnToggleFps);
         BindBtn(root, "ToggleTimescaleBtn", OnToggleTimescale);
+        BindBtn(root, "DevRemove500Btn", () => OnAdjustCurrency(-500));
+        BindBtn(root, "DevRemove100Btn", () => OnAdjustCurrency(-100));
+        BindBtn(root, "DevAdd100Btn", () => OnAdjustCurrency(100));
+        BindBtn(root, "DevAdd500Btn", () => OnAdjustCurrency(500));
+        BindBtn(root, "AddCurrencyBtn", () => OnApplyCustomCurrency(1));
+        BindBtn(root, "RemoveCurrencyBtn", () => OnApplyCustomCurrency(-1));
+        BindBtn(root, "ResetProgressionBtn", OnResetProgression);
+        BindBtn(root, "WeatherNightBtn", () => OnSetWeather(BarangayWeatherType.NightFireflies, false));
+        BindBtn(root, "WeatherFogBtn", () => OnSetWeather(BarangayWeatherType.Foggy, false));
+        BindBtn(root, "WeatherRainBtn", () => OnSetWeather(BarangayWeatherType.RainThunderstorm, false));
+        BindBtn(root, "ToggleRedMoonBtn", OnToggleRedMoon);
+
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        if (mgr != null)
+        {
+            mgr.OnCurrencyOrLoadoutChanged -= RefreshCurrencyLabel;
+            mgr.OnCurrencyOrLoadoutChanged += RefreshCurrencyLabel;
+        }
+        RefreshCurrencyLabel();
+    }
+
+    private void OnDisable()
+    {
+        if (ProgressionAndLoadoutManager.Instance != null)
+        {
+            ProgressionAndLoadoutManager.Instance.OnCurrencyOrLoadoutChanged -= RefreshCurrencyLabel;
+        }
     }
 
     private void BindBtn(VisualElement root, string name, Action action)
@@ -119,6 +168,7 @@ public class DeveloperConsoleManager : MonoBehaviour
         {
             UnityEngine.Cursor.lockState = CursorLockMode.None;
             UnityEngine.Cursor.visible = true;
+            RefreshCurrencyLabel();
             SetStatus("Console opened.");
         }
         else
@@ -376,6 +426,95 @@ public class DeveloperConsoleManager : MonoBehaviour
         isSlowMo = !isSlowMo;
         Time.timeScale = isSlowMo ? 0.4f : 1.0f;
         SetStatus($"Simulation Speed: {(isSlowMo ? "0.4x (Slow-Mo)" : "1.0x (Normal)")}");
+    }
+
+    private void OnAdjustCurrency(int delta)
+    {
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        if (mgr == null)
+        {
+            SetStatus("ProgressionAndLoadoutManager not available.");
+            return;
+        }
+
+        int before = mgr.Currency;
+        mgr.AddCurrency(delta);
+        RefreshCurrencyLabel();
+
+        if (delta >= 0)
+        {
+            SetStatus($"Added ${delta}. Balance: ${mgr.Currency}.");
+        }
+        else
+        {
+            bool clamped = before + delta < 0;
+            string clampNote = clamped ? " (clamped at $0)" : string.Empty;
+            SetStatus($"Removed ${-delta}{clampNote}. Balance: ${mgr.Currency}.");
+        }
+    }
+
+    private void OnApplyCustomCurrency(int sign)
+    {
+        string raw = currencyAmountInput != null ? currencyAmountInput.value : string.Empty;
+        if (!int.TryParse(raw, out int amount) || amount <= 0)
+        {
+            SetStatus("Enter a positive integer currency amount.");
+            return;
+        }
+
+        OnAdjustCurrency(sign >= 0 ? amount : -amount);
+    }
+
+    private void RefreshCurrencyLabel()
+    {
+        if (currencyBalanceLabel == null) return;
+        var mgr = ProgressionAndLoadoutManager.Instance;
+        int balance = mgr != null ? mgr.Currency : ProgressionAndLoadoutManager.STARTER_CURRENCY;
+        currencyBalanceLabel.text = $"Balance: ${balance}";
+    }
+
+    private static string SanitizePositiveDigits(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(input.Length);
+        for (int i = 0; i < input.Length; i++)
+        {
+            char ch = input[i];
+            if (ch >= '0' && ch <= '9') sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
+    private void OnResetProgression()
+    {
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        if (mgr != null)
+        {
+            mgr.ResetProgressionToDefault();
+            SetStatus($"Progression reset to ${ProgressionAndLoadoutManager.STARTER_CURRENCY} + starter Flashlight.");
+        }
+        else SetStatus("ProgressionAndLoadoutManager not available.");
+    }
+
+    private void OnSetWeather(BarangayWeatherType weatherType, bool redMoon)
+    {
+        if (WeatherManager.Instance != null)
+        {
+            WeatherManager.Instance.SetWeatherPresetServerRpc((int)weatherType, redMoon);
+            SetStatus($"Weather forced: {weatherType} (Red Moon: {(redMoon ? "ON" : "OFF")})");
+        }
+        else SetStatus("WeatherManager not present in this scene.");
+    }
+
+    private void OnToggleRedMoon()
+    {
+        if (WeatherManager.Instance != null)
+        {
+            bool next = !WeatherManager.Instance.IsRedMoon;
+            WeatherManager.Instance.ToggleRedMoonServerRpc();
+            SetStatus($"Red Moon toggled: {(next ? "ON" : "OFF")}");
+        }
+        else SetStatus("WeatherManager not present in this scene.");
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────

@@ -10,9 +10,10 @@ public class JournalController : MonoBehaviour
     private UIDocument uiDocument;
     private VisualElement journalOverlay;
 
-    // Spreads (0..7 = Standard Field Journal, 8 = Lobby / Multiplayer / Equipment Shop)
-    private const int TotalSpreads = 9;
-    private const int LobbySpreadIndex = 8;
+    // Spreads (0..8 = Standard Field Journal, 9 = Lobby / Multiplayer / Equipment Shop)
+    private const int TotalSpreads = 10;
+    private const int BlueprintSpreadIndex = 2;
+    private const int LobbySpreadIndex = 9;
     private VisualElement[] spreads = new VisualElement[TotalSpreads];
     private int currentSpread = 0;
 
@@ -20,6 +21,7 @@ public class JournalController : MonoBehaviour
     private Button tabLobby;
     private Button tabCover;
     private Button tabToc;
+    private Button tabBlueprint;
     private Button tabEquip;
     private Button tabGhosts;
     private Button tabEvidence;
@@ -27,12 +29,25 @@ public class JournalController : MonoBehaviour
 
     // Table of Contents Buttons
     private Button btnCoverOpen;
+    private Button btnTocBlueprint;
     private Button btnTocEquip1;
     private Button btnTocEquip2;
     private Button btnTocTikbalang;
     private Button btnTocKapre;
     private Button btnTocManananggal;
     private Button btnTocEvidence;
+
+    // Case Briefing & Blueprint Controls (Spread 2)
+    private Label lblCaseId;
+    private Label lblCaseDifficulty;
+    private Label lblCaseGhostName;
+    private Label lblCaseBgTitle;
+    private Label lblCaseGhostBg;
+    private Label lblBlueprintMapName;
+    private Label lblBlueprintSubtitle;
+    private VisualElement blueprintImage;
+    private Label lblBlueprintUnavailable;
+    private GameMatchManager subscribedMatchManager;
 
     // Bottom Navigation
     private Button btnPrevPage;
@@ -73,6 +88,7 @@ public class JournalController : MonoBehaviour
     private Button btnStartContract;
     private Label lblPlayerCurrency;
     private Label lblLoadoutSummary;
+    private VisualElement lobbyPlayerLegend;
     private ScrollView loadoutShopList;
 
     // Two-way cross-filtering data structures
@@ -90,11 +106,15 @@ public class JournalController : MonoBehaviour
     private bool isUpdatingFilters = false;
 
     private bool isJournalOpen = false;
+    private bool isStartingContract = false;
+    private bool isPartyCodeInputFocused = false;
+    private int textInputBlurFrame = -1;
     private int closedFrame = -1;
 
     public static JournalController Instance { get; private set; }
     public static bool IsOpen => Instance != null && Instance.isJournalOpen;
     public static bool WasOpenThisFrame => IsOpen || (Instance != null && Instance.closedFrame == Time.frameCount);
+    public static bool IsTextInputFocused => IsOpen && Instance != null && Instance.ComputeTextInputFocused();
     public bool IsJournalOpen => isJournalOpen;
 
     private void Awake()
@@ -114,6 +134,78 @@ public class JournalController : MonoBehaviour
         if (Instance == this) Instance = null;
     }
 
+    private static bool IsElementHierarchyVisible(VisualElement element)
+    {
+        for (VisualElement current = element; current != null; current = current.parent)
+        {
+            if (current.ClassListContains("hidden") ||
+                current.ClassListContains("hidden-spread") ||
+                (current.style.display.keyword != StyleKeyword.Null && current.style.display.value == DisplayStyle.None) ||
+                !current.visible)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private bool ComputeTextInputFocused()
+    {
+        if (!isJournalOpen || currentSpread != LobbySpreadIndex ||
+            (inputPartyCode != null && !IsElementHierarchyVisible(inputPartyCode)))
+        {
+            isPartyCodeInputFocused = false;
+        }
+
+        if (isPartyCodeInputFocused)
+        {
+            return true;
+        }
+
+        IPanel panel = journalOverlay?.panel ?? uiDocument?.rootVisualElement?.panel;
+        if (panel?.focusController?.focusedElement is VisualElement focusedElement &&
+            IsElementHierarchyVisible(focusedElement))
+        {
+            return focusedElement is TextField || focusedElement.GetFirstAncestorOfType<TextField>() != null;
+        }
+
+        return false;
+    }
+
+    private void BlurPartyCodeInput()
+    {
+        bool wasFocused = isPartyCodeInputFocused;
+        isPartyCodeInputFocused = false;
+
+        if (inputPartyCode != null)
+        {
+            inputPartyCode.Blur();
+        }
+
+        IPanel panel = journalOverlay?.panel ?? uiDocument?.rootVisualElement?.panel;
+        if (panel?.focusController?.focusedElement is VisualElement focusedElement &&
+            (focusedElement == inputPartyCode ||
+             (inputPartyCode != null && focusedElement.GetFirstAncestorOfType<TextField>() == inputPartyCode)))
+        {
+            focusedElement.Blur();
+            wasFocused = true;
+        }
+
+        if (wasFocused)
+        {
+            textInputBlurFrame = Time.frameCount;
+        }
+    }
+
+    private void SubmitPartyCodeJoin()
+    {
+        if (NetworkController.Instance != null && inputPartyCode != null)
+        {
+            NetworkController.Instance.JoinMultiplayerByPartyCode(inputPartyCode.value);
+            RefreshLobbySpreadUI();
+        }
+    }
+
     private void OnEnable()
     {
         uiDocument.sortingOrder = 10;
@@ -131,6 +223,7 @@ public class JournalController : MonoBehaviour
         tabLobby = root.Q<Button>("tab-lobby");
         tabCover = root.Q<Button>("tab-cover");
         tabToc = root.Q<Button>("tab-toc");
+        tabBlueprint = root.Q<Button>("tab-blueprint");
         tabEquip = root.Q<Button>("tab-equip");
         tabGhosts = root.Q<Button>("tab-ghosts");
         tabEvidence = root.Q<Button>("tab-evidence");
@@ -139,9 +232,10 @@ public class JournalController : MonoBehaviour
         if (tabLobby != null) tabLobby.clicked += () => ShowSpread(LobbySpreadIndex);
         if (tabCover != null) tabCover.clicked += () => ShowSpread(0);
         if (tabToc != null) tabToc.clicked += () => ShowSpread(1);
-        if (tabEquip != null) tabEquip.clicked += () => ShowSpread(2);
-        if (tabGhosts != null) tabGhosts.clicked += () => ShowSpread(4);
-        if (tabEvidence != null) tabEvidence.clicked += () => ShowSpread(7);
+        if (tabBlueprint != null) tabBlueprint.clicked += () => ShowSpread(BlueprintSpreadIndex);
+        if (tabEquip != null) tabEquip.clicked += () => ShowSpread(3);
+        if (tabGhosts != null) tabGhosts.clicked += () => ShowSpread(5);
+        if (tabEvidence != null) tabEvidence.clicked += () => ShowSpread(8);
         if (btnCloseTop != null) btnCloseTop.clicked += ToggleJournal;
 
         // 3. Cover Open Button
@@ -149,6 +243,7 @@ public class JournalController : MonoBehaviour
         if (btnCoverOpen != null) btnCoverOpen.clicked += () => ShowSpread(1);
 
         // 4. Table of Contents Jumps
+        btnTocBlueprint = root.Q<Button>("btn-toc-blueprint");
         btnTocEquip1 = root.Q<Button>("btn-toc-equip1");
         btnTocEquip2 = root.Q<Button>("btn-toc-equip2");
         btnTocTikbalang = root.Q<Button>("btn-toc-tikbalang");
@@ -156,12 +251,13 @@ public class JournalController : MonoBehaviour
         btnTocManananggal = root.Q<Button>("btn-toc-manananggal");
         btnTocEvidence = root.Q<Button>("btn-toc-evidence");
 
-        if (btnTocEquip1 != null) btnTocEquip1.clicked += () => ShowSpread(2);
-        if (btnTocEquip2 != null) btnTocEquip2.clicked += () => ShowSpread(3);
-        if (btnTocTikbalang != null) btnTocTikbalang.clicked += () => ShowSpread(4);
-        if (btnTocKapre != null) btnTocKapre.clicked += () => ShowSpread(5);
-        if (btnTocManananggal != null) btnTocManananggal.clicked += () => ShowSpread(6);
-        if (btnTocEvidence != null) btnTocEvidence.clicked += () => ShowSpread(7);
+        if (btnTocBlueprint != null) btnTocBlueprint.clicked += () => ShowSpread(BlueprintSpreadIndex);
+        if (btnTocEquip1 != null) btnTocEquip1.clicked += () => ShowSpread(3);
+        if (btnTocEquip2 != null) btnTocEquip2.clicked += () => ShowSpread(4);
+        if (btnTocTikbalang != null) btnTocTikbalang.clicked += () => ShowSpread(5);
+        if (btnTocKapre != null) btnTocKapre.clicked += () => ShowSpread(6);
+        if (btnTocManananggal != null) btnTocManananggal.clicked += () => ShowSpread(7);
+        if (btnTocEvidence != null) btnTocEvidence.clicked += () => ShowSpread(8);
 
         // 5. Bottom Navigation Bar
         btnPrevPage = root.Q<Button>("btn-prev-page");
@@ -216,42 +312,188 @@ public class JournalController : MonoBehaviour
         btnClose = root.Q<Button>("btn-close");
         if (btnClose != null) btnClose.clicked += ToggleJournal;
 
-        // 8. Bind Lobby / Multiplayer / Equipment Loadout Spread (Spread 8)
+        // 8. Bind Case Briefing & Map Blueprint Spread (Spread 2) and Lobby Spread (Spread 9)
+        BindCaseBriefingAndBlueprintControls(root);
         BindLobbySpreadControls(root);
 
-        if (ProgressionAndLoadoutManager.Instance != null)
+        var loadoutMgr = ProgressionAndLoadoutManager.EnsureInstance();
+        if (loadoutMgr != null)
         {
-            ProgressionAndLoadoutManager.Instance.OnCurrencyOrLoadoutChanged += RefreshLobbySpreadUI;
-            ProgressionAndLoadoutManager.Instance.OnContractSettingsChanged += RefreshLobbySpreadUI;
+            loadoutMgr.OnCurrencyOrLoadoutChanged -= RefreshLobbySpreadUI;
+            loadoutMgr.OnContractSettingsChanged -= HandleContractSettingsChanged;
+            loadoutMgr.OnCurrencyOrLoadoutChanged += RefreshLobbySpreadUI;
+            loadoutMgr.OnContractSettingsChanged += HandleContractSettingsChanged;
         }
         if (NetworkController.Instance != null)
         {
+            NetworkController.Instance.OnPartyStateChanged -= RefreshLobbySpreadUI;
             NetworkController.Instance.OnPartyStateChanged += RefreshLobbySpreadUI;
         }
 
+        EnsureMatchManagerSubscription();
+        RefreshCaseBriefingAndBlueprintUI();
         UpdateLobbyTabVisibility();
 
-        // Default spread: Lobby spread if in LobbyScene, otherwise Cover
+        // Default spread: Lobby spread if in LobbyScene, otherwise Case Briefing & Blueprint (Spread 2)
         if (ProgressionAndLoadoutManager.IsInLobbyScene)
         {
             ShowSpread(LobbySpreadIndex);
         }
         else
         {
-            ShowSpread(0);
+            ShowSpread(BlueprintSpreadIndex);
         }
     }
 
     private void OnDisable()
     {
+        BlurPartyCodeInput();
+
         if (ProgressionAndLoadoutManager.Instance != null)
         {
             ProgressionAndLoadoutManager.Instance.OnCurrencyOrLoadoutChanged -= RefreshLobbySpreadUI;
-            ProgressionAndLoadoutManager.Instance.OnContractSettingsChanged -= RefreshLobbySpreadUI;
+            ProgressionAndLoadoutManager.Instance.OnContractSettingsChanged -= HandleContractSettingsChanged;
         }
         if (NetworkController.Instance != null)
         {
             NetworkController.Instance.OnPartyStateChanged -= RefreshLobbySpreadUI;
+        }
+        if (subscribedMatchManager != null)
+        {
+            subscribedMatchManager.OnGhostContractInfoChanged -= RefreshCaseBriefingAndBlueprintUI;
+            subscribedMatchManager = null;
+        }
+    }
+
+    private void HandleContractSettingsChanged()
+    {
+        RefreshLobbySpreadUI();
+        RefreshCaseBriefingAndBlueprintUI();
+    }
+
+    private void EnsureMatchManagerSubscription()
+    {
+        var current = GameMatchManager.Instance;
+        if (subscribedMatchManager == current) return;
+
+        if (subscribedMatchManager != null)
+        {
+            subscribedMatchManager.OnGhostContractInfoChanged -= RefreshCaseBriefingAndBlueprintUI;
+        }
+
+        subscribedMatchManager = current;
+        if (subscribedMatchManager != null)
+        {
+            subscribedMatchManager.OnGhostContractInfoChanged -= RefreshCaseBriefingAndBlueprintUI;
+            subscribedMatchManager.OnGhostContractInfoChanged += RefreshCaseBriefingAndBlueprintUI;
+        }
+    }
+
+    private void BindCaseBriefingAndBlueprintControls(VisualElement root)
+    {
+        lblCaseId = root.Q<Label>("lbl-case-id");
+        lblCaseDifficulty = root.Q<Label>("lbl-case-difficulty");
+        lblCaseGhostName = root.Q<Label>("lbl-case-ghost-name");
+        lblCaseBgTitle = root.Q<Label>("lbl-case-bg-title");
+        lblCaseGhostBg = root.Q<Label>("lbl-case-ghost-bg");
+        lblBlueprintMapName = root.Q<Label>("lbl-blueprint-map-name");
+        lblBlueprintSubtitle = root.Q<Label>("lbl-blueprint-subtitle");
+        blueprintImage = root.Q<VisualElement>("blueprint-image");
+        lblBlueprintUnavailable = root.Q<Label>("lbl-blueprint-unavailable");
+    }
+
+    private static string FormatDifficultyBadge(ContractDifficulty difficulty)
+    {
+        float mult = ProgressionAndLoadoutManager.GetDifficultyRewardMultiplier(difficulty);
+        return $"{difficulty.ToString().ToUpperInvariant()} ({mult:0.0}x)";
+    }
+
+    private void RefreshCaseBriefingAndBlueprintUI()
+    {
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
+        bool inLobby = ProgressionAndLoadoutManager.IsInLobbyScene;
+        ContractDifficulty diff = mgr != null ? mgr.SelectedDifficulty : ContractDifficulty.Amateur;
+
+        if (lblCaseDifficulty != null)
+        {
+            lblCaseDifficulty.text = FormatDifficultyBadge(diff);
+        }
+
+        if (inLobby)
+        {
+            if (lblCaseId != null) lblCaseId.text = "PENDING";
+            if (lblCaseGhostName != null) lblCaseGhostName.text = "PENDING ASSIGNMENT";
+            if (lblCaseBgTitle != null) lblCaseBgTitle.text = "Awaiting Dispatch";
+            if (lblCaseGhostBg != null)
+            {
+                lblCaseGhostBg.text = "Contract briefing and spirit dossier will be issued upon arrival at the investigation site.";
+            }
+
+            string mapTitle = mgr != null ? mgr.GetSelectedMapDisplayName() : "Barangay San Nicolas — 6 Tanglewood Drive";
+            bool hasBarangayBlueprint = mgr == null || mgr.GetSelectedSceneName() == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
+
+            if (lblBlueprintMapName != null) lblBlueprintMapName.text = mapTitle;
+            SetBlueprintImageAvailability(hasBarangayBlueprint);
+            return;
+        }
+
+        EnsureMatchManagerSubscription();
+        var matchMgr = GameMatchManager.Instance;
+        if (matchMgr != null && matchMgr.HasAssignedGhostProfile)
+        {
+            if (lblCaseId != null) lblCaseId.text = matchMgr.AssignedCaseId;
+            if (lblCaseGhostName != null) lblCaseGhostName.text = matchMgr.AssignedGhostName;
+            if (lblCaseBgTitle != null) lblCaseBgTitle.text = matchMgr.AssignedGhostBackgroundTitle;
+            if (lblCaseGhostBg != null) lblCaseGhostBg.text = matchMgr.AssignedGhostBackground;
+        }
+        else
+        {
+            if (lblCaseId != null) lblCaseId.text = "SYNCING";
+            if (lblCaseGhostName != null) lblCaseGhostName.text = "Investigating...";
+            if (lblCaseBgTitle != null) lblCaseBgTitle.text = "Barangay Incident Record";
+            if (lblCaseGhostBg != null)
+            {
+                lblCaseGhostBg.text = "Retrieving Barangay San Nicolas civil records and witness statements...";
+            }
+        }
+
+        string activeScene = SceneManager.GetActiveScene().name;
+        bool isBarangayScene = activeScene == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
+        if (lblBlueprintMapName != null)
+        {
+            lblBlueprintMapName.text = isBarangayScene
+                ? "Barangay San Nicolas — 6 Tanglewood Drive"
+                : "Abandoned House (Original Prototype)";
+        }
+        SetBlueprintImageAvailability(isBarangayScene);
+    }
+
+    private void SetBlueprintImageAvailability(bool available)
+    {
+        if (lblBlueprintSubtitle != null)
+        {
+            lblBlueprintSubtitle.text = available
+                ? "General Floor Plan (Main Floor & Basement)"
+                : "Floor Plan Unavailable";
+        }
+
+        if (blueprintImage != null)
+        {
+            if (available) blueprintImage.RemoveFromClassList("hidden");
+            else blueprintImage.AddToClassList("hidden");
+        }
+
+        if (lblBlueprintUnavailable != null)
+        {
+            if (available)
+            {
+                lblBlueprintUnavailable.AddToClassList("hidden");
+            }
+            else
+            {
+                lblBlueprintUnavailable.text = "Blueprint only available for Barangay San Nicolas — 6 Tanglewood Drive.";
+                lblBlueprintUnavailable.RemoveFromClassList("hidden");
+            }
         }
     }
 
@@ -277,6 +519,7 @@ public class JournalController : MonoBehaviour
 
         lblPlayerCurrency = root.Q<Label>("lbl-player-currency");
         lblLoadoutSummary = root.Q<Label>("lbl-loadout-summary");
+        lobbyPlayerLegend = root.Q<VisualElement>("lobby-player-legend");
         loadoutShopList = root.Q<ScrollView>("loadout-shop-list");
 
         if (btnMapPrev != null)
@@ -324,22 +567,52 @@ public class JournalController : MonoBehaviour
 
         if (btnJoinParty != null)
         {
-            btnJoinParty.clicked += () =>
+            btnJoinParty.clicked += SubmitPartyCodeJoin;
+        }
+
+        if (inputPartyCode != null)
+        {
+            inputPartyCode.RegisterCallback<FocusInEvent>(_ => isPartyCodeInputFocused = true);
+            inputPartyCode.RegisterCallback<FocusOutEvent>(evt =>
             {
-                if (NetworkController.Instance != null && inputPartyCode != null)
+                if (evt.relatedTarget is VisualElement nextFocused &&
+                    (nextFocused == inputPartyCode || nextFocused.GetFirstAncestorOfType<TextField>() == inputPartyCode))
                 {
-                    NetworkController.Instance.JoinMultiplayerByPartyCode(inputPartyCode.value);
-                    RefreshLobbySpreadUI();
+                    return;
                 }
-            };
+
+                isPartyCodeInputFocused = false;
+                textInputBlurFrame = Time.frameCount;
+            });
+            inputPartyCode.RegisterCallback<KeyDownEvent>(evt =>
+            {
+                if (evt.keyCode == KeyCode.Escape)
+                {
+                    BlurPartyCodeInput();
+                    evt.StopPropagation();
+                }
+                else if (evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter)
+                {
+                    SubmitPartyCodeJoin();
+                    evt.StopPropagation();
+                }
+            }, TrickleDown.TrickleDown);
         }
 
         if (btnStartContract != null)
         {
+            isStartingContract = false;
             btnStartContract.clicked += () =>
             {
+                if (isStartingContract || !ProgressionAndLoadoutManager.IsNetworkHostOrOffline)
+                {
+                    return;
+                }
+
                 if (NetworkController.Instance != null)
                 {
+                    isStartingContract = true;
+                    btnStartContract.SetEnabled(false);
                     if (isJournalOpen) ToggleJournal();
                     NetworkController.Instance.LoadGameScene();
                 }
@@ -355,7 +628,7 @@ public class JournalController : MonoBehaviour
         if (loadoutShopList == null) return;
         loadoutShopList.Clear();
 
-        var mgr = ProgressionAndLoadoutManager.Instance;
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
         if (mgr == null) return;
 
         foreach (var entry in mgr.Catalog)
@@ -379,6 +652,10 @@ public class JournalController : MonoBehaviour
             VisualElement controls = new VisualElement();
             controls.AddToClassList("loadout-item-controls");
 
+            VisualElement contribRow = new VisualElement();
+            contribRow.name = $"pips-{itemId}";
+            contribRow.AddToClassList("loadout-contrib-row");
+
             Button btnMinus = new Button(() =>
             {
                 ProgressionAndLoadoutManager.Instance?.TryRemoveEquipmentAndRefund(itemId);
@@ -399,6 +676,7 @@ public class JournalController : MonoBehaviour
             btnPlus.name = $"btn-plus-{itemId}";
             btnPlus.AddToClassList("loadout-qty-btn");
 
+            controls.Add(contribRow);
             controls.Add(btnMinus);
             controls.Add(qtyLbl);
             controls.Add(btnPlus);
@@ -412,7 +690,7 @@ public class JournalController : MonoBehaviour
 
     public void RefreshLobbySpreadUI()
     {
-        var mgr = ProgressionAndLoadoutManager.Instance;
+        var mgr = ProgressionAndLoadoutManager.EnsureInstance();
         if (mgr == null) return;
 
         if (lblSelectedMap != null)
@@ -448,14 +726,21 @@ public class JournalController : MonoBehaviour
             }
         }
 
-        bool isHostOrSolo = NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer;
+        bool isHostOrSolo = ProgressionAndLoadoutManager.IsNetworkHostOrOffline;
         int connectedCount = 1;
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
             connectedCount = NetworkManager.Singleton.IsServer
                 ? Mathf.Max(1, NetworkManager.Singleton.ConnectedClientsIds.Count)
-                : Mathf.Max(1, PlayerController.AllPlayers.Count);
+                : Mathf.Max(1, mgr.GetLobbyPlayerSlots().Count, PlayerController.AllPlayers.Count);
         }
+
+        btnMapPrev?.SetEnabled(isHostOrSolo);
+        btnMapNext?.SetEnabled(isHostOrSolo);
+        btnDiffAmateur?.SetEnabled(isHostOrSolo);
+        btnDiffIntermediate?.SetEnabled(isHostOrSolo);
+        btnDiffProfessional?.SetEnabled(isHostOrSolo);
+        btnDiffNightmare?.SetEnabled(isHostOrSolo);
 
         if (lblPartyPlayers != null)
         {
@@ -465,24 +750,32 @@ public class JournalController : MonoBehaviour
 
         if (btnStartContract != null)
         {
-            btnStartContract.SetEnabled(isHostOrSolo);
+            btnStartContract.SetEnabled(isHostOrSolo && !isStartingContract);
             btnStartContract.text = isHostOrSolo
                 ? "▶ START INVESTIGATION"
                 : "WAITING FOR HOST TO START...";
         }
 
-        // Currency & Equipment Loadout UI
+        // Currency, Player Legend & Equipment Loadout UI
+        int availableCurrency = mgr.GetAvailableCurrency();
         if (lblPlayerCurrency != null)
-            lblPlayerCurrency.text = $"CURRENCY: ${mgr.Currency}";
+            lblPlayerCurrency.text = $"CURRENCY: ${availableCurrency}";
 
         if (lblLoadoutSummary != null)
             lblLoadoutSummary.text = $"Van Gear: {mgr.GetTotalBroughtItemsCount()} Items (${mgr.GetTotalLoadoutValue()})";
+
+        RefreshPlayerLegend(mgr);
 
         if (loadoutShopList != null)
         {
             foreach (var entry in mgr.Catalog)
             {
                 int count = mgr.GetLoadoutCount(entry.id);
+                int ownRemovableCount = mgr.GetOwnContributionCount(entry.id) - mgr.GetPendingRemoveCount(entry.id);
+
+                var contribRow = loadoutShopList.Q<VisualElement>($"pips-{entry.id}");
+                RefreshItemContributors(contribRow, mgr.GetEquipmentContributors(entry.id));
+
                 var qtyLbl = loadoutShopList.Q<Label>($"lbl-qty-{entry.id}");
                 if (qtyLbl != null)
                 {
@@ -492,16 +785,89 @@ public class JournalController : MonoBehaviour
                 var btnMinus = loadoutShopList.Q<Button>($"btn-minus-{entry.id}");
                 if (btnMinus != null)
                 {
-                    btnMinus.SetEnabled(count > 0);
+                    btnMinus.SetEnabled(ownRemovableCount > 0);
                 }
 
                 var btnPlus = loadoutShopList.Q<Button>($"btn-plus-{entry.id}");
                 if (btnPlus != null)
                 {
-                    btnPlus.SetEnabled(count < entry.maxCount && mgr.Currency >= entry.cost);
+                    btnPlus.SetEnabled(count < entry.maxCount && availableCurrency >= entry.cost);
                 }
             }
         }
+    }
+
+    private void RefreshPlayerLegend(ProgressionAndLoadoutManager mgr)
+    {
+        if (lobbyPlayerLegend == null) return;
+        lobbyPlayerLegend.Clear();
+
+        var slots = new List<LobbyPlayerSlotEntry>(mgr.GetLobbyPlayerSlots());
+        slots.Sort((a, b) => a.slotIndex.CompareTo(b.slotIndex));
+        ulong localId = ProgressionAndLoadoutManager.LocalNetworkClientId;
+
+        for (int i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            bool isLocal = slot.clientId == localId;
+            string roleTag = slot.slotIndex == 0 ? (isLocal ? "You" : "Host") : (isLocal ? "You" : string.Empty);
+            string label = string.IsNullOrEmpty(roleTag)
+                ? $"P{slot.slotIndex + 1}"
+                : $"P{slot.slotIndex + 1} ({roleTag})";
+
+            lobbyPlayerLegend.Add(CreateColoredBadge(
+                label,
+                ProgressionAndLoadoutManager.GetPlayerColor(slot.slotIndex),
+                "lobby-legend-pill",
+                "lobby-legend-dot",
+                "lobby-legend-text"
+            ));
+        }
+    }
+
+    private static void RefreshItemContributors(VisualElement container, List<LoadoutContributorEntry> contributors)
+    {
+        if (container == null) return;
+        container.Clear();
+        if (contributors == null || contributors.Count == 0) return;
+
+        for (int i = 0; i < contributors.Count; i++)
+        {
+            var c = contributors[i];
+            container.Add(CreateColoredBadge(
+                c.count.ToString(),
+                ProgressionAndLoadoutManager.GetPlayerColor(c.slotIndex),
+                "loadout-contrib-pill",
+                "loadout-contrib-dot",
+                "loadout-contrib-count"
+            ));
+        }
+    }
+
+    private static VisualElement CreateColoredBadge(
+        string text,
+        Color color,
+        string pillClass,
+        string dotClass,
+        string textClass)
+    {
+        var pill = new VisualElement();
+        pill.AddToClassList(pillClass);
+        pill.style.borderTopColor = color;
+        pill.style.borderBottomColor = color;
+        pill.style.borderLeftColor = color;
+        pill.style.borderRightColor = color;
+
+        var dot = new VisualElement();
+        dot.AddToClassList(dotClass);
+        dot.style.backgroundColor = color;
+
+        var lbl = new Label(text);
+        lbl.AddToClassList(textClass);
+
+        pill.Add(dot);
+        pill.Add(lbl);
+        return pill;
     }
 
     private static void UpdateDifficultyBtnHighlight(Button btn, bool isActive)
@@ -511,18 +877,21 @@ public class JournalController : MonoBehaviour
         else btn.RemoveFromClassList("lobby-diff-btn-active");
     }
 
+    private bool? lastLobbyTabVisible;
+
     private void UpdateLobbyTabVisibility()
     {
         bool inLobby = ProgressionAndLoadoutManager.IsInLobbyScene;
-        if (tabLobby != null)
+        if (tabLobby != null && lastLobbyTabVisible != inLobby)
         {
+            lastLobbyTabVisible = inLobby;
             // Multiplayer & Lobby tab ONLY appears inside the Lobby Map and disappears inside the playable map
             tabLobby.style.display = inLobby ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         if (!inLobby && currentSpread == LobbySpreadIndex)
         {
-            ShowSpread(0);
+            ShowSpread(BlueprintSpreadIndex);
         }
     }
 
@@ -561,6 +930,14 @@ public class JournalController : MonoBehaviour
         {
             RefreshLobbySpreadUI();
         }
+        else
+        {
+            BlurPartyCodeInput();
+            if (currentSpread == BlueprintSpreadIndex)
+            {
+                RefreshCaseBriefingAndBlueprintUI();
+            }
+        }
 
         UpdateNavigationVisuals();
     }
@@ -597,25 +974,28 @@ public class JournalController : MonoBehaviour
                     lblPageIndicator.text = "Cover Page";
                     break;
                 case 1:
-                    lblPageIndicator.text = "Table of Contents  (Page 1 of 7)";
+                    lblPageIndicator.text = "Table of Contents  (Page 1 of 8)";
                     break;
                 case 2:
-                    lblPageIndicator.text = "Equipment Manual 1  (Page 2 of 7)";
+                    lblPageIndicator.text = "Case Briefing & Blueprint  (Page 2 of 8)";
                     break;
                 case 3:
-                    lblPageIndicator.text = "Equipment Manual 2  (Page 3 of 7)";
+                    lblPageIndicator.text = "Equipment Manual 1  (Page 3 of 8)";
                     break;
                 case 4:
-                    lblPageIndicator.text = "Entity: Tikbalang  (Page 4 of 7)";
+                    lblPageIndicator.text = "Equipment Manual 2  (Page 4 of 8)";
                     break;
                 case 5:
-                    lblPageIndicator.text = "Entity: Kapre  (Page 5 of 7)";
+                    lblPageIndicator.text = "Entity: Tikbalang  (Page 5 of 8)";
                     break;
                 case 6:
-                    lblPageIndicator.text = "Entity: Manananggal  (Page 6 of 7)";
+                    lblPageIndicator.text = "Entity: Kapre  (Page 6 of 8)";
                     break;
                 case 7:
-                    lblPageIndicator.text = "Deduction Checklist  (Page 7 of 7)";
+                    lblPageIndicator.text = "Entity: Manananggal  (Page 7 of 8)";
+                    break;
+                case 8:
+                    lblPageIndicator.text = "Deduction Checklist  (Page 8 of 8)";
                     break;
                 case LobbySpreadIndex:
                     lblPageIndicator.text = "Safe House Contract, Multiplayer & Equipment Loadout";
@@ -628,7 +1008,7 @@ public class JournalController : MonoBehaviour
         if (btnNextPage != null) btnNextPage.SetEnabled(currentSpread < maxAllowedSpread);
 
         // Update active tab bookmarks
-        Button[] allTabs = { tabLobby, tabCover, tabToc, tabEquip, tabGhosts, tabEvidence };
+        Button[] allTabs = { tabLobby, tabCover, tabToc, tabBlueprint, tabEquip, tabGhosts, tabEvidence };
         foreach (var t in allTabs)
         {
             if (t != null) t.RemoveFromClassList("active-tab");
@@ -637,9 +1017,10 @@ public class JournalController : MonoBehaviour
         if (currentSpread == LobbySpreadIndex && tabLobby != null) tabLobby.AddToClassList("active-tab");
         else if (currentSpread == 0 && tabCover != null) tabCover.AddToClassList("active-tab");
         else if (currentSpread == 1 && tabToc != null) tabToc.AddToClassList("active-tab");
-        else if ((currentSpread == 2 || currentSpread == 3) && tabEquip != null) tabEquip.AddToClassList("active-tab");
-        else if ((currentSpread >= 4 && currentSpread <= 6) && tabGhosts != null) tabGhosts.AddToClassList("active-tab");
-        else if (currentSpread == 7 && tabEvidence != null) tabEvidence.AddToClassList("active-tab");
+        else if (currentSpread == BlueprintSpreadIndex && tabBlueprint != null) tabBlueprint.AddToClassList("active-tab");
+        else if ((currentSpread == 3 || currentSpread == 4) && tabEquip != null) tabEquip.AddToClassList("active-tab");
+        else if ((currentSpread >= 5 && currentSpread <= 7) && tabGhosts != null) tabGhosts.AddToClassList("active-tab");
+        else if (currentSpread == 8 && tabEvidence != null) tabEvidence.AddToClassList("active-tab");
     }
 
     private void Update()
@@ -647,6 +1028,25 @@ public class JournalController : MonoBehaviour
         if (SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.MAIN_MENU_SCENE_NAME) return;
 
         UpdateLobbyTabVisibility();
+        if (!ProgressionAndLoadoutManager.IsInLobbyScene && subscribedMatchManager == null && GameMatchManager.Instance != null)
+        {
+            EnsureMatchManagerSubscription();
+            RefreshCaseBriefingAndBlueprintUI();
+        }
+
+        if (isJournalOpen)
+        {
+            bool textInputFocused = ComputeTextInputFocused();
+            bool blockKeysForTextInput = textInputFocused || textInputBlurFrame == Time.frameCount;
+            if (blockKeysForTextInput)
+            {
+                if (textInputFocused && Input.GetKeyDown(KeyCode.Escape))
+                {
+                    BlurPartyCodeInput();
+                }
+                return;
+            }
+        }
 
         if (Input.GetKeyDown(KeyCode.J) || (isJournalOpen && Input.GetKeyDown(KeyCode.Escape)))
         {
@@ -657,8 +1057,8 @@ public class JournalController : MonoBehaviour
             ToggleJournal();
         }
 
-        // Keyboard navigation while journal is open (ignore A/D when typing in Party Code TextField)
-        if (isJournalOpen && currentSpread != LobbySpreadIndex)
+        // Keyboard navigation while journal is open (ignore A/D when typing in Party Code TextField or DevConsole)
+        if (isJournalOpen && currentSpread != LobbySpreadIndex && !DeveloperConsoleManager.IsConsoleOpen)
         {
             if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
             {
@@ -679,6 +1079,7 @@ public class JournalController : MonoBehaviour
         if (isJournalOpen)
         {
             journalOverlay.RemoveFromClassList("hidden");
+            RefreshCaseBriefingAndBlueprintUI();
             if (ProgressionAndLoadoutManager.IsInLobbyScene)
             {
                 RefreshLobbySpreadUI();
@@ -688,6 +1089,7 @@ public class JournalController : MonoBehaviour
         else
         {
             closedFrame = Time.frameCount;
+            BlurPartyCodeInput();
             journalOverlay.AddToClassList("hidden");
         }
     }

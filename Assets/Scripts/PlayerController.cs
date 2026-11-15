@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [DisallowMultipleComponent]
@@ -40,6 +41,12 @@ public class PlayerController : NetworkBehaviour
     private NetworkVariable<bool> isCrouching = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+    private NetworkVariable<bool> netIsWalking = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+    private NetworkVariable<bool> netIsHolding = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
     [Header("Sanity Settings")]
     [Tooltip("Rate at which sanity drains per second while in the dark and outside safe zones (sped up by 0.5x to 0.75/s).")]
     [SerializeField] private float darkSanityDrainRate = 0.75f;
@@ -53,6 +60,7 @@ public class PlayerController : NetworkBehaviour
     public bool IsAlive => isAlive.Value;
     public bool IsCrouching => isCrouching.Value;
     public float Sanity => sanity.Value;
+    public float MaxReachRadius => maxReachRadius;
     public bool IsInHideZone { get; private set; }
     public HideZone CurrentHideZone { get; private set; }
     private readonly System.Collections.Generic.HashSet<SafeZone> activeSafeZones = new System.Collections.Generic.HashSet<SafeZone>();
@@ -101,6 +109,24 @@ public class PlayerController : NetworkBehaviour
     private IInteractable currentDraggedInteractable = null;
 
     private IInteractable currentlyHoveredInteractable = null;
+    private EquipmentItem lastHoveredEquipment = null;
+    private int cachedStackCount = 1;
+    private float nextStackCountRefreshTime = 0f;
+    private Light2D playerPovLight;
+
+    private static readonly System.Collections.Generic.List<Collider2D> s_OverlapBuffer = new System.Collections.Generic.List<Collider2D>(16);
+    private static readonly System.Collections.Generic.List<Collider2D> s_StackOverlapBuffer = new System.Collections.Generic.List<Collider2D>(16);
+    private static readonly System.Collections.Generic.HashSet<EquipmentItem> s_CountedEquipment = new System.Collections.Generic.HashSet<EquipmentItem>();
+    private static readonly ContactFilter2D s_NoFilter = ContactFilter2D.noFilter;
+
+    [Header("Ambient Light Settings")]
+    [SerializeField] private float playerAmbientRadius = 0.58f;
+    [SerializeField] private float playerAmbientInnerRadius = 0.08f;
+    [SerializeField] private float playerAmbientIntensity = 0.34f;
+    [SerializeField] private float playerAmbientFalloff = 0.72f;
+    [SerializeField] private Color playerAmbientColor = new Color(0.84f, 0.89f, 0.96f, 1f);
+
+    public Light2D PlayerAmbientLight => playerPovLight;
 
     private void Awake()
     {
@@ -122,10 +148,16 @@ public class PlayerController : NetworkBehaviour
     {
         AllPlayers.Add(this);
 
+        if (TryGetComponent<Light2D>(out var rootLight))
+        {
+            rootLight.enabled = false;
+        }
+
         if (IsOwner)
         {
             LocalInstance = this;
             localCamera = Camera.main;
+            EnsurePlayerPOVLight();
             StartCoroutine(DelayedTeleportToSpawn());
             if (ItemHoverIndicator.Instance == null)
             {
@@ -135,9 +167,84 @@ public class PlayerController : NetworkBehaviour
             StartCoroutine(DelayedMatchStartTutorialRoutine());
             StartCoroutine(DelayedJournalHintRoutine());
         }
+        else if (playerPovLight != null)
+        {
+            playerPovLight.enabled = false;
+        }
 
-        isAlive.OnValueChanged += (oldVal, newVal) => OnAliveStateChanged(newVal);
+        isAlive.OnValueChanged += (oldVal, newVal) =>
+        {
+            OnAliveStateChanged(newVal);
+            if (!IsOwner) UpdateRemoteAnimator();
+        };
         isCrouching.OnValueChanged += (oldVal, newVal) => OnCrouchStateChanged(newVal);
+        netIsWalking.OnValueChanged += (oldVal, newVal) => { if (!IsOwner) UpdateRemoteAnimator(); };
+        netIsHolding.OnValueChanged += (oldVal, newVal) => { if (!IsOwner) UpdateRemoteAnimator(); };
+
+        if (!IsOwner)
+        {
+            UpdateRemoteAnimator();
+        }
+    }
+
+    private void EnsurePlayerPOVLight()
+    {
+        if (TryGetComponent<Light2D>(out var rootLight))
+        {
+            rootLight.enabled = false;
+        }
+
+        if (playerPovLight == null)
+        {
+            Transform existing = transform.Find("PlayerPOVLight");
+            if (existing != null)
+            {
+                playerPovLight = existing.GetComponent<Light2D>();
+            }
+        }
+
+        if (playerPovLight == null)
+        {
+            var povGo = new GameObject("PlayerPOVLight");
+            povGo.transform.SetParent(transform, false);
+            povGo.transform.localPosition = Vector3.zero;
+            povGo.transform.localRotation = Quaternion.identity;
+            playerPovLight = povGo.AddComponent<Light2D>();
+        }
+
+        UpdatePOVLightScale();
+        ApplyPlayerAmbientLightSettings();
+        playerPovLight.enabled = IsOwner && isAlive.Value;
+    }
+
+    private void ApplyPlayerAmbientLightSettings()
+    {
+        if (playerPovLight == null) return;
+
+        playerPovLight.lightType = Light2D.LightType.Point;
+        playerPovLight.color = playerAmbientColor;
+        playerPovLight.intensity = playerAmbientIntensity;
+        playerPovLight.falloffIntensity = playerAmbientFalloff;
+        playerPovLight.pointLightInnerAngle = 360f;
+        playerPovLight.pointLightOuterAngle = 360f;
+        playerPovLight.pointLightInnerRadius = playerAmbientInnerRadius;
+        playerPovLight.pointLightOuterRadius = playerAmbientRadius;
+        playerPovLight.shadowsEnabled = true;
+        playerPovLight.shadowIntensity = 1.0f;
+        playerPovLight.shadowVolumeIntensity = 0f;
+        playerPovLight.targetSortingLayers = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
+    }
+
+    private void UpdatePOVLightScale()
+    {
+        if (playerPovLight == null) return;
+
+        // Cancel current parent scale (including negative Y scale on Player.prefab and crouch 0.85x)
+        // so the 360-degree circular light stays uniform in world space.
+        Vector3 currentScale = transform.localScale;
+        float sx = Mathf.Abs(currentScale.x) > 1e-5f ? 1f / currentScale.x : 1f;
+        float sy = Mathf.Abs(currentScale.y) > 1e-5f ? 1f / currentScale.y : 1f;
+        playerPovLight.transform.localScale = new Vector3(sx, sy, 1f);
     }
 
     private System.Collections.IEnumerator DelayedMatchStartTutorialRoutine()
@@ -155,6 +262,7 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        EndCurrentDrag();
         AllPlayers.Remove(this);
         if (LocalInstance == this)
         {
@@ -163,16 +271,31 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    private void EndCurrentDrag()
+    {
+        if (currentDraggedInteractable == null) return;
+
+        if ((currentDraggedInteractable as Object) != null)
+        {
+            ulong localClientId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : 0UL;
+            currentDraggedInteractable.OnDragEnd(localClientId);
+        }
+        currentDraggedInteractable = null;
+    }
+
     /// <summary>
     /// Checks whether player movement and rotation should be blocked by open full-screen GUIs:
-    /// Dev Console, Pause Menu, Truck Dashboard, Spirit Box Dialogue.
-    /// (Note: Journal keeps movement functional, so it is not in this set).
+    /// Dev Console, Pause Menu, Truck Dashboard, Spirit Box Dialogue, or an active Journal text input.
+    /// (Note: Journal keeps movement functional while reading, unless typing into its Party Code input).
     /// </summary>
     public static bool IsMovementBlocked =>
         DeveloperConsoleManager.IsConsoleOpen ||
         PauseMenuController.IsOpen ||
         TruckDashboardController.IsOpen ||
-        SpiritBoxItem.IsLocalDialogueActive;
+        SpiritBoxItem.IsLocalDialogueActive ||
+        JournalController.IsTextInputFocused ||
+        LoadingScreenManager.IsLoadingVisible ||
+        EndGameRevealController.IsOpen;
 
     /// <summary>
     /// Checks whether world interactions (clicks, item usage, dragging, E interact, drop, place, slot switching)
@@ -199,24 +322,27 @@ public class PlayerController : NetworkBehaviour
             }
         }
 
-        if (!IsOwner || !isAlive.Value) return;
+        if (!IsOwner)
+        {
+            UpdateRemoteAnimator();
+            return;
+        }
+
+        if (!isAlive.Value)
+        {
+            EndCurrentDrag();
+            SetLocalAnimationState(false, false);
+            return;
+        }
 
         // Block movement and world interactions while in locking GUIs (Pause Menu, Truck Dashboard, Dev Console, Spirit Box)
         if (IsMovementBlocked)
         {
             moveInput = Vector2.zero;
-            if (currentDraggedInteractable != null)
-            {
-                currentDraggedInteractable.OnDragEnd(NetworkManager.Singleton.LocalClientId);
-                currentDraggedInteractable = null;
-            }
+            EndCurrentDrag();
             currentlyHoveredInteractable = null;
             ItemHoverIndicator.Instance?.Hide();
-            if (animator != null)
-            {
-                animator.SetBool("isWalking", false);
-                animator.SetBool("isHolding", inventory != null && inventory.CurrentItem != null);
-            }
+            SetLocalAnimationState(false, inventory != null && inventory.CurrentItem != null);
             return;
         }
 
@@ -235,20 +361,12 @@ public class PlayerController : NetworkBehaviour
         // If interaction is blocked (e.g. inside Journal), disable world interactions and clicks while keeping movement active
         if (IsInteractionBlocked)
         {
-            if (currentDraggedInteractable != null)
-            {
-                currentDraggedInteractable.OnDragEnd(NetworkManager.Singleton.LocalClientId);
-                currentDraggedInteractable = null;
-            }
+            EndCurrentDrag();
             currentlyHoveredInteractable = null;
             ItemHoverIndicator.Instance?.Hide();
 
             // Maintain walking animation state for WASD movement in Journal
-            if (animator != null)
-            {
-                animator.SetBool("isWalking", moveInput.sqrMagnitude > 0.01f);
-                animator.SetBool("isHolding", inventory != null && inventory.CurrentItem != null);
-            }
+            SetLocalAnimationState(moveInput.sqrMagnitude > 0.01f, inventory != null && inventory.CurrentItem != null);
             return;
         }
 
@@ -282,8 +400,9 @@ public class PlayerController : NetworkBehaviour
             {
                 if (hovered.CanDrag())
                 {
+                    ulong localClientId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : 0UL;
                     currentDraggedInteractable = hovered;
-                    currentDraggedInteractable.OnDragBegin(NetworkManager.Singleton.LocalClientId);
+                    currentDraggedInteractable.OnDragBegin(localClientId);
                 }
                 else
                 {
@@ -296,24 +415,29 @@ public class PlayerController : NetworkBehaviour
             }
         }
 
-        if (Input.GetMouseButtonUp(0) && currentDraggedInteractable != null)
+        if ((Input.GetMouseButtonUp(0) || !Input.GetMouseButton(0)) && currentDraggedInteractable != null)
         {
-            currentDraggedInteractable.OnDragEnd(NetworkManager.Singleton.LocalClientId);
-            currentDraggedInteractable = null;
+            EndCurrentDrag();
         }
 
         if (currentDraggedInteractable != null)
         {
-            Vector2 dragTarget = mousePosition;
-            Vector2 toTarget = dragTarget - (Vector2)transform.position;
-            
-            if (toTarget.magnitude > maxReachRadius)
+            if ((currentDraggedInteractable as Object) == null || !currentDraggedInteractable.CanDrag())
             {
-                dragTarget = (Vector2)transform.position + toTarget.normalized * maxReachRadius;
-                toTarget = dragTarget - (Vector2)transform.position;
+                EndCurrentDrag();
             }
+            else
+            {
+                Vector2 dragTarget = mousePosition;
+                Vector2 toTarget = dragTarget - (Vector2)transform.position;
 
-            currentDraggedInteractable.OnDragUpdate(dragTarget);
+                if (toTarget.magnitude > maxReachRadius)
+                {
+                    dragTarget = (Vector2)transform.position + toTarget.normalized * maxReachRadius;
+                }
+
+                currentDraggedInteractable.OnDragUpdate(dragTarget);
+            }
         }
 
         // 6. Place Item (Right Click)
@@ -336,12 +460,54 @@ public class PlayerController : NetworkBehaviour
         if (Input.GetKeyDown(KeyCode.V)) ToggleLocalVoice();
         if (Input.GetKeyDown(KeyCode.B)) ToggleRadioVoice();
 
-        // 9. Update Animator
+        // 9. Update Animator and replicate animation state
+        SetLocalAnimationState(moveInput.sqrMagnitude > 0.01f, inventory != null && inventory.CurrentItem != null);
+    }
+
+    private void SetLocalAnimationState(bool walking, bool holding)
+    {
         if (animator != null)
         {
-            animator.SetBool("isWalking", moveInput.sqrMagnitude > 0.01f);
-            animator.SetBool("isHolding", inventory != null && inventory.CurrentItem != null);
+            animator.SetBool("isWalking", walking);
+            animator.SetBool("isHolding", holding);
         }
+
+        if (IsSpawned && IsOwner)
+        {
+            if (netIsWalking.Value != walking) netIsWalking.Value = walking;
+            if (netIsHolding.Value != holding) netIsHolding.Value = holding;
+        }
+    }
+
+    private void UpdateRemoteAnimator()
+    {
+        if (animator == null) return;
+
+        if (!isAlive.Value)
+        {
+            animator.SetBool("isWalking", false);
+            animator.SetBool("isHolding", false);
+            return;
+        }
+
+        animator.SetBool("isWalking", netIsWalking.Value);
+        animator.SetBool("isHolding", netIsHolding.Value || HasRemoteHeldEquipment());
+    }
+
+    private bool HasRemoteHeldEquipment()
+    {
+        if (!IsSpawned) return false;
+        ulong clientId = OwnerClientId;
+        var items = EquipmentItem.AllEquipment;
+        for (int i = 0; i < items.Count; i++)
+        {
+            var eq = items[i];
+            if (eq != null && eq.CurrentHolderClientId == clientId && eq.IsInHand)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void OpenJournal() { /* Stub for Journal UI */ }
@@ -441,15 +607,21 @@ public class PlayerController : NetworkBehaviour
     {
         // Visual posture feedback: scale slightly down when crouching
         transform.localScale = crouched ? originalScale * 0.85f : originalScale;
+        UpdatePOVLightScale();
     }
 
     private void OnAliveStateChanged(bool alive)
     {
         if (!alive)
         {
+            if (playerPovLight != null)
+            {
+                playerPovLight.enabled = false;
+            }
             GameAudioManager.PlayGhostKill(transform.position);
             if (IsOwner)
             {
+                EndCurrentDrag();
                 ItemHoverIndicator.Instance?.Hide();
                 if (inventory != null)
                 {
@@ -477,6 +649,10 @@ public class PlayerController : NetworkBehaviour
         }
         else
         {
+            if (playerPovLight != null)
+            {
+                playerPovLight.enabled = IsOwner;
+            }
             if (spriteRenderer != null)
             {
                 spriteRenderer.color = Color.white;
@@ -522,15 +698,17 @@ public class PlayerController : NetworkBehaviour
     {
         if (Vector2.Distance(transform.position, mousePosition) > maxReachRadius) return null;
 
-        // Check both interactLayer and all colliders at cursor so items/buttons work even if layer is Default
-        Collider2D[] hits = Physics2D.OverlapCircleAll(mousePosition, 0.06f);
-        
+        // Check both interactLayer and all colliders at cursor without per-frame array allocation
+        s_OverlapBuffer.Clear();
+        int hitCount = Physics2D.OverlapCircle(mousePosition, 0.06f, s_NoFilter, s_OverlapBuffer);
+
         IInteractable bestInteractable = null;
         float bestDistance = float.MaxValue;
         bool bestIsEquipmentOrKey = false;
 
-        foreach (var hit in hits)
+        for (int i = 0; i < hitCount; i++)
         {
+            var hit = s_OverlapBuffer[i];
             if (hit == null) continue;
 
             var equipment = hit.GetComponent<EquipmentItem>();
@@ -554,10 +732,15 @@ public class PlayerController : NetworkBehaviour
 
             if (interactable != null)
             {
-                bool isEquipOrKey = (interactable is EquipmentItem) || (interactable is FrontDoorKeyItem);
-                float dist = Vector2.Distance(mousePosition, hit.transform.position);
+                if (interactable is NetworkDoor door && !door.AllowPlayerInteract)
+                {
+                    continue;
+                }
 
-                // Prioritize small pickup items over large background triggers, then closest center to mouse
+                bool isEquipOrKey = (interactable is EquipmentItem) || (interactable is FrontDoorKeyItem) || (interactable is SummoningCircle);
+                float dist = Vector2.Distance(mousePosition, hit.ClosestPoint(mousePosition));
+
+                // Prioritize small pickup items and the summoning circle over large background triggers, then closest point to mouse
                 if (isEquipOrKey && !bestIsEquipmentOrKey)
                 {
                     bestIsEquipmentOrKey = true;
@@ -606,19 +789,28 @@ public class PlayerController : NetworkBehaviour
         {
             if (currentlyHoveredInteractable is EquipmentItem equipment)
             {
-                if (equipment.IsOnGround || equipment.IsPlaced)
+                if (!(equipment is RitualChalkItem && equipment.IsPlaced) && (equipment.IsOnGround || equipment.IsPlaced))
                 {
                     float distToMouse = Vector2.Distance(transform.position, mousePosition);
                     float distToItem = Vector2.Distance(transform.position, equipment.transform.position);
 
                     if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
                     {
-                        int stackCount = CountStackedEquipment(equipment);
-                        string displayLabel = $"{equipment.ItemName} x{stackCount}";
+                        if (lastHoveredEquipment != equipment || Time.unscaledTime >= nextStackCountRefreshTime)
+                        {
+                            lastHoveredEquipment = equipment;
+                            cachedStackCount = CountStackedEquipment(equipment);
+                            nextStackCountRefreshTime = Time.unscaledTime + 0.15f;
+                        }
+                        string displayLabel = $"{equipment.ItemName} x{cachedStackCount}";
                         ItemHoverIndicator.Instance.Show(equipment.gameObject, displayLabel);
                         return;
                     }
                 }
+            }
+            else if (currentlyHoveredInteractable is SummoningCircle summoningCircle)
+            {
+                if (TryShowWorldInteractableHover(summoningCircle, summoningCircle.GetInteractText())) return;
             }
             else if (currentlyHoveredInteractable is FrontDoorKeyItem keyItem)
             {
@@ -633,18 +825,45 @@ public class PlayerController : NetworkBehaviour
             }
             else if (currentlyHoveredInteractable is TruckEndGameButton endBtn)
             {
+                if (TryShowWorldInteractableHover(endBtn, endBtn.GetInteractText())) return;
+            }
+            else if (currentlyHoveredInteractable is HouseLightSwitch lightSwitch)
+            {
+                if (TryShowWorldInteractableHover(lightSwitch, lightSwitch.GetInteractText())) return;
+            }
+            else if (currentlyHoveredInteractable is FuseBox fuseBox)
+            {
+                if (TryShowWorldInteractableHover(fuseBox, fuseBox.GetInteractText())) return;
+            }
+            else if (currentlyHoveredInteractable is TruckDashboardController dashboard)
+            {
                 float distToMouse = Vector2.Distance(transform.position, mousePosition);
-                float distToItem = Vector2.Distance(transform.position, endBtn.transform.position);
+                float distToItem = Vector2.Distance(transform.position, dashboard.transform.position);
 
                 if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
                 {
-                    ItemHoverIndicator.Instance.Show(endBtn.gameObject, endBtn.GetInteractText());
+                    ItemHoverIndicator.Instance.Show(dashboard.gameObject, dashboard.GetInteractText());
                     return;
                 }
             }
         }
 
         ItemHoverIndicator.Instance.Hide();
+        lastHoveredEquipment = null;
+    }
+
+    private bool TryShowWorldInteractableHover(Component target, string interactText)
+    {
+        if (target == null) return false;
+        float distToMouse = Vector2.Distance(transform.position, mousePosition);
+        float distToItem = Vector2.Distance(transform.position, target.transform.position);
+
+        if (distToMouse <= maxReachRadius && distToItem <= maxReachRadius + 0.8f)
+        {
+            ItemHoverIndicator.Instance.Show(target.gameObject, interactText);
+            return true;
+        }
+        return false;
     }
 
     private static int CountStackedEquipment(EquipmentItem target)
@@ -655,19 +874,21 @@ public class PlayerController : NetworkBehaviour
         Vector2 targetPos = target.transform.position;
         System.Type targetType = target.GetType();
 
-        // Check nearby colliders first for fast stack counting
-        Collider2D[] nearby = Physics2D.OverlapCircleAll(targetPos, 0.06f);
-        HashSet<EquipmentItem> counted = new HashSet<EquipmentItem>();
+        // Check nearby colliders first for fast stack counting without per-frame allocations
+        s_StackOverlapBuffer.Clear();
+        int nearbyCount = Physics2D.OverlapCircle(targetPos, 0.06f, s_NoFilter, s_StackOverlapBuffer);
+        s_CountedEquipment.Clear();
 
-        foreach (var col in nearby)
+        for (int i = 0; i < nearbyCount; i++)
         {
+            var col = s_StackOverlapBuffer[i];
             if (col == null) continue;
             var eq = col.GetComponent<EquipmentItem>();
-            if (eq != null && !counted.Contains(eq) && (eq.IsOnGround || eq.IsPlaced))
+            if (eq != null && !s_CountedEquipment.Contains(eq) && (eq.IsOnGround || eq.IsPlaced))
             {
                 if (eq.GetType() == targetType || eq.ItemName == target.ItemName)
                 {
-                    counted.Add(eq);
+                    s_CountedEquipment.Add(eq);
                     count++;
                 }
             }
@@ -686,6 +907,7 @@ public class PlayerController : NetworkBehaviour
         UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedLocal;
         if (IsOwner)
         {
+            EndCurrentDrag();
             ItemHoverIndicator.Instance?.Hide();
         }
     }
@@ -714,18 +936,65 @@ public class PlayerController : NetworkBehaviour
             rb.linearVelocity = Vector2.zero;
         }
 
+        bool isNetListening = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
         if (TryGetComponent<ClientNetworkTransform>(out var clientNetTransform))
         {
-            clientNetTransform.Teleport(position, transform.rotation, transform.localScale);
+            if (!isNetListening || (clientNetTransform.IsSpawned && clientNetTransform.CanCommitToTransform))
+            {
+                clientNetTransform.Teleport(position, transform.rotation, transform.localScale);
+            }
         }
         else if (TryGetComponent<Unity.Netcode.Components.NetworkTransform>(out var netTransform))
         {
-            netTransform.Teleport(position, transform.rotation, transform.localScale);
+            if (!isNetListening || (netTransform.IsSpawned && netTransform.CanCommitToTransform))
+            {
+                netTransform.Teleport(position, transform.rotation, transform.localScale);
+            }
         }
+    }
+
+    /// <summary>
+    /// Teleports a player cleanly from either the owning client or the server, respecting ClientNetworkTransform authority.
+    /// </summary>
+    public void ServerTeleportTo(Vector3 position)
+    {
+        bool isNetListening = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        if (!isNetListening || !IsSpawned || IsOwner)
+        {
+            TeleportTo(position);
+            return;
+        }
+
+        if (IsServer)
+        {
+            TeleportToOwnerRpc(position);
+        }
+    }
+
+    [Rpc(SendTo.Owner)]
+    private void TeleportToOwnerRpc(Vector3 position)
+    {
+        TeleportTo(position);
     }
 
     private System.Collections.IEnumerator DelayedTeleportToSpawn()
     {
+        // Yield before teleporting so SynchronizeSceneNetworkObjects and sibling NetworkBehaviour spawns finish first.
+        yield return null;
+
+        if (TryGetComponent<ClientNetworkTransform>(out var clientNetTransform))
+        {
+            int waitFrames = 0;
+            while (NetworkManager.Singleton != null &&
+                   NetworkManager.Singleton.IsListening &&
+                   (!clientNetTransform.IsSpawned || !clientNetTransform.CanCommitToTransform) &&
+                   waitFrames < 30)
+            {
+                waitFrames++;
+                yield return null;
+            }
+        }
+
         PixelScenePostProcessor.ApplyPixelArtToScene();
         TeleportToSpawnPoint();
         yield return null;

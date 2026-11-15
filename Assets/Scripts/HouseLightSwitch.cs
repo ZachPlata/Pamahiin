@@ -13,19 +13,143 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     [Tooltip("The GameObject(s) with the SafeZone script and Trigger Collider. This prevents sanity drain when the light is on.")]
     [SerializeField] private List<GameObject> litSafeZones = new List<GameObject>();
 
+    [Header("Switch Indicator Light")]
+    [SerializeField] private Light2D indicatorLight;
+    [SerializeField] private float indicatorRadius = 0.18f;
+    [SerializeField] private float indicatorIntensityOn = 0.7f;
+    [SerializeField] private float indicatorIntensityOff = 0.45f;
+    [SerializeField] private Color indicatorColorOn = new Color(1f, 0.94f, 0.68f, 1f);
+    [SerializeField] private Color indicatorColorOff = new Color(0.95f, 0.85f, 0.55f, 1f);
+
     private NetworkVariable<bool> isLightOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     public bool IsOn => isLightOn.Value;
 
+    private void Awake()
+    {
+        EnsureSwitchSetup();
+    }
+
+    private void OnEnable()
+    {
+        UpdateIndicatorLightScale();
+        UpdateIndicatorLightVisual(isLightOn.Value);
+    }
+
     public override void OnNetworkSpawn()
     {
+        EnsureSwitchSetup();
+
         isLightOn.OnValueChanged += (oldVal, newVal) =>
         {
             if (oldVal != newVal) GameAudioManager.PlayLightSwitch(transform.position);
             ApplyLightState(newVal);
         };
         ApplyLightState(isLightOn.Value);
+    }
+
+    /// <summary>
+    /// Replaces legacy oversized CircleCollider2D triggers with a sprite-fitting BoxCollider2D
+    /// and guarantees the small switch indicator Light2D exists without altering switch scale.
+    /// </summary>
+    public void EnsureSwitchSetup()
+    {
+        EnsureBoxCollider();
+        EnsureIndicatorLight();
+    }
+
+    private void EnsureBoxCollider()
+    {
+        // Add BoxCollider2D BEFORE removing CircleCollider2D so [RequireComponent(typeof(Collider2D))] never blocks removal.
+        BoxCollider2D box = GetComponent<BoxCollider2D>();
+        bool addedBox = box == null;
+        if (addedBox)
+        {
+            box = gameObject.AddComponent<BoxCollider2D>();
+        }
+
+        bool removedCircle = false;
+        CircleCollider2D[] circles = GetComponents<CircleCollider2D>();
+        for (int i = 0; i < circles.Length; i++)
+        {
+            circles[i].enabled = false;
+            circles[i].radius = 0.001f;
+            DestroyImmediate(circles[i]);
+            removedCircle = true;
+        }
+
+        box.isTrigger = true;
+        if ((removedCircle || addedBox) && TryGetComponent<SpriteRenderer>(out var sr) && sr.sprite != null)
+        {
+            Bounds spriteBounds = sr.sprite.bounds;
+            box.offset = spriteBounds.center;
+            box.size = new Vector2(
+                Mathf.Max(0.05f, spriteBounds.size.x),
+                Mathf.Max(0.05f, spriteBounds.size.y));
+        }
+    }
+
+    private void EnsureIndicatorLight()
+    {
+        if (indicatorLight == null)
+        {
+            Transform existing = transform.Find("SwitchIndicatorLight");
+            if (existing != null)
+            {
+                indicatorLight = existing.GetComponent<Light2D>();
+            }
+        }
+
+        if (indicatorLight == null)
+        {
+            var lightGo = new GameObject("SwitchIndicatorLight");
+            lightGo.transform.SetParent(transform, false);
+            if (TryGetComponent<SpriteRenderer>(out var sr) && sr.sprite != null)
+            {
+                lightGo.transform.localPosition = sr.sprite.bounds.center;
+            }
+            indicatorLight = lightGo.AddComponent<Light2D>();
+        }
+
+        // Indicator must stay out of controlledLights so switches remain visible in dark rooms
+        if (controlledLights != null && indicatorLight != null)
+        {
+            controlledLights.Remove(indicatorLight);
+        }
+
+        if (indicatorLight == null) return;
+
+        indicatorLight.lightType = Light2D.LightType.Point;
+        indicatorLight.pointLightInnerAngle = 360f;
+        indicatorLight.pointLightOuterAngle = 360f;
+        indicatorLight.pointLightInnerRadius = 0.02f;
+        indicatorLight.pointLightOuterRadius = indicatorRadius;
+        indicatorLight.falloffIntensity = 0.65f;
+        indicatorLight.shadowsEnabled = false;
+        indicatorLight.targetSortingLayers = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
+        indicatorLight.enabled = true;
+
+        UpdateIndicatorLightScale();
+        UpdateIndicatorLightVisual(isLightOn.Value);
+    }
+
+    private void UpdateIndicatorLightScale()
+    {
+        if (indicatorLight == null) return;
+        // Compensate parent lossyScale (e.g. manually scaled 1x3 or 3x1 switches) so the indicator glow stays circular.
+        Vector3 lossy = transform.lossyScale;
+        float sx = Mathf.Abs(lossy.x) > 0.0001f ? 1f / Mathf.Abs(lossy.x) : 1f;
+        float sy = Mathf.Abs(lossy.y) > 0.0001f ? 1f / Mathf.Abs(lossy.y) : 1f;
+        indicatorLight.transform.localScale = new Vector3(sx, sy, 1f);
+    }
+
+    private void UpdateIndicatorLightVisual(bool state)
+    {
+        if (indicatorLight == null) return;
+        indicatorLight.enabled = true;
+        indicatorLight.intensity = state ? indicatorIntensityOn : indicatorIntensityOff;
+        indicatorLight.color = state ? indicatorColorOn : indicatorColorOff;
     }
 
     public void Interact()
@@ -35,9 +159,9 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     public string GetInteractText()
     {
-        if (FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
+        if (!isLightOn.Value && FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
         {
-            return "No Power (Fuse Box Off)";
+            return "Turn on fuse box first!";
         }
         return isLightOn.Value ? "Turn Off Light" : "Turn On Light";
     }
@@ -134,6 +258,8 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
                 safeZone.SetActive(state);
             }
         }
+
+        UpdateIndicatorLightVisual(state);
     }
 
     private Coroutine currentFlickerRoutine;

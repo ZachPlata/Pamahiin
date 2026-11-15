@@ -96,9 +96,10 @@ public class PlayerInventory : NetworkBehaviour
                 return;
             }
 
+            Quaternion finalRot = CurrentItem.GetPlacementRotation(placeRotation);
             CurrentItem.transform.position = finalPos;
-            CurrentItem.transform.rotation = placeRotation;
-            CurrentItem.PlaceItemRpc(finalPos, placeRotation);
+            CurrentItem.transform.rotation = finalRot;
+            CurrentItem.PlaceItemRpc(finalPos, finalRot);
             slots[currentSlotIndex] = null;
             OnInventoryUpdated?.Invoke();
         }

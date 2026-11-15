@@ -23,15 +23,22 @@ public class FrontDoorKeyItem : NetworkBehaviour, IInteractable
             }
         }
 
-        // Destroy the key globally
+        // Deactivate scene-placed key safely without destroying its NetworkObject
         if (NetworkObject != null && NetworkObject.IsSpawned)
         {
-            NetworkObject.Despawn(true);
+            NetworkObject.Despawn(false);
+            gameObject.SetActive(false);
         }
         else
         {
-            Destroy(gameObject);
+            gameObject.SetActive(false);
         }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        gameObject.SetActive(false);
     }
 
     public string GetInteractText()

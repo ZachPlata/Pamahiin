@@ -179,15 +179,27 @@ public class LobbySceneController : MonoBehaviour
 
         Vector3 basePos = spawnTrans != null ? spawnTrans.position : new Vector3(0f, -0.35f, 0f);
 
-        // Position all spawned players inside the Safe House Lobby room
+        // Position all spawned players inside the Safe House Lobby room cleanly with proper network authority
+        bool isNetListening = Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening;
         int idx = 0;
         foreach (var player in PlayerController.AllPlayers)
         {
             if (player != null)
             {
                 Vector3 spawnOffset = basePos + new Vector3((idx % 2 == 0 ? -0.2f : 0.2f), (idx / 2) * 0.2f, 0f);
-                player.TeleportTo(spawnOffset);
-                player.RestoreSanity(100f);
+                if (!isNetListening || !player.IsSpawned || player.IsOwner)
+                {
+                    player.TeleportTo(spawnOffset);
+                }
+                else if (Unity.Netcode.NetworkManager.Singleton.IsServer)
+                {
+                    player.ServerTeleportTo(spawnOffset);
+                }
+
+                if (!isNetListening || Unity.Netcode.NetworkManager.Singleton.IsServer || player.IsOwner)
+                {
+                    player.RestoreSanity(100f);
+                }
                 idx++;
             }
         }

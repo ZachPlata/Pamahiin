@@ -5,14 +5,119 @@ using UnityEngine.Rendering.Universal;
 
 public class VideoCameraItem : EquipmentItem
 {
+    public const string CCTVLayerName = "CCTVOnly";
+    public const int FallbackCCTVLayer = 10;
+
+    public static readonly Color NightVisionBackgroundColor = new Color(0.2f, 0.2f, 0.2f);
+    public static readonly Color NightVisionLightColor = new Color(0.88f, 0.94f, 0.92f);
+    public const float NightVisionLightIntensity = 1.1f;
+    public const float NightVisionLightInnerRadius = 0f;
+    public const float NightVisionLightOuterRadius = 22f;
+    public const float NightVisionLightFalloffIntensity = 0.5f;
+    public const bool NightVisionShadowsEnabled = true;
+    public const float NightVisionShadowIntensity = 0.6f;
+    public const float NightVisionSaturation = -100f;
+    public const float NightVisionPostExposure = 0.45f;
+    public const float NightVisionContrast = 15f;
+
     [Header("Video Camera Settings")]
     [SerializeField] private Color nightVisionColor = new Color(0.2f, 0.2f, 0.2f);
-    [SerializeField] private float nightVisionRadius = 22f;
+    [SerializeField] private float nightVisionRadius = NightVisionLightOuterRadius;
+    [SerializeField] private Camera feedCamera;
+    [SerializeField] private float cctvOrthographicSize = 0.45f;
+
+    public static int ResolveCCTVLayer()
+    {
+        int layer = LayerMask.NameToLayer(CCTVLayerName);
+        return layer >= 0 ? layer : FallbackCCTVLayer;
+    }
+
+    public static VolumeProfile CreateNightVisionVolumeProfile()
+    {
+        VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
+        if (profile.Add<ColorAdjustments>(true) && profile.TryGet(out ColorAdjustments colorAdj))
+        {
+            colorAdj.saturation.Override(NightVisionSaturation);
+            colorAdj.postExposure.Override(NightVisionPostExposure);
+            colorAdj.contrast.Override(NightVisionContrast);
+        }
+        return profile;
+    }
+
+    public static void ApplyNightVisionLightSettings(Light2D targetLight, float outerRadius, int[] sortingLayerIds)
+    {
+        if (targetLight == null) return;
+        targetLight.lightType = Light2D.LightType.Point;
+        targetLight.color = NightVisionLightColor;
+        targetLight.intensity = NightVisionLightIntensity;
+        targetLight.falloffIntensity = NightVisionLightFalloffIntensity;
+        targetLight.pointLightOuterRadius = outerRadius;
+        targetLight.pointLightInnerRadius = NightVisionLightInnerRadius;
+        targetLight.pointLightInnerAngle = 360f;
+        targetLight.pointLightOuterAngle = 360f;
+        targetLight.shadowsEnabled = NightVisionShadowsEnabled;
+        targetLight.shadowIntensity = NightVisionShadowIntensity;
+        if (sortingLayerIds != null)
+        {
+            targetLight.targetSortingLayers = sortingLayerIds;
+        }
+    }
+
+    /// <summary>
+    /// Ensures Camera.main renders GhostOrbs if and only if the local player is holding a powered-on VideoCameraItem.
+    /// </summary>
+    public static void SyncMainCameraGhostOrbsMask(VideoCameraItem excludeItem = null)
+    {
+        Camera mainCam = Camera.main;
+        if (mainCam == null) return;
+
+        int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
+        if (ghostOrbLayer == -1) return;
+
+        if (HasLocalActiveNightVisionCamera(excludeItem))
+        {
+            mainCam.cullingMask |= (1 << ghostOrbLayer);
+        }
+        else
+        {
+            mainCam.cullingMask &= ~(1 << ghostOrbLayer);
+        }
+    }
+
+    private static bool HasLocalActiveNightVisionCamera(VideoCameraItem excludeItem = null)
+    {
+        for (int i = 0; i < AllEquipment.Count; i++)
+        {
+            if (AllEquipment[i] is VideoCameraItem cam &&
+                cam != excludeItem &&
+                cam != null &&
+                cam.gameObject.activeInHierarchy &&
+                cam.IsLocallyHeldForNightVision() &&
+                cam.IsPoweredOn)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private bool IsLocallyHeldForNightVision()
+    {
+        return ownerClientId.Value != ulong.MaxValue &&
+               NetworkManager.Singleton != null &&
+               ownerClientId.Value == NetworkManager.Singleton.LocalClientId &&
+               isInHand.Value;
+    }
     
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    private static readonly System.Collections.Generic.List<VideoCameraItem> activeCameras = new System.Collections.Generic.List<VideoCameraItem>();
+    public static System.Collections.Generic.IReadOnlyList<VideoCameraItem> ActiveCameras => activeCameras;
+
     public override bool IsPoweredOn => isPoweredOn.Value;
+    public Camera CctvCamera => cctvCamera;
+    public bool IsAvailableForCCTV => gameObject.activeInHierarchy && (ownerClientId.Value == ulong.MaxValue || isInHand.Value);
 
     private Camera localCamera;
     private Color originalCameraColor;
@@ -21,19 +126,15 @@ public class VideoCameraItem : EquipmentItem
     private bool originalPostProcessing;
     private UniversalAdditionalCameraData cameraData;
     private bool cameraSettingsStored = false;
+    private bool appliedLocalCameraOverrides = false;
 
     private Volume nightVisionVolume;
     private Light2D nightVisionLight;
     
     private Camera cctvCamera;
-    private Volume cctvBWVolume;
-    private Light2D cctvNightVisionLight;
-    private bool cctvNightVisionEnabled = false;
-
-    /// <summary>
-    /// Whether CCTV night vision is currently enabled (toggled from the dashboard).
-    /// </summary>
-    public bool IsCCTVNightVisionOn => cctvNightVisionEnabled;
+    private Light2D playerAmbientLight;
+    private float originalPlayerLightIntensity = 1f;
+    private bool playerLightStored = false;
 
     protected override void Awake()
     {
@@ -46,7 +147,7 @@ public class VideoCameraItem : EquipmentItem
     {
         int[] allSortingLayerIds = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
 
-        // 1. Setup Volume for Black and White (player night vision)
+        // 1. Setup Volume for Black and White (player hand-held night vision only)
         GameObject volumeObj = new GameObject("NightVisionVolume");
         volumeObj.hideFlags = HideFlags.HideInHierarchy;
         volumeObj.transform.SetParent(null);
@@ -54,173 +155,173 @@ public class VideoCameraItem : EquipmentItem
         nightVisionVolume = volumeObj.AddComponent<Volume>();
         nightVisionVolume.isGlobal = true;
         nightVisionVolume.priority = 100;
-        
-        VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
-        if (profile.Add<ColorAdjustments>(true))
-        {
-            if (profile.TryGet(out ColorAdjustments colorAdj))
-            {
-                colorAdj.saturation.Override(-100f);
-                colorAdj.postExposure.Override(1.3f);
-                colorAdj.contrast.Override(20f);
-            }
-        }
-        nightVisionVolume.sharedProfile = profile;
+        nightVisionVolume.sharedProfile = CreateNightVisionVolumeProfile();
         nightVisionVolume.weight = 0f;
 
-        // 2. Setup Point Light2D to see in the dark (player hand-held night vision)
-        // Kept unscaled from the weapon/item transform so it maintains true 22m radius in world space.
+        // 2. Setup Point Light2D to see in the dark (player hand-held night vision only)
+        // Kept unscaled from the weapon/item transform so it maintains true world-space radius.
         GameObject lightObj = new GameObject("NightVisionLight");
         lightObj.hideFlags = HideFlags.HideInHierarchy;
         lightObj.transform.SetParent(null);
         lightObj.transform.localScale = Vector3.one;
         nightVisionLight = lightObj.AddComponent<Light2D>();
-        nightVisionLight.lightType = Light2D.LightType.Point;
-        nightVisionLight.color = Color.white;
-        nightVisionLight.intensity = 2.0f;
-        nightVisionLight.pointLightOuterRadius = nightVisionRadius;
-        nightVisionLight.pointLightInnerRadius = 0f;
-        nightVisionLight.pointLightInnerAngle = 360f;
-        nightVisionLight.pointLightOuterAngle = 360f;
-        nightVisionLight.shadowsEnabled = true;
-        nightVisionLight.shadowIntensity = 0.6f;
-        nightVisionLight.targetSortingLayers = allSortingLayerIds;
+        ApplyNightVisionLightSettings(nightVisionLight, nightVisionRadius, allSortingLayerIds);
         nightVisionLight.enabled = false;
         
-        // 3. Setup CCTV Camera for the Truck Dashboard feed
-        GameObject cctvObj = new GameObject("CCTV_POV");
-        cctvObj.transform.SetParent(transform, false);
-        cctvObj.transform.localPosition = new Vector3(0, 0, -10f);
-        cctvCamera = cctvObj.AddComponent<Camera>();
+        // 3. Bind and configure CCTV Camera for the Truck Dashboard feed (prefer prefab's FeedCamera child)
+        cctvCamera = feedCamera != null ? feedCamera : transform.Find("FeedCamera")?.GetComponent<Camera>();
+        if (cctvCamera == null)
+        {
+            cctvCamera = transform.Find("CCTV_POV")?.GetComponent<Camera>();
+        }
+        if (cctvCamera == null)
+        {
+            GameObject cctvObj = new GameObject("CCTV_POV");
+            cctvObj.transform.SetParent(transform, false);
+            cctvCamera = cctvObj.AddComponent<Camera>();
+        }
+
+        cctvCamera.gameObject.SetActive(true);
         cctvCamera.orthographic = true;
-        cctvCamera.orthographicSize = 5f;
+        cctvCamera.orthographicSize = cctvOrthographicSize;
+        cctvCamera.nearClipPlane = 0.1f;
+        cctvCamera.farClipPlane = 1000f;
         cctvCamera.backgroundColor = Color.black;
         cctvCamera.clearFlags = CameraClearFlags.SolidColor;
-        cctvCamera.depth = -10; // Lower depth so it doesn't interfere with main camera
-        cctvCamera.enabled = false; // Dashboard will manage enabling/disabling
-        
-        // Ensure CCTV can see Ghost Orbs layer
+        cctvCamera.depth = -10; // Render before Main Camera and never interfere with screen output
+        cctvCamera.enabled = false; // TruckDashboardController manages enabling/disabling
+
+        // Isolate FeedCamera onto CCTVOnly for volumes/IR light and keep GhostOrbs off until CCTV NV turns ON
+        int cctvLayer = ResolveCCTVLayer();
+        cctvCamera.cullingMask |= (1 << cctvLayer);
+
         int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
         if (ghostOrbLayer != -1)
         {
-            cctvCamera.cullingMask |= (1 << ghostOrbLayer);
+            cctvCamera.cullingMask &= ~(1 << ghostOrbLayer);
         }
-        
-        // Enable post-processing on the CCTV camera
-        var cctvCamData = cctvObj.AddComponent<UniversalAdditionalCameraData>();
+
+        // Enable post-processing on the CCTV camera using only the isolated CCTVOnly volume layer
+        var cctvCamData = cctvCamera.GetComponent<UniversalAdditionalCameraData>();
+        if (cctvCamData == null) cctvCamData = cctvCamera.gameObject.AddComponent<UniversalAdditionalCameraData>();
         cctvCamData.renderPostProcessing = true;
-        cctvCamData.volumeLayerMask = ~0;
-        
-        // 4. Setup B&W Volume for CCTV feed
-        GameObject cctvVolumeObj = new GameObject("CCTV_BW_Volume");
-        cctvVolumeObj.hideFlags = HideFlags.HideInHierarchy;
-        cctvVolumeObj.transform.SetParent(null);
-        cctvVolumeObj.transform.localScale = Vector3.one;
-        
-        cctvBWVolume = cctvVolumeObj.AddComponent<Volume>();
-        cctvBWVolume.isGlobal = true;
-        cctvBWVolume.priority = 200;
-        cctvBWVolume.weight = 0f;
-        
-        VolumeProfile cctvProfile = ScriptableObject.CreateInstance<VolumeProfile>();
-        if (cctvProfile.Add<ColorAdjustments>(true))
-        {
-            if (cctvProfile.TryGet(out ColorAdjustments cctvColorAdj))
-            {
-                cctvColorAdj.saturation.Override(-100f);
-                cctvColorAdj.postExposure.Override(1.5f);
-                cctvColorAdj.contrast.Override(25f);
-            }
-        }
-        cctvBWVolume.sharedProfile = cctvProfile;
+        cctvCamData.volumeLayerMask = (1 << cctvLayer);
+        cctvCamera.SetVolumeFrameworkUpdateMode(VolumeFrameworkUpdateMode.EveryFrame);
 
-        // 5. Setup CCTV Night Vision Light (unscaled so placed cameras illuminate fully)
-        GameObject cctvLightObj = new GameObject("CCTV_NightVisionLight");
-        cctvLightObj.hideFlags = HideFlags.HideInHierarchy;
-        cctvLightObj.transform.SetParent(null);
-        cctvLightObj.transform.localScale = Vector3.one;
-        cctvNightVisionLight = cctvLightObj.AddComponent<Light2D>();
-        cctvNightVisionLight.lightType = Light2D.LightType.Point;
-        cctvNightVisionLight.color = Color.white;
-        cctvNightVisionLight.intensity = 2.0f;
-        cctvNightVisionLight.pointLightOuterRadius = 35f;
-        cctvNightVisionLight.pointLightInnerRadius = 0f;
-        cctvNightVisionLight.pointLightInnerAngle = 360f;
-        cctvNightVisionLight.pointLightOuterAngle = 360f;
-        cctvNightVisionLight.shadowsEnabled = false;
-        cctvNightVisionLight.targetSortingLayers = allSortingLayerIds;
-        cctvNightVisionLight.enabled = false;
+        SyncCCTVCameraWorldPose();
+        SyncMainCameraGhostOrbsMask();
     }
 
-    private void OnEnable()
+    /// <summary>
+    /// Returns the world position where the CCTV IR light should be anchored.
+    /// When held, anchors at the holder's body center so shadows cast cleanly without wall clipping.
+    /// </summary>
+    public Vector3 GetCCTVNightVisionLightPosition()
     {
-        // Subscribe to camera rendering events for CCTV night vision toggle
+        if (ownerClientId.Value != ulong.MaxValue)
+        {
+            Transform holder = ResolveHolderPlayerTransform();
+            if (holder != null)
+            {
+                return new Vector3(holder.position.x, holder.position.y, 0f);
+            }
+        }
+
+        return new Vector3(transform.position.x, transform.position.y, 0f);
+    }
+
+    public void SyncCCTVCameraWorldPose()
+    {
+        if (cctvCamera == null) return;
+        Transform camTr = cctvCamera.transform;
+        Vector3 worldPos = transform.position;
+        camTr.position = new Vector3(worldPos.x, worldPos.y, -10f);
+        camTr.rotation = Quaternion.identity;
+    }
+
+    private TruckDashboardController FindDashboard()
+    {
+        return TruckDashboardController.Instance != null
+            ? TruckDashboardController.Instance
+            : FindAnyObjectByType<TruckDashboardController>(FindObjectsInactive.Include);
+    }
+
+    private void SyncDashboardRegistration()
+    {
+        if (cctvCamera == null) return;
+        var dashboard = FindDashboard();
+        if (dashboard == null) return;
+
+        if (IsAvailableForCCTV)
+        {
+            SyncCCTVCameraWorldPose();
+            dashboard.RegisterDynamicCamera(cctvCamera);
+        }
+        else
+        {
+            dashboard.UnregisterDynamicCamera(cctvCamera);
+        }
+    }
+
+    private void UnregisterFromDashboard()
+    {
+        if (cctvCamera == null) return;
+        var dashboard = FindDashboard();
+        if (dashboard != null)
+        {
+            dashboard.UnregisterDynamicCamera(cctvCamera);
+        }
+    }
+
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+        if (!activeCameras.Contains(this))
+        {
+            activeCameras.Add(this);
+        }
         RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
-        RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
+        SyncDashboardRegistration();
     }
 
-    private void OnDisable()
+    protected override void OnDisable()
     {
+        activeCameras.Remove(this);
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
-        RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
-        
-        // Ensure everything is off when disabled
-        if (cctvBWVolume != null) cctvBWVolume.weight = 0f;
-        if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;
+        UnregisterFromDashboard();
+        RestorePlayerAmbientLight();
+        RestoreLocalCameraOverridesIfIdle();
+        base.OnDisable();
+        SyncMainCameraGhostOrbsMask(this);
     }
 
-    /// <summary>
-    /// Right before the CCTV camera renders, enable NV effects if toggled on.
-    /// This ensures B&W + light only apply to the CCTV feed, not the main camera.
-    /// </summary>
     private void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
-    {
-        if (cam == cctvCamera && cctvNightVisionEnabled)
-        {
-            if (cctvBWVolume != null) cctvBWVolume.weight = 1f;
-            if (cctvNightVisionLight != null)
-            {
-                cctvNightVisionLight.transform.position = new Vector3(cam.transform.position.x, cam.transform.position.y, 0f);
-                cctvNightVisionLight.enabled = true;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Right after the CCTV camera finishes, disable NV effects
-    /// so the main camera renders normally.
-    /// </summary>
-    private void OnEndCameraRendering(ScriptableRenderContext ctx, Camera cam)
     {
         if (cam == cctvCamera)
         {
-            if (cctvBWVolume != null) cctvBWVolume.weight = 0f;
-            if (cctvNightVisionLight != null) cctvNightVisionLight.enabled = false;
+            SyncCCTVCameraWorldPose();
         }
-    }
-
-    /// <summary>
-    /// Toggle CCTV night vision on/off. Called from the TruckDashboardController.
-    /// </summary>
-    public void SetCCTVNightVision(bool enabled)
-    {
-        cctvNightVisionEnabled = enabled;
     }
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
         isPoweredOn.OnValueChanged += (oldVal, newVal) => UpdateNightVisionVisuals();
-        
-        // Register the CCTV camera with the Truck Dashboard
-        if (cctvCamera != null)
-        {
-            var dashboard = FindAnyObjectByType<TruckDashboardController>();
-            if (dashboard != null)
-            {
-                dashboard.RegisterDynamicCamera(cctvCamera);
-            }
-        }
+        SyncCCTVCameraWorldPose();
+        UpdateNightVisionVisuals();
+        SyncDashboardRegistration();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        UnregisterFromDashboard();
+        base.OnNetworkDespawn();
+    }
+
+    protected override void OnSyncedScaleApplied(Vector3 appliedScale)
+    {
+        base.OnSyncedScaleApplied(appliedScale);
+        SyncCCTVCameraWorldPose();
     }
 
     public override void UsePrimary()
@@ -238,12 +339,26 @@ public class VideoCameraItem : EquipmentItem
     {
         base.UpdateEquipState(newOwnerId);
         UpdateNightVisionVisuals();
+        SyncDashboardRegistration();
     }
 
     protected override void OnInHandChanged(bool inHand)
     {
         base.OnInHandChanged(inHand);
         UpdateNightVisionVisuals();
+        SyncDashboardRegistration();
+    }
+
+    protected override void OnPlacedChanged(bool placed)
+    {
+        base.OnPlacedChanged(placed);
+        SyncDashboardRegistration();
+    }
+
+    protected override void LateUpdate()
+    {
+        base.LateUpdate();
+        SyncCCTVCameraWorldPose();
     }
 
     /// <summary>
@@ -256,16 +371,39 @@ public class VideoCameraItem : EquipmentItem
         if (nightVisionLight != null && nightVisionLight.enabled)
         {
             nightVisionLight.transform.rotation = Quaternion.identity;
-            
-            // Anchor the light to the root (player) position so hand movements don't swing the shadows
-            if (transform.root != null)
+
+            // Anchor the light to the holder's body center so hand movements don't swing shadows
+            Transform holder = ResolveHolderPlayerTransform();
+            if (holder != null)
             {
-                nightVisionLight.transform.position = transform.root.position;
+                nightVisionLight.transform.position = holder.position;
+            }
+            else if (PlayerController.LocalInstance != null && IsHeldByLocalPlayer)
+            {
+                nightVisionLight.transform.position = PlayerController.LocalInstance.transform.position;
             }
             else
             {
                 nightVisionLight.transform.position = transform.position;
             }
+        }
+    }
+
+    private void RestoreLocalCameraOverridesIfIdle()
+    {
+        if (appliedLocalCameraOverrides && !HasLocalActiveNightVisionCamera(this))
+        {
+            if (localCamera != null && cameraSettingsStored)
+            {
+                localCamera.backgroundColor = originalCameraColor;
+                localCamera.orthographicSize = originalOrthoSize;
+
+                if (cameraData != null)
+                {
+                    cameraData.renderPostProcessing = originalPostProcessing;
+                }
+            }
+            appliedLocalCameraOverrides = false;
         }
     }
 
@@ -290,12 +428,7 @@ public class VideoCameraItem : EquipmentItem
             }
         }
 
-        bool isHolding = (ownerClientId.Value != ulong.MaxValue && 
-                            NetworkManager.Singleton != null && 
-                            ownerClientId.Value == NetworkManager.Singleton.LocalClientId && 
-                            isInHand.Value);
-
-        bool nightVisionActive = isHolding && isPoweredOn.Value;
+        bool nightVisionActive = IsLocallyHeldForNightVision() && isPoweredOn.Value;
 
         if (localCamera != null)
         {
@@ -310,33 +443,15 @@ public class VideoCameraItem : EquipmentItem
                         cameraData.renderPostProcessing = true;
                     }
                 }
-                
-                int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
-                if (ghostOrbLayer != -1)
-                {
-                    localCamera.cullingMask |= (1 << ghostOrbLayer);
-                }
+                appliedLocalCameraOverrides = true;
             }
             else
             {
-                if (cameraSettingsStored)
-                {
-                    localCamera.backgroundColor = originalCameraColor;
-                    localCamera.orthographicSize = originalOrthoSize;
-                    
-                    if (cameraData != null)
-                    {
-                        cameraData.renderPostProcessing = originalPostProcessing;
-                    }
-                    
-                    int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
-                    if (ghostOrbLayer != -1)
-                    {
-                        localCamera.cullingMask &= ~(1 << ghostOrbLayer);
-                    }
-                }
+                RestoreLocalCameraOverridesIfIdle();
             }
         }
+
+        SyncMainCameraGhostOrbsMask();
 
         if (nightVisionVolume != null)
         {
@@ -348,44 +463,69 @@ public class VideoCameraItem : EquipmentItem
         {
             nightVisionLight.enabled = nightVisionActive;
         }
+
+        if (nightVisionActive)
+        {
+            DimPlayerAmbientLight();
+        }
+        else
+        {
+            RestorePlayerAmbientLight();
+        }
+    }
+
+    private void DimPlayerAmbientLight()
+    {
+        var localPlayer = PlayerController.LocalInstance;
+        if (localPlayer == null) return;
+
+        Light2D targetLight = localPlayer.PlayerAmbientLight != null
+            ? localPlayer.PlayerAmbientLight
+            : localPlayer.GetComponent<Light2D>();
+
+        if (targetLight == null) return;
+
+        if (playerAmbientLight != targetLight)
+        {
+            RestorePlayerAmbientLight();
+            playerAmbientLight = targetLight;
+            originalPlayerLightIntensity = playerAmbientLight.intensity;
+            playerLightStored = true;
+        }
+        else if (!playerLightStored)
+        {
+            originalPlayerLightIntensity = playerAmbientLight.intensity;
+            playerLightStored = true;
+        }
+
+        playerAmbientLight.intensity = Mathf.Min(originalPlayerLightIntensity, 0.25f);
+    }
+
+    private void RestorePlayerAmbientLight()
+    {
+        if (playerAmbientLight != null && playerLightStored)
+        {
+            playerAmbientLight.intensity = originalPlayerLightIntensity;
+        }
+
+        playerLightStored = false;
+        playerAmbientLight = null;
     }
 
     public override void OnDestroy()
     {
-        // Unsubscribe from rendering events
+        RestorePlayerAmbientLight();
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
-        RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
+        UnregisterFromDashboard();
 
-        // Unregister from dashboard
-        if (cctvCamera != null)
+        if (nightVisionVolume != null)
         {
-            var dashboard = FindAnyObjectByType<TruckDashboardController>();
-            if (dashboard != null)
-            {
-                dashboard.UnregisterDynamicCamera(cctvCamera);
-            }
+            if (nightVisionVolume.sharedProfile != null) Destroy(nightVisionVolume.sharedProfile);
+            Destroy(nightVisionVolume.gameObject);
         }
-
-        if (nightVisionVolume != null) Destroy(nightVisionVolume.gameObject);
         if (nightVisionLight != null) Destroy(nightVisionLight.gameObject);
-        if (cctvBWVolume != null) Destroy(cctvBWVolume.gameObject);
-        if (cctvNightVisionLight != null) Destroy(cctvNightVisionLight.gameObject);
 
-        if (localCamera != null && cameraSettingsStored)
-        {
-            localCamera.backgroundColor = originalCameraColor;
-            localCamera.orthographicSize = originalOrthoSize;
-            
-            if (cameraData != null)
-            {
-                cameraData.renderPostProcessing = originalPostProcessing;
-            }
-            
-            int ghostOrbLayer = LayerMask.NameToLayer("GhostOrbs");
-            if (ghostOrbLayer != -1)
-            {
-                localCamera.cullingMask &= ~(1 << ghostOrbLayer);
-            }
-        }
+        RestoreLocalCameraOverridesIfIdle();
+        SyncMainCameraGhostOrbsMask(this);
     }
 }

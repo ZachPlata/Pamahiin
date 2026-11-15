@@ -46,6 +46,9 @@ public class DotsProjectorItem : EquipmentItem
         UpdateVisuals();
     }
 
+    // Align the horizontal (+X) sprite and Spot Light 2D beam with the player's forward (+Y) axis.
+    protected override Quaternion HeldRotationOffset => Quaternion.Euler(0f, 0f, 90f);
+
     protected override void Update()
     {
         base.Update();
@@ -55,18 +58,6 @@ public class DotsProjectorItem : EquipmentItem
             // 16-bit stepped laser grid shimmer
             float stepped = Mathf.Floor((0.88f + 0.18f * Mathf.Sin(Time.time * 12f)) * 8f) / 8f;
             dotsLight.intensity = stepped;
-        }
-
-        // Rotate 90 degrees when held in hand so the projector lens and light beam point straight forward
-        if (ownerClientId.Value != ulong.MaxValue && NetworkManager.Singleton != null && NetworkManager.Singleton.SpawnManager != null)
-        {
-            var playerObj = NetworkManager.Singleton.SpawnManager.GetPlayerNetworkObject(ownerClientId.Value);
-            if (playerObj != null)
-            {
-                Transform handPoint = playerObj.transform.Find("HandPoint");
-                Quaternion baseRotation = handPoint != null ? handPoint.rotation : playerObj.transform.rotation;
-                transform.rotation = baseRotation * Quaternion.Euler(0f, 0f, 90f);
-            }
         }
     }
 

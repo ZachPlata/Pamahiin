@@ -1,4 +1,4 @@
-﻿using NavMeshPlus.Components;
+using NavMeshPlus.Components;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -245,7 +245,15 @@ namespace NavMeshPlus.Extensions
             src.shape = NavMeshBuildSourceShape.Mesh;
             src.component = spriteRenderer;
             src.area = area;
-            src.transform = Matrix4x4.TRS(Vector3.Scale(spriteRenderer.transform.position, builder.overrideVector), spriteRenderer.transform.rotation, spriteRenderer.transform.lossyScale);
+            Vector3 scale = spriteRenderer.transform.lossyScale;
+            if (spriteRenderer.drawMode != SpriteDrawMode.Simple && spriteRenderer.sprite.bounds.size.x > 0.0001f && spriteRenderer.sprite.bounds.size.y > 0.0001f)
+            {
+                scale = new Vector3(
+                    scale.x * (spriteRenderer.size.x / spriteRenderer.sprite.bounds.size.x),
+                    scale.y * (spriteRenderer.size.y / spriteRenderer.sprite.bounds.size.y),
+                    scale.z);
+            }
+            src.transform = Matrix4x4.TRS(Vector3.Scale(spriteRenderer.transform.position, builder.overrideVector), spriteRenderer.transform.rotation, scale);
             src.sourceObject = mesh;
             sources.Add(src);
 

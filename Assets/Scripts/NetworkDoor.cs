@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Reflection;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
@@ -11,10 +13,15 @@ public enum DoorMotionType
 
 public class NetworkDoor : NetworkBehaviour, IInteractable
 {
+    public static readonly List<NetworkDoor> AllDoors = new List<NetworkDoor>();
+
     private NetworkVariable<bool> isOpen = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private NetworkVariable<bool> isLocked = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<bool> hasBeenOpened = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     [Header("Reference Sprites (Placed in Scene)")]
@@ -42,6 +49,8 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     [SerializeField] private bool requiresKey = false;
     [Tooltip("Whether this door is a hiding spot (closet or cabinet) where players conceal themselves.")]
     [SerializeField] private bool isHidingSpot = false;
+    [Tooltip("Whether players can directly open/close this door via [E] or click (disabled for automated Jeepney ramp).")]
+    [SerializeField] private bool allowPlayerInteract = true;
 
     [Header("Legacy Settings (Fallback if no references assigned)")]
     [SerializeField] private float openAngle = 90f;
@@ -51,7 +60,35 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     public bool IsFrontDoor => isFrontDoor;
     public bool RequiresKey => requiresKey;
     public bool IsHidingSpot => isHidingSpot;
+    public bool AllowPlayerInteract => allowPlayerInteract;
+    public float CurrentProgress => currentProgress;
     public bool IsKeyFound => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isKeyFound.Value : localIsKeyFound;
+    public bool HasBeenOpened => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        ? (hasBeenOpened.Value || isOpen.Value || localHasBeenOpened)
+        : (localHasBeenOpened || localIsOpen);
+
+    /// <summary>Returns true if the active scene contains at least one front door.</summary>
+    public static bool HasAnyFrontDoor()
+    {
+        for (int i = 0; i < AllDoors.Count; i++)
+        {
+            if (AllDoors[i] != null && AllDoors[i].isFrontDoor)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Returns true once any front door in the scene has been opened at least once.</summary>
+    public static bool HasAnyFrontDoorOpened()
+    {
+        for (int i = 0; i < AllDoors.Count; i++)
+        {
+            NetworkDoor door = AllDoors[i];
+            if (door != null && door.isFrontDoor && door.HasBeenOpened)
+                return true;
+        }
+        return false;
+    }
 
     private NetworkVariable<bool> isKeyFound = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -59,12 +96,18 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     private bool localIsOpen = false;
     private bool localIsLocked = false;
     private bool localIsKeyFound = false;
+    private bool localHasBeenOpened = false;
     private bool hasTriggeredGhostSpawn = false;
+
+    private static readonly FieldInfo ShadowApplyToSortingLayersField =
+        typeof(ShadowCaster2D).GetField("m_ApplyToSortingLayers", BindingFlags.Instance | BindingFlags.NonPublic);
 
     // Runtime state
     private GameObject runtimeDoorObj;
     private SpriteRenderer runtimeRenderer;
     private Collider2D runtimeCollider;
+    private Collider2D interactionTriggerCollider;
+    private ShadowCaster2D runtimeShadowCaster;
     private float currentProgress = 0f;
 
     // Cached poses
@@ -80,11 +123,25 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     private Vector2 pivotPoint;
     private bool hasValidPivot = false;
+    private bool snappedPivot = false;
     private bool usesReferenceSprites = false;
 
     // Legacy fallback state
     private Quaternion legacyClosedRotation;
     private Quaternion legacyTargetOpenRotation;
+
+    private void OnEnable()
+    {
+        if (!AllDoors.Contains(this))
+        {
+            AllDoors.Add(this);
+        }
+    }
+
+    private void OnDisable()
+    {
+        AllDoors.Remove(this);
+    }
 
     private void Awake()
     {
@@ -118,8 +175,23 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
+        if (isOpen.Value)
+        {
+            localHasBeenOpened = true;
+            if (IsServer) hasBeenOpened.Value = true;
+        }
+        if (usesReferenceSprites)
+        {
+            currentProgress = isOpen.Value ? 1f : 0f;
+            ApplyProgress(currentProgress);
+        }
         isOpen.OnValueChanged += (oldVal, newVal) =>
         {
+            if (newVal)
+            {
+                localHasBeenOpened = true;
+                if (IsServer) hasBeenOpened.Value = true;
+            }
             if (oldVal != newVal)
             {
                 if (newVal) GameAudioManager.PlayDoorOpen(transform.position);
@@ -147,9 +219,19 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
         // Calculate hinge pivot if arc swing is used
         float deltaDeg = Mathf.DeltaAngle(closedAngleZ, openAngleZ);
+        snappedPivot = false;
         if (Mathf.Abs(deltaDeg) >= 0.5f)
         {
             pivotPoint = CalculateHingePivot(closedPos, closedAngleZ, openPos, openAngleZ);
+            float maxExtent = closedDoorRef.bounds.extents.magnitude;
+            if (maxExtent > 0.001f && Vector2.Distance(pivotPoint, closedPos) > maxExtent * 1.35f)
+            {
+                float halfX = closedDoorRef.sprite != null
+                    ? closedDoorRef.sprite.bounds.extents.x * Mathf.Abs(closedScale.x)
+                    : closedDoorRef.bounds.extents.x;
+                pivotPoint = (Vector2)closedPos + (Vector2)(closedRot * new Vector3(-halfX, 0f, 0f));
+                snappedPivot = true;
+            }
             hasValidPivot = true;
         }
         else
@@ -167,12 +249,16 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         runtimeRenderer = runtimeDoorObj.AddComponent<SpriteRenderer>();
         CopySpriteRendererProperties(closedDoorRef, runtimeRenderer);
 
-        // Copy or setup Collider
+        // Copy obstacle collider
         CopyCollider(closedDoorRef.gameObject, runtimeDoorObj);
 
-        // Add interaction proxy so clicking or interacting with the runtime door works
-        var proxy = runtimeDoorObj.AddComponent<DoorInteractionProxy>();
-        proxy.Setup(this);
+        if (allowPlayerInteract)
+        {
+            // Persistent trigger collider keeps open doors interactive even when obstacle collider disables
+            CreatePersistentInteractionTrigger(closedDoorRef.gameObject, runtimeDoorObj);
+            var proxy = runtimeDoorObj.AddComponent<DoorInteractionProxy>();
+            proxy.Setup(this);
+        }
 
         // Copy ShadowCaster2D if universal 2D shadow caster exists
         TrySetupShadowCaster();
@@ -248,6 +334,43 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
     }
 
+    private void CreatePersistentInteractionTrigger(GameObject sourceObj, GameObject targetObj)
+    {
+        Collider2D refCol = sourceObj.GetComponent<Collider2D>();
+        if (refCol is BoxCollider2D box)
+        {
+            BoxCollider2D trig = targetObj.AddComponent<BoxCollider2D>();
+            trig.size = new Vector2(Mathf.Max(box.size.x, 0.25f), Mathf.Max(box.size.y, 0.25f));
+            trig.offset = box.offset;
+            trig.isTrigger = true;
+            interactionTriggerCollider = trig;
+        }
+        else if (refCol is CircleCollider2D circle)
+        {
+            CircleCollider2D trig = targetObj.AddComponent<CircleCollider2D>();
+            trig.radius = Mathf.Max(circle.radius, 0.15f);
+            trig.offset = circle.offset;
+            trig.isTrigger = true;
+            interactionTriggerCollider = trig;
+        }
+        else if (refCol is PolygonCollider2D poly)
+        {
+            PolygonCollider2D trig = targetObj.AddComponent<PolygonCollider2D>();
+            trig.points = poly.points;
+            trig.isTrigger = true;
+            interactionTriggerCollider = trig;
+        }
+        else
+        {
+            BoxCollider2D trig = targetObj.AddComponent<BoxCollider2D>();
+            trig.size = closedDoorRef != null && closedDoorRef.sprite != null
+                ? (Vector2)closedDoorRef.sprite.bounds.size
+                : Vector2.one * 0.3f;
+            trig.isTrigger = true;
+            interactionTriggerCollider = trig;
+        }
+    }
+
     private void TrySetupShadowCaster()
     {
         var sourceShadow = closedDoorRef.GetComponent<ShadowCaster2D>() ?? GetComponent<ShadowCaster2D>();
@@ -260,10 +383,52 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                 parentShadow.enabled = false;
             }
 
-            var targetShadow = runtimeDoorObj.AddComponent<ShadowCaster2D>();
-            targetShadow.castsShadows = sourceShadow.castsShadows;
-            targetShadow.selfShadows = sourceShadow.selfShadows;
+            runtimeShadowCaster = runtimeDoorObj.AddComponent<ShadowCaster2D>();
+            runtimeShadowCaster.castsShadows = sourceShadow.castsShadows;
+            runtimeShadowCaster.selfShadows = sourceShadow.selfShadows;
+            ApplyDoorShadowSortingLayers(sourceShadow, runtimeShadowCaster);
         }
+    }
+
+    private static void ApplyDoorShadowSortingLayers(ShadowCaster2D source, ShadowCaster2D target)
+    {
+        if (ShadowApplyToSortingLayersField == null || target == null) return;
+
+        int[] sourceLayers = source != null
+            ? ShadowApplyToSortingLayersField.GetValue(source) as int[]
+            : null;
+        int wallLayerId = GetSortingLayerId("Wall");
+
+        if (sourceLayers != null && sourceLayers.Length > 0)
+        {
+            List<int> filtered = new List<int>(sourceLayers.Length);
+            for (int i = 0; i < sourceLayers.Length; i++)
+            {
+                if (wallLayerId != int.MinValue && sourceLayers[i] == wallLayerId) continue;
+                filtered.Add(sourceLayers[i]);
+            }
+            ShadowApplyToSortingLayersField.SetValue(target, filtered.ToArray());
+            return;
+        }
+
+        SortingLayer[] allLayers = SortingLayer.layers;
+        List<int> nonWallLayers = new List<int>(allLayers.Length);
+        for (int i = 0; i < allLayers.Length; i++)
+        {
+            if (allLayers[i].name == "Wall") continue;
+            nonWallLayers.Add(allLayers[i].id);
+        }
+        ShadowApplyToSortingLayersField.SetValue(target, nonWallLayers.ToArray());
+    }
+
+    private static int GetSortingLayerId(string layerName)
+    {
+        SortingLayer[] layers = SortingLayer.layers;
+        for (int i = 0; i < layers.Length; i++)
+        {
+            if (layers[i].name == layerName) return layers[i].id;
+        }
+        return int.MinValue;
     }
 
     public static Vector2 CalculateHingePivot(Vector2 p1, float theta1Deg, Vector2 p2, float theta2Deg)
@@ -316,7 +481,9 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             Quaternion rotFromClosed = Quaternion.Euler(0, 0, currentAngleDelta);
 
             Vector3 vStart = (Vector3)closedPos - (Vector3)pivotPoint;
-            Vector3 vEndRotatedBack = Quaternion.Euler(0, 0, -deltaDeg) * ((Vector3)openPos - (Vector3)pivotPoint);
+            Vector3 vEndRotatedBack = snappedPivot
+                ? vStart
+                : Quaternion.Euler(0, 0, -deltaDeg) * ((Vector3)openPos - (Vector3)pivotPoint);
             Vector3 baseOffset = Vector3.Lerp(vStart, vEndRotatedBack, t);
 
             pos = (Vector3)pivotPoint + rotFromClosed * baseOffset;
@@ -352,15 +519,27 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
 
         // Swap sprite if configured and open sprite is different
-        if (swapSpriteWhenOpen && runtimeRenderer != null && openDoorRef != null && openDoorRef.sprite != null && openDoorRef.sprite != closedDoorRef.sprite)
+        bool didSwapSprite = swapSpriteWhenOpen && runtimeRenderer != null && openDoorRef != null && openDoorRef.sprite != null && openDoorRef.sprite != closedDoorRef.sprite;
+        if (didSwapSprite)
         {
             runtimeRenderer.sprite = (t >= 0.5f) ? openDoorRef.sprite : closedDoorRef.sprite;
         }
 
-        // Disable obstacle collider when open if enabled
+        // Disable obstacle collider when open if enabled (interactionTriggerCollider stays enabled)
         if (disableObstacleColliderWhenOpen && runtimeCollider != null)
         {
             runtimeCollider.enabled = (t < 0.2f);
+        }
+
+        if (interactionTriggerCollider != null)
+        {
+            interactionTriggerCollider.enabled = allowPlayerInteract;
+        }
+
+        // For non-swinging swap doors (e.g. cabinets / ramps), disable shadow blocker when open
+        if (runtimeShadowCaster != null && didSwapSprite)
+        {
+            runtimeShadowCaster.enabled = (t < 0.2f);
         }
     }
 
@@ -404,6 +583,8 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     public void Interact()
     {
+        if (!allowPlayerInteract) return;
+
         if (IsLocked)
         {
             // Door is locked (e.g. during a Hunt)
@@ -428,6 +609,37 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
     }
 
+    /// <summary>
+    /// Programmatically opens or closes a door (used by automated Jeepney ramp arrival/departure).
+    /// </summary>
+    public void SetDoorOpen(bool open, bool immediate = false)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            if (IsServer)
+            {
+                isOpen.Value = open;
+                if (open) hasBeenOpened.Value = true;
+            }
+            if (open) localHasBeenOpened = true;
+            if (immediate)
+            {
+                currentProgress = open ? 1f : 0f;
+                ApplyProgress(currentProgress);
+            }
+        }
+        else
+        {
+            localIsOpen = open;
+            if (open) localHasBeenOpened = true;
+            if (immediate)
+            {
+                currentProgress = open ? 1f : 0f;
+                ApplyProgress(currentProgress);
+            }
+        }
+    }
+
     private void ToggleDoor()
     {
         Debug.Log($"Player toggled door: {gameObject.name}");
@@ -436,6 +648,11 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             if (IsServer)
             {
                 isOpen.Value = !isOpen.Value;
+                if (isOpen.Value)
+                {
+                    hasBeenOpened.Value = true;
+                    localHasBeenOpened = true;
+                }
                 if (isFrontDoor && isOpen.Value && !hasTriggeredGhostSpawn)
                 {
                     Debug.Log("NetworkDoor: Front door opened! Searching for GhostHandler...");
@@ -456,6 +673,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         else
         {
             localIsOpen = !localIsOpen;
+            if (localIsOpen) localHasBeenOpened = true;
             if (isFrontDoor && localIsOpen)
             {
                 TutorialTooltipManager.TriggerHint(TutorialHintId.HousePower);
@@ -481,7 +699,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
     private void ToggleDoorRpc()
     {
-        if (isLocked.Value) return;
+        if (!allowPlayerInteract || isLocked.Value) return;
         ToggleDoor();
     }
 
@@ -497,10 +715,16 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
             isOpen.Value = forceOpen.HasValue ? forceOpen.Value : !isOpen.Value;
+            if (isOpen.Value)
+            {
+                hasBeenOpened.Value = true;
+                localHasBeenOpened = true;
+            }
         }
         else
         {
             localIsOpen = forceOpen.HasValue ? forceOpen.Value : !localIsOpen;
+            if (localIsOpen) localHasBeenOpened = true;
         }
 
         if (ParanormalManager.Instance != null)
@@ -535,6 +759,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     public string GetInteractText()
     {
+        if (!allowPlayerInteract) return string.Empty;
         if (IsLocked) return "Locked";
         return IsOpen ? "Close Door" : "Open Door";
     }

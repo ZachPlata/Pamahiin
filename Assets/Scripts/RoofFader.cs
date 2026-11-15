@@ -23,19 +23,28 @@ public class RoofFader : MonoBehaviour
 
     [Header("Fade Settings")]
     [SerializeField] private float fadeDuration = 0.5f;
+    [Tooltip("True for enclosed buildings (Main House); false for open roofs (Jeepney) so outdoor weather/headlights stay outside.")]
+    [SerializeField] private bool enclosedBuilding = true;
+
+    public bool IsEnclosedBuilding => enclosedBuilding;
 
     private float targetAlpha = 1f;
     private float currentAlpha = 1f;
     private int localPlayersInside = 0;
     private Collider2D triggerCollider;
+    private Collider2D[] triggerColliders;
     private TruckDashboardController dashboard;
 
     private void Awake()
     {
-        triggerCollider = GetComponent<Collider2D>();
-        if (triggerCollider != null)
+        triggerColliders = GetComponents<Collider2D>();
+        triggerCollider = triggerColliders != null && triggerColliders.Length > 0 ? triggerColliders[0] : GetComponent<Collider2D>();
+        if (triggerColliders != null)
         {
-            triggerCollider.isTrigger = true;
+            foreach (var col in triggerColliders)
+            {
+                if (col != null) col.isTrigger = true;
+            }
         }
 
         // Initialize alphas to 1
@@ -75,15 +84,44 @@ public class RoofFader : MonoBehaviour
     }
 
     /// <summary>
-    /// Checks if a 2D world position is inside this roof trigger's bounding box.
+    /// Checks if a 2D world position is inside any of this roof trigger's colliders.
     /// </summary>
     public bool IsPositionInside(Vector2 position)
     {
-        if (triggerCollider == null) triggerCollider = GetComponent<Collider2D>();
-        if (triggerCollider == null) return false;
-        Bounds bounds = triggerCollider.bounds;
-        return position.x >= bounds.min.x && position.x <= bounds.max.x &&
-               position.y >= bounds.min.y && position.y <= bounds.max.y;
+        if (triggerColliders == null || triggerColliders.Length == 0)
+        {
+            triggerColliders = GetComponents<Collider2D>();
+            if (triggerCollider == null && triggerColliders.Length > 0) triggerCollider = triggerColliders[0];
+        }
+        if (triggerColliders == null || triggerColliders.Length == 0) return false;
+
+        for (int i = 0; i < triggerColliders.Length; i++)
+        {
+            Collider2D col = triggerColliders[i];
+            if (col == null) continue;
+
+            if (col.isActiveAndEnabled)
+            {
+                if (col.OverlapPoint(position)) return true;
+                Bounds bounds = col.bounds;
+                if (position.x >= bounds.min.x && position.x <= bounds.max.x &&
+                    position.y >= bounds.min.y && position.y <= bounds.max.y)
+                {
+                    return true;
+                }
+            }
+            else if (col is BoxCollider2D box)
+            {
+                Vector3 localPos = box.transform.InverseTransformPoint(new Vector3(position.x, position.y, box.transform.position.z));
+                Vector2 half = box.size * 0.5f;
+                if (Mathf.Abs(localPos.x - box.offset.x) <= half.x &&
+                    Mathf.Abs(localPos.y - box.offset.y) <= half.y)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -128,9 +166,10 @@ public class RoofFader : MonoBehaviour
         }
 
         // 2. Fallback: check if any placed or deployed VideoCameraItem is inside this roof
-        var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
-        foreach (var cam in allCameras)
+        var allCameras = VideoCameraItem.ActiveCameras;
+        for (int i = 0; i < allCameras.Count; i++)
         {
+            var cam = allCameras[i];
             if (cam == null) continue;
 
             if (cam.IsPlaced || cam.IsOnGround)

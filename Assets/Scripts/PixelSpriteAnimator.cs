@@ -38,18 +38,39 @@ public static class PixelScenePostProcessor
 
     public static void ApplyPixelArtToScene()
     {
-        // 1. Force Point filter on every active SpriteRenderer texture
-        var allRenderers = Object.FindObjectsByType<SpriteRenderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        // 1. Force Point filter on every active SpriteRenderer texture and hide invisible trigger zone placeholders
+        var allRenderers = Object.FindObjectsByType<SpriteRenderer>(FindObjectsInactive.Include);
         foreach (var sr in allRenderers)
         {
-            if (sr != null && sr.sprite != null && sr.sprite.texture != null)
+            if (sr == null) continue;
+
+            if (sr.sprite != null && sr.sprite.texture != null)
             {
                 sr.sprite.texture.filterMode = FilterMode.Point;
+            }
+
+            if (sr.GetComponent<SafeZone>() != null ||
+                sr.GetComponent<HideZone>() != null ||
+                sr.GetComponent<GhostRoomMarker>() != null ||
+                sr.GetComponent<EquipmentSpawnPoint>() != null ||
+                sr.GetComponent<PlayerSpawnPoint>() != null)
+            {
+                sr.enabled = false;
+                continue;
+            }
+
+            // Hide oversized white "Square" trigger placeholders on light switches so they don't wash out under IR night vision
+            if (sr.GetComponent<HouseLightSwitch>() != null && sr.sprite != null && sr.sprite.name == "Square")
+            {
+                if (sr.bounds.size.x > 0.25f || sr.bounds.size.y > 0.25f)
+                {
+                    sr.enabled = false;
+                }
             }
         }
 
         // 2. Attach GhostPixelAnimator to any Ghost in the scene
-        foreach (var eg in Object.FindObjectsByType<EventGhostBehavior>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        foreach (var eg in Object.FindObjectsByType<EventGhostBehavior>(FindObjectsInactive.Include))
         {
             if (eg != null && eg.GetComponent<GhostPixelAnimator>() == null)
             {
@@ -57,7 +78,7 @@ public static class PixelScenePostProcessor
             }
         }
 
-        foreach (var hg in Object.FindObjectsByType<HunterGhostBehavior>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        foreach (var hg in Object.FindObjectsByType<HunterGhostBehavior>(FindObjectsInactive.Include))
         {
             if (hg != null && hg.GetComponent<GhostPixelAnimator>() == null)
             {
@@ -66,7 +87,10 @@ public static class PixelScenePostProcessor
         }
 
         // 3. Upgrade Lobby flat squares to 16-bit pixel art sprites while keeping exact world bounds
-        UpgradeLobbySprites(allRenderers);
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME)
+        {
+            UpgradeLobbySprites(allRenderers);
+        }
     }
 
     private static void UpgradeLobbySprites(SpriteRenderer[] renderers)
@@ -74,6 +98,7 @@ public static class PixelScenePostProcessor
         foreach (var sr in renderers)
         {
             if (sr == null || sr.gameObject == null) continue;
+            if (sr.drawMode != SpriteDrawMode.Simple) continue;
             string n = sr.gameObject.name;
 
             Sprite replacement = null;
@@ -124,6 +149,12 @@ public class GhostPixelAnimator : MonoBehaviour
     private float frameTimer;
     private int currentFrame;
     private float footstepTimer;
+    private bool isDyingOverride = false;
+
+    public void SetDyingOverride(bool active)
+    {
+        isDyingOverride = active;
+    }
 
     private void Awake()
     {
@@ -157,6 +188,8 @@ public class GhostPixelAnimator : MonoBehaviour
 
     private void Update()
     {
+        if (isDyingOverride) return;
+
         if (sr == null || !sr.enabled)
         {
             lastPos = transform.position;

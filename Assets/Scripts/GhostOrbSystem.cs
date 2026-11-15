@@ -22,6 +22,8 @@ public class GhostOrbSystem : NetworkBehaviour
     private ParticleSystem[] particleSystems;
     private bool isCurrentlyVisible = true;
 
+    private bool hasAppliedInitialVisibility = false;
+
     private void Awake()
     {
         CacheRenderers();
@@ -36,6 +38,12 @@ public class GhostOrbSystem : NetworkBehaviour
 
     private void SetOrbVisible(bool visible)
     {
+        if (hasAppliedInitialVisibility && isCurrentlyVisible == visible)
+        {
+            return;
+        }
+        hasAppliedInitialVisibility = true;
+
         if (allRenderers == null) CacheRenderers();
 
         if (allRenderers != null)
@@ -78,6 +86,24 @@ public class GhostOrbSystem : NetworkBehaviour
         }
         transform.position = startPos;
         PickNewTarget();
+    }
+
+    /// <summary>
+    /// Server-side: moves this existing orb to a position inside its room (used by ghost events
+    /// so no duplicate orb is spawned).
+    /// </summary>
+    public void NudgeTo(Vector2 position)
+    {
+        if (IsSpawned && !IsServer) return;
+
+        if (roomCollider != null && !roomCollider.OverlapPoint(position))
+            position = roomCollider.ClosestPoint(position);
+        else if (roomCollider == null && initialized && !roomBounds.Contains(position))
+            position = roomBounds.ClosestPoint(position);
+
+        transform.position = position;
+        timer = 0f;
+        if (initialized) PickNewTarget();
     }
 
     public void Initialize(Bounds bounds)
@@ -134,13 +160,14 @@ public class GhostOrbSystem : NetworkBehaviour
 
         // Client-side visibility: NEVER show if no VideoCameraItem exists in the scene
         bool shouldBeVisible = false;
-        var allCameras = FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        var allCameras = VideoCameraItem.ActiveCameras;
 
-        if (allCameras != null && allCameras.Length > 0)
+        if (allCameras != null && allCameras.Count > 0)
         {
             // 1. Check if the local player is holding a powered-on Video Camera in hand
-            foreach (var cam in allCameras)
+            for (int i = 0; i < allCameras.Count; i++)
             {
+                var cam = allCameras[i];
                 if (cam != null && cam.IsPoweredOn && cam.IsInHand && cam.IsHeldByLocalPlayer)
                 {
                     shouldBeVisible = true;
@@ -148,15 +175,16 @@ public class GhostOrbSystem : NetworkBehaviour
                 }
             }
 
-            // 2. Or if the Truck Dashboard is open AND at least one Video Camera is placed/active in the scene
+            // 2. Or if the Truck Dashboard is open with Night Vision ON AND at least one Video Camera is available in the scene
             if (!shouldBeVisible)
             {
-                var dashboard = FindAnyObjectByType<TruckDashboardController>();
-                if (dashboard != null && dashboard.IsDashboardOpen)
+                var dashboard = TruckDashboardController.Instance;
+                if (dashboard != null && dashboard.IsDashboardOpen && dashboard.IsCCTVNightVisionOn)
                 {
-                    foreach (var cam in allCameras)
+                    for (int i = 0; i < allCameras.Count; i++)
                     {
-                        if (cam != null && (cam.IsPlaced || cam.IsOnGround || cam.IsPoweredOn))
+                        var cam = allCameras[i];
+                        if (cam != null && (cam.IsPlaced || cam.IsOnGround || cam.IsInHand || cam.IsPoweredOn))
                         {
                             shouldBeVisible = true;
                             break;

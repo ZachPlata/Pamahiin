@@ -64,9 +64,24 @@ public class GameSettingsManager : MonoBehaviour
     // ── Unity Lifecycle ─────────────────────────────────────────────────────
     private void Awake()
     {
-        if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+        if (Instance != null && Instance != this)
+        {
+            // Never destroy a shared GameObject (e.g. GameMatchManager) when cleaning up a duplicate settings component
+            if (GetComponents<Component>().Length > 2 || GetComponent<GameMatchManager>() != null)
+            {
+                Destroy(this);
+            }
+            else
+            {
+                Destroy(gameObject);
+            }
+            return;
+        }
         Instance = this;
-        DontDestroyOnLoad(gameObject);
+        if (GetComponent<GameMatchManager>() == null)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
         LoadAll();
     }
 

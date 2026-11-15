@@ -11,11 +11,11 @@ public class RitualChalkItem : EquipmentItem
     [SerializeField] private Sprite diagramSprite;
 
     [Header("Scale & Sizing")]
-    [Tooltip("Desired diameter of the chalk circle on the floor in world units (camera viewport height is ~0.6, so 0.22 - 0.25 fits cleanly in rooms and van floor).")]
-    [SerializeField, Range(0.15f, 0.35f)] private float diagramWorldDiameter = 0.24f;
+    [Tooltip("Desired diameter of the chalk circle on the floor in world units (camera viewport height is ~0.6, so 0.24 - 0.30 fits cleanly in rooms and van floor).")]
+    [SerializeField, Range(0.15f, 0.35f)] private float diagramWorldDiameter = 0.26f;
 
-    [Tooltip("Target length of the chalk stick in world units when held or dropped (crucifix is ~0.035, so 0.025 fits player hands).")]
-    [SerializeField, Range(0.015f, 0.045f)] private float chalkItemTargetLength = 0.025f;
+    [Tooltip("Target length of the chalk stick in world units when held or dropped (calibrated to fit EquipmentSpawn slots).")]
+    [SerializeField, Range(0.012f, 0.045f)] private float chalkItemTargetLength = 0.020f;
 
     [Header("Rendering Layers")]
     [Tooltip("Sorting layer applied to the chalk diagram when placed on the ground (Item renders above all house/room floors).")]
@@ -25,12 +25,12 @@ public class RitualChalkItem : EquipmentItem
     [SerializeField] private int diagramSortingOrder = 10;
 
     [Header("Optional Diagram Prefab")]
-    [Tooltip("Optional prefab to instantiate at placement position. If null, this chalk item itself renders the diagram sprite.")]
+    [Tooltip("Optional SummoningCircle prefab to instantiate at placement position. If null, a standalone SummoningCircle entity is created at runtime.")]
     [SerializeField] private GameObject chalkDiagramPrefab;
 
     [Header("Exorcism Settings")]
     [Tooltip("Whether placing the chalk diagram automatically triggers the exorcism ghost-selection popup.")]
-    [SerializeField] private bool autoStartOnPlace = true;
+    [SerializeField] private bool autoStartOnPlace = false;
 
     private Vector3 baseLocalScale = Vector3.one;
     private bool hasBaseScale = false;
@@ -76,12 +76,38 @@ public class RitualChalkItem : EquipmentItem
         // Enforce hard realistic bounds against stale serialized inspector values (e.g. 1.0f or 2.8f)
         if (diagramWorldDiameter > 0.35f || diagramWorldDiameter < 0.15f)
         {
-            diagramWorldDiameter = 0.24f;
+            diagramWorldDiameter = 0.26f;
         }
 
-        if (chalkItemTargetLength > 0.045f || chalkItemTargetLength < 0.015f)
+        if (chalkItemTargetLength > 0.045f || chalkItemTargetLength < 0.012f)
         {
-            chalkItemTargetLength = 0.025f;
+            chalkItemTargetLength = 0.020f;
+        }
+    }
+
+    /// <summary>Sets the shelf/hand target length for unplaced chalk while preserving diagramWorldDiameter when placed.</summary>
+    public void SetShelfTargetLength(float targetLength)
+    {
+        chalkItemTargetLength = Mathf.Clamp(targetLength, 0.012f, 0.035f);
+        if (spriteRenderer != null)
+        {
+            UpdateVisuals();
+        }
+    }
+
+    protected override void OnSyncedScaleApplied(Vector3 appliedScale)
+    {
+        float itemSpriteWidth = (itemSprite != null && itemSprite.pixelsPerUnit > 0)
+            ? (itemSprite.rect.width / itemSprite.pixelsPerUnit)
+            : 4.64f;
+        float derivedLength = Mathf.Abs(appliedScale.x) * itemSpriteWidth;
+        if (derivedLength >= 0.012f && derivedLength <= 0.045f)
+        {
+            chalkItemTargetLength = Mathf.Clamp(derivedLength, 0.012f, 0.035f);
+        }
+        if (spriteRenderer != null)
+        {
+            UpdateVisuals();
         }
     }
 
@@ -195,6 +221,33 @@ public class RitualChalkItem : EquipmentItem
         UpdateVisuals();
     }
 
+    private void EnsureSpawnedSummoningCircle(Vector3 worldPos)
+    {
+        if (spawnedDiagramInstance != null) return;
+
+        worldPos.z = 0f;
+        if (chalkDiagramPrefab != null)
+        {
+            spawnedDiagramInstance = Instantiate(chalkDiagramPrefab, worldPos, Quaternion.identity);
+            spawnedDiagramInstance.SetActive(true);
+        }
+        else
+        {
+            spawnedDiagramInstance = new GameObject("SummoningCircle");
+            spawnedDiagramInstance.transform.position = worldPos;
+            spawnedDiagramInstance.transform.rotation = Quaternion.identity;
+        }
+
+        var circle = spawnedDiagramInstance.GetComponent<SummoningCircle>();
+        if (circle == null)
+        {
+            circle = spawnedDiagramInstance.AddComponent<SummoningCircle>();
+        }
+
+        float effectiveDiameter = Mathf.Clamp(diagramWorldDiameter, 0.15f, 0.35f);
+        circle.Configure(effectiveDiameter, diagramSortingLayer, diagramSortingOrder);
+    }
+
     protected override void OnPlacedChanged(bool placed)
     {
         base.OnPlacedChanged(placed);
@@ -213,34 +266,8 @@ public class RitualChalkItem : EquipmentItem
             worldPos.z = 0f;
             transform.position = worldPos;
 
-            // 3. Optional prefab instantiation support
-            if (chalkDiagramPrefab != null && spawnedDiagramInstance == null)
-            {
-                spawnedDiagramInstance = Instantiate(chalkDiagramPrefab, worldPos, transform.rotation);
-                spawnedDiagramInstance.SetActive(true);
-
-                float diagSpriteWidth = (diagramSprite != null && diagramSprite.pixelsPerUnit > 0)
-                    ? (diagramSprite.rect.width / diagramSprite.pixelsPerUnit)
-                    : 4.95f;
-                float effectiveDiameter = Mathf.Clamp(diagramWorldDiameter, 0.15f, 0.28f);
-                float diagScale = (diagSpriteWidth > 0.01f) ? (effectiveDiameter / diagSpriteWidth) : 0.0485f;
-                spawnedDiagramInstance.transform.localScale = new Vector3(diagScale, diagScale, 1f);
-
-                var sr = spawnedDiagramInstance.GetComponentInChildren<SpriteRenderer>();
-                if (sr != null)
-                {
-                    sr.enabled = true;
-                    sr.sortingLayerName = diagramSortingLayer;
-                    sr.sortingOrder = diagramSortingOrder;
-                }
-
-                // If diagram prefab has NetworkObject and we are server, spawn it
-                var netObj = spawnedDiagramInstance.GetComponent<NetworkObject>();
-                if (netObj != null && IsServer && !netObj.IsSpawned)
-                {
-                    netObj.Spawn();
-                }
-            }
+            // 3. Spawn standalone SummoningCircle synchronously on Server and Clients
+            EnsureSpawnedSummoningCircle(worldPos);
         }
         else
         {
@@ -278,6 +305,16 @@ public class RitualChalkItem : EquipmentItem
         }
     }
 
+    public override void OnDestroy()
+    {
+        if (spawnedDiagramInstance != null)
+        {
+            Destroy(spawnedDiagramInstance);
+            spawnedDiagramInstance = null;
+        }
+        base.OnDestroy();
+    }
+
     protected override void UpdateVisuals()
     {
         base.UpdateVisuals();
@@ -287,51 +324,24 @@ public class RitualChalkItem : EquipmentItem
         SanitizeSizing();
         TryResolveSprites();
 
-        // 1. Compute diagram world scale (fits inside rooms/van, ~0.24 world units diameter)
-        float diagSpriteWidth = (diagramSprite != null && diagramSprite.pixelsPerUnit > 0)
-            ? (diagramSprite.rect.width / diagramSprite.pixelsPerUnit)
-            : 4.95f;
-        float effectiveDiagramDiameter = Mathf.Clamp(diagramWorldDiameter, 0.15f, 0.28f);
-        float diagramScale = (diagSpriteWidth > 0.01f) ? (effectiveDiagramDiameter / diagSpriteWidth) : 0.0485f;
-
-        // 2. Compute chalk item scale (sized to ~0.025 world units, matching crucifix and player hands)
+        // Compute chalk item scale (sized to ~0.025 world units, matching crucifix and player hands)
         float itemSpriteWidth = (itemSprite != null && itemSprite.pixelsPerUnit > 0)
             ? (itemSprite.rect.width / itemSprite.pixelsPerUnit)
             : 4.64f;
-        float effectiveItemLength = Mathf.Clamp(chalkItemTargetLength, 0.015f, 0.035f);
+        float effectiveItemLength = Mathf.Clamp(chalkItemTargetLength, 0.012f, 0.035f);
         float itemScale = (itemSpriteWidth > 0.01f) ? (effectiveItemLength / itemSpriteWidth) : 0.0054f;
 
         if (IsPlaced)
         {
-            // Placed State: show ritual diagram
-            if (chalkDiagramPrefab != null && spawnedDiagramInstance != null)
+            // Decouple placed circle from the chalk stick: hide stick sprite & disable chalk collider
+            if (Application.isPlaying)
             {
-                spawnedDiagramInstance.transform.localScale = new Vector3(diagramScale, diagramScale, 1f);
-                spriteRenderer.enabled = false; // Rendered by instantiated prefab
+                EnsureSpawnedSummoningCircle(transform.position);
             }
-            else
-            {
-                spriteRenderer.enabled = true;
-                if (diagramSprite != null)
-                {
-                    spriteRenderer.sprite = diagramSprite;
-                }
-                else if (itemSprite != null)
-                {
-                    spriteRenderer.sprite = itemSprite;
-                }
-
-                ApplyWorldScale(diagramScale);
-                spriteRenderer.sortingLayerName = diagramSortingLayer;
-                spriteRenderer.sortingOrder = diagramSortingOrder;
-                spriteRenderer.color = Color.white;
-            }
-
-            // Allow walking smoothly across the chalk diagram on the floor
+            spriteRenderer.enabled = false;
             if (interactCollider != null)
             {
-                interactCollider.enabled = true;
-                interactCollider.isTrigger = true;
+                interactCollider.enabled = false;
             }
         }
         else
@@ -402,7 +412,7 @@ public class RitualChalkItem : EquipmentItem
                     return "Exorcism in Progress";
                 }
             }
-            return "Begin Exorcism";
+            return "Summon Ghost";
         }
 
         return base.GetInteractText();

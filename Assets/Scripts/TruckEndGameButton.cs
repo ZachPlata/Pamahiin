@@ -1,9 +1,21 @@
+using System.Collections;
 using UnityEngine;
 using Unity.Netcode;
 
 [RequireComponent(typeof(Collider2D))]
 public class TruckEndGameButton : NetworkBehaviour, IInteractable
 {
+    private const float StageTransitionDebounceSeconds = 0.6f;
+
+    private readonly NetworkVariable<bool> syncedRampOpened = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private bool hasTriggered = false;
+    private bool localRampOpened = false;
+    private float rampOpenedUnscaledTime = -10f;
+    private bool hasSearchedRampDoor = false;
+    private NetworkDoor cachedRampDoor;
+
     private void Awake()
     {
         int interactLayer = LayerMask.NameToLayer("Interactable");
@@ -26,9 +38,140 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
         }
     }
 
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        syncedRampOpened.OnValueChanged += OnSyncedRampOpenedChanged;
+        if (syncedRampOpened.Value)
+        {
+            localRampOpened = true;
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        syncedRampOpened.OnValueChanged -= OnSyncedRampOpenedChanged;
+        base.OnNetworkDespawn();
+    }
+
+    private void OnSyncedRampOpenedChanged(bool previousValue, bool newValue)
+    {
+        if (newValue)
+        {
+            localRampOpened = true;
+            rampOpenedUnscaledTime = Time.unscaledTime;
+        }
+    }
+
+    private NetworkDoor GetRampDoor()
+    {
+        if (cachedRampDoor != null) return cachedRampDoor;
+        if (hasSearchedRampDoor) return null;
+
+        hasSearchedRampDoor = true;
+        var rampGo = GameObject.Find("JeepneyRampDoor");
+        if (rampGo != null)
+        {
+            cachedRampDoor = rampGo.GetComponent<NetworkDoor>();
+            if (cachedRampDoor != null) return cachedRampDoor;
+        }
+
+        for (int i = 0; i < NetworkDoor.AllDoors.Count; i++)
+        {
+            NetworkDoor door = NetworkDoor.AllDoors[i];
+            if (door == null) continue;
+            string lower = door.gameObject.name.ToLowerInvariant();
+            if (lower.Contains("jeepneyramp") || lower.Contains("rampdoor"))
+            {
+                cachedRampDoor = door;
+                return cachedRampDoor;
+            }
+        }
+
+        return null;
+    }
+
+    private bool IsRampStageCompleted()
+    {
+        NetworkDoor ramp = GetRampDoor();
+        if (ramp == null) return true; // Scenes without a Jeepney ramp (e.g., GameMapScene) skip Stage 1
+
+        if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            return syncedRampOpened.Value || ramp.IsOpen;
+        }
+
+        return localRampOpened || ramp.IsOpen;
+    }
+
+    private static bool IsFrontDoorGateBlocked()
+    {
+        return NetworkDoor.HasAnyFrontDoor() && !NetworkDoor.HasAnyFrontDoorOpened();
+    }
+
+    private void OpenJeepneyRampServer()
+    {
+        localRampOpened = true;
+        rampOpenedUnscaledTime = Time.unscaledTime;
+
+        if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsServer)
+        {
+            syncedRampOpened.Value = true;
+        }
+
+        NetworkDoor ramp = GetRampDoor();
+        if (ramp != null)
+        {
+            ramp.SetDoorOpen(true);
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void OpenJeepneyRampRpc()
+    {
+        OpenJeepneyRampServer();
+    }
+
     public void Interact()
     {
-        Debug.Log("[TruckEndGameButton] End Mission button interacted!");
+        if (hasTriggered) return;
+
+        // Stage 1: Open the Jeepney rear ramp door first
+        if (!IsRampStageCompleted())
+        {
+            Debug.Log("[TruckEndGameButton] Stage 1 interacted: Opening Jeepney ramp.");
+            GameAudioManager.PlayUIClick();
+            localRampOpened = true;
+            rampOpenedUnscaledTime = Time.unscaledTime;
+
+            if (IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !IsServer)
+            {
+                OpenJeepneyRampRpc();
+            }
+            else
+            {
+                OpenJeepneyRampServer();
+            }
+            return;
+        }
+
+        // Prevent accidental double-tap across the Stage 1 -> Stage 2 boundary
+        if (Time.unscaledTime - rampOpenedUnscaledTime < StageTransitionDebounceSeconds)
+        {
+            return;
+        }
+
+        // Stage 2 gate: Mission departure requires the house front door to have been opened at least once
+        if (IsFrontDoorGateBlocked())
+        {
+            Debug.Log("[TruckEndGameButton] Departure blocked: open the house front door first.");
+            GameAudioManager.PlayDoorLocked(transform.position);
+            return;
+        }
+
+        hasTriggered = true;
+
+        Debug.Log("[TruckEndGameButton] Stage 2 interacted: Ending mission and departing!");
         GameAudioManager.PlayUIClick();
 
         var matchMgr = GameMatchManager.Instance != null
@@ -67,6 +210,35 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
 
     private void TriggerEndMatchFallback()
     {
+        if (PlayerController.LocalInstance != null)
+        {
+            PlayerController.LocalInstance.enabled = false;
+        }
+
+        var rampGo = GameObject.Find("JeepneyRampDoor");
+        var ramp = rampGo != null ? rampGo.GetComponent<NetworkDoor>() : null;
+        if (ramp != null)
+        {
+            ramp.SetDoorOpen(false);
+        }
+
+        StartCoroutine(WaitForTruckAudioFallbackRoutine(ramp));
+    }
+
+    private IEnumerator WaitForTruckAudioFallbackRoutine(NetworkDoor ramp)
+    {
+        Vector3 sfxPos = ramp != null ? ramp.transform.position : transform.position;
+        float departDuration = GameAudioManager.PlayTruckStartDepart(sfxPos);
+        if (departDuration <= 0f) departDuration = 1.5f;
+
+        float elapsed = 0f;
+        float maxWait = departDuration + 1.5f;
+        while (elapsed < departDuration || (ramp != null && ramp.CurrentProgress > 0.02f && elapsed < maxWait))
+        {
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
         string ghostName = "Unknown Entity";
         var ghost = Object.FindAnyObjectByType<GhostHandler>();
         if (ghost != null && !string.IsNullOrEmpty(ghost.ghostName) && !ghost.ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
@@ -74,14 +246,36 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
             ghostName = ghost.ghostName;
         }
 
-        var reveal = Object.FindAnyObjectByType<EndGameRevealController>();
-        if (reveal != null)
+        EndGameRevealController.PreparePendingReveal(ghostName, ExorcismManager.Instance != null && ExorcismManager.Instance.IsExorcismCompleted);
+
+        var loadingMgr = LoadingScreenManager.EnsureInstance();
+        if (loadingMgr != null)
         {
-            reveal.TriggerReveal(ghostName);
+            loadingMgr.ShowIntermission(
+                "DEPARTING INVESTIGATION SITE",
+                "Unloading investigation area & returning to Safe House Lobby...",
+                "CASE DEBRIEFING");
+            loadingMgr.SetProgress(0.35f, "Returning to Safe House Lobby...");
+            yield return new WaitForSecondsRealtime(1.0f);
+        }
+
+        TruckGearSpawner.CleanupAllGhostOrbs();
+        if (NetworkController.Instance != null)
+        {
+            NetworkController.Instance.ReturnToLobbyFromMatch();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(ProgressionAndLoadoutManager.LOBBY_SCENE_NAME);
         }
     }
 
-    public string GetInteractText() => "End Mission and Leave";
+    public string GetInteractText()
+    {
+        if (!IsRampStageCompleted()) return "Open Jeepney Ramp";
+        if (IsFrontDoorGateBlocked()) return "Open Front Door First";
+        return "End Mission and Leave";
+    }
 
     public bool CanDrag() => false;
     public void OnDragBegin(ulong clientId) { }

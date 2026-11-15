@@ -1,0 +1,143 @@
+/* ========================================================
+   PAMAHIIN - PERSISTENT INTERMISSION LOADING SCREEN
+   Aged Horror Dossier / Gunmetal / Brass Aesthetic
+   ======================================================== */
+
+.loading-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgb(7, 8, 12);
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+}
+
+.loading-visible {
+    opacity: 1;
+}
+
+.hidden {
+    display: none;
+}
+
+.loading-vignette {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    border-width: 28px;
+    border-color: rgba(2, 2, 4, 0.85);
+    background-color: rgba(18, 10, 10, 0.18);
+}
+
+.loading-frame {
+    width: 680px;
+    max-width: 88%;
+    background-color: rgba(16, 15, 20, 0.96);
+    border-width: 2px;
+    border-color: rgb(118, 88, 52);
+    border-radius: 6px;
+    padding: 30px 36px;
+    align-items: stretch;
+}
+
+.loading-header-row {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.loading-tag {
+    font-size: 12px;
+    color: rgb(196, 154, 86);
+    -unity-font-style: bold;
+    letter-spacing: 3px;
+}
+
+.loading-percent {
+    font-size: 13px;
+    color: rgb(215, 202, 178);
+    -unity-font-style: bold;
+    letter-spacing: 1px;
+}
+
+.loading-divider {
+    height: 2px;
+    background-color: rgba(145, 42, 36, 0.8);
+    margin-bottom: 22px;
+}
+
+.loading-title {
+    font-size: 28px;
+    color: rgb(242, 232, 214);
+    -unity-font-style: bold;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    white-space: normal;
+}
+
+.loading-subtitle {
+    font-size: 15px;
+    color: rgb(186, 172, 152);
+    letter-spacing: 1px;
+    margin-bottom: 26px;
+    white-space: normal;
+}
+
+.loading-progress-section {
+    margin-bottom: 24px;
+}
+
+.loading-progress-track {
+    width: 100%;
+    height: 14px;
+    background-color: rgb(10, 11, 15);
+    border-width: 2px;
+    border-color: rgb(88, 68, 44);
+    border-radius: 2px;
+    padding: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.loading-progress-fill {
+    width: 0%;
+    height: 100%;
+    background-color: rgb(172, 42, 34);
+    border-right-width: 3px;
+    border-right-color: rgb(235, 178, 92);
+}
+
+.loading-status {
+    font-size: 12px;
+    color: rgb(146, 140, 132);
+    letter-spacing: 1px;
+}
+
+.loading-tip-card {
+    background-color: rgba(26, 22, 20, 0.92);
+    border-width: 1px;
+    border-color: rgba(118, 88, 52, 0.65);
+    border-left-width: 3px;
+    border-left-color: rgb(178, 140, 62);
+    padding: 12px 16px;
+}
+
+.loading-tip-header {
+    font-size: 11px;
+    color: rgb(196, 154, 86);
+    -unity-font-style: bold;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+}
+
+.loading-tip {
+    font-size: 13px;
+    color: rgb(218, 206, 186);
+    white-space: normal;
+}

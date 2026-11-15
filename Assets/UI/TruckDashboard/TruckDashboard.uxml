@@ -41,11 +41,12 @@
                         <!-- Bottom HUD Bar -->
                         <ui:VisualElement class="cctv-hud-bottom" picking-mode="Ignore">
                             <ui:Label name="cctv-timestamp" text="2026-10-11  02:44:19" class="cctv-hud-text" />
-                            <ui:Label text="CH-01 FEED  |  FPS: 30  |  SIGNAL: OPTIMAL" class="cctv-hud-text cctv-hud-sub" />
+                            <ui:Label name="cctv-hud-sub" text="CH-01 FEED  |  FPS: 30  |  SIGNAL: OPTIMAL" class="cctv-hud-text cctv-hud-sub" />
                         </ui:VisualElement>
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="cctv-controls" style="flex-direction: row; justify-content: center; margin-top: 10px;">
+                    <ui:Button name="btn-prev-camera" text="Prev Camera" class="control-button" />
                     <ui:Button name="btn-next-camera" text="Next Camera" class="control-button" />
                     <ui:Button name="btn-toggle-nv" text="Toggle Night Vision" class="control-button" />
                 </ui:VisualElement>

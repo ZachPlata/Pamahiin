@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 public enum ContractDifficulty
@@ -48,6 +47,19 @@ public struct MatchPayoutBreakdown
     public int newBalance;
 }
 
+public struct LobbyPlayerSlotEntry
+{
+    public ulong clientId;
+    public int slotIndex;
+}
+
+public struct LoadoutContributorEntry
+{
+    public ulong clientId;
+    public int slotIndex;
+    public int count;
+}
+
 /// <summary>
 /// Manages persistent in-game currency, lobby mission configuration (Map, Difficulty, Party Code),
 /// van ghost equipment loadout selection, and end-of-match currency payouts.
@@ -57,14 +69,19 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     public static ProgressionAndLoadoutManager Instance { get; private set; }
 
     public const string LOBBY_SCENE_NAME = "LobbyScene";
-    public const string GAME_MAP_SCENE_NAME = "GameMapScene";
+    public const string BARANGAY_MAP_SCENE_NAME = "BarangayMap";
+    public const string GAME_MAP_SCENE_NAME = "GameMapScene"; // Legacy prototype scene (index 1)
     public const string MAIN_MENU_SCENE_NAME = "MainMenuScene";
 
-    private const string PREF_CURRENCY_INIT = "Pamahiin_Currency_Initialized_v1";
-    private const string PREF_CURRENCY = "Pamahiin_Currency_v1";
+    private const string PREF_CURRENCY_INIT_LEGACY = "Pamahiin_Currency_Initialized_v1";
+    private const string PREF_CURRENCY_LEGACY = "Pamahiin_Currency_v1";
+    private const string PREF_LOADOUT_PREFIX_LEGACY = "Pamahiin_Loadout_v1_";
+
+    private const string PREF_CURRENCY_INIT = "Pamahiin_Currency_Initialized_v2";
+    private const string PREF_CURRENCY = "Pamahiin_Currency_v2";
     private const string PREF_DIFFICULTY = "Pamahiin_Difficulty_v1";
     private const string PREF_MAP_INDEX = "Pamahiin_MapIndex_v1";
-    private const string PREF_LOADOUT_PREFIX = "Pamahiin_Loadout_v1_";
+    private const string PREF_LOADOUT_PREFIX = "Pamahiin_Loadout_v2_";
 
     public const int STARTER_CURRENCY = 250;
     public const int REWARD_PER_CORRECT_EVIDENCE = 35;
@@ -73,6 +90,20 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public event Action OnCurrencyOrLoadoutChanged;
     public event Action OnContractSettingsChanged;
+
+    private static readonly string[] KnownEquipmentIds =
+    {
+        "Flashlight",
+        "EMFReader",
+        "Thermometer",
+        "SpiritBox",
+        "GhostWritingBook",
+        "DotsProjector",
+        "VideoCamera",
+        "Crucifix",
+        "SanityPills",
+        "RitualChalk"
+    };
 
     public readonly List<EquipmentCatalogEntry> Catalog = new List<EquipmentCatalogEntry>
     {
@@ -90,30 +121,78 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public readonly string[] AvailableMaps = new string[]
     {
-        "Abandoned House (Baryo San Nicolas)"
+        "Barangay San Nicolas — 6 Tanglewood Drive", // Default index 0 -> BarangayMap
+        "Abandoned House (Original Prototype)"       // Legacy index 1 -> REMOVE THIS LINE to retire GameMapScene
     };
 
     private readonly Dictionary<string, int> loadoutCounts = new Dictionary<string, int>();
+    private readonly Dictionary<string, Dictionary<ulong, int>> multiplayerContributions = new Dictionary<string, Dictionary<ulong, int>>();
+    private readonly List<LobbyPlayerSlotEntry> lobbyPlayerSlots = new List<LobbyPlayerSlotEntry>();
+    private readonly Dictionary<string, int> pendingRemoveCounts = new Dictionary<string, int>();
+
+    private static readonly Color32[] PlayerSlotColors =
+    {
+        new Color32(59, 130, 246, 255),   // P1 (Host): Cobalt Blue
+        new Color32(239, 68, 68, 255),    // P2: Coral Red
+        new Color32(34, 197, 94, 255),    // P3: Emerald Green
+        new Color32(234, 179, 8, 255),    // P4: Amber Gold
+        new Color32(217, 70, 239, 255),   // P5+: Orchid
+        new Color32(6, 182, 212, 255)     // P6+: Cyan
+    };
+
+    private bool isMultiplayerClientSession = false;
+    private int pendingPurchaseCost = 0;
 
     public int Currency { get; private set; }
     public ContractDifficulty SelectedDifficulty { get; private set; } = ContractDifficulty.Amateur;
     public int SelectedMapIndex { get; private set; } = 0;
+    public bool IsMultiplayerClientSession => isMultiplayerClientSession;
+
+    public static Color GetPlayerColor(int slotIndex)
+    {
+        int idx = ((slotIndex % PlayerSlotColors.Length) + PlayerSlotColors.Length) % PlayerSlotColors.Length;
+        return PlayerSlotColors[idx];
+    }
+
+    public static string GetPlayerColorHex(int slotIndex)
+    {
+        Color32 c = GetPlayerColor(slotIndex);
+        return $"#{c.r:X2}{c.g:X2}{c.b:X2}";
+    }
+
+    public static ulong LocalNetworkClientId =>
+        (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            ? NetworkManager.Singleton.LocalClientId
+            : 0UL;
+
+    public static bool IsNetworkHostOrOffline =>
+        NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer;
+
+    public static bool IsConnectedMultiplayerClient =>
+        NetworkManager.Singleton != null &&
+        NetworkManager.Singleton.IsListening &&
+        NetworkManager.Singleton.IsClient &&
+        !NetworkManager.Singleton.IsServer;
+
+    public int GetAvailableCurrency() => Mathf.Max(0, Currency - pendingPurchaseCost);
 
     public static bool IsInLobbyScene =>
         SceneManager.GetActiveScene().name == LOBBY_SCENE_NAME;
 
-    public static void EnsureInstance()
+    public static ProgressionAndLoadoutManager EnsureInstance()
     {
-        if (Instance != null) return;
+        if (Instance != null) return Instance;
         var existing = FindAnyObjectByType<ProgressionAndLoadoutManager>();
         if (existing != null)
         {
             Instance = existing;
-            return;
+            return Instance;
         }
 
         var go = new GameObject("ProgressionAndLoadoutManager");
+        DontDestroyOnLoad(go);
         Instance = go.AddComponent<ProgressionAndLoadoutManager>();
+        return Instance;
     }
 
     private void Awake()
@@ -133,13 +212,7 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     {
         if (PlayerPrefs.GetInt(PREF_CURRENCY_INIT, 0) == 0)
         {
-            Currency = STARTER_CURRENCY;
-            PlayerPrefs.SetInt(PREF_CURRENCY, Currency);
-            PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
-
-            // Give 1 free starter Flashlight in initial loadout so brand-new players immediately have light
-            PlayerPrefs.SetInt(PREF_LOADOUT_PREFIX + "Flashlight", 1);
-            PlayerPrefs.Save();
+            InitializeDefaultProgressionPrefs();
         }
         else
         {
@@ -157,15 +230,97 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         }
     }
 
-    private void SaveStateToPrefs()
+    private void InitializeDefaultProgressionPrefs()
+    {
+        Currency = STARTER_CURRENCY;
+        PlayerPrefs.SetInt(PREF_CURRENCY, Currency);
+        PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
+
+        loadoutCounts.Clear();
+        foreach (var entry in Catalog)
+        {
+            int starterCount = entry.id == "Flashlight" ? 1 : 0;
+            loadoutCounts[entry.id] = starterCount;
+            PlayerPrefs.SetInt(PREF_LOADOUT_PREFIX + entry.id, starterCount);
+        }
+
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>
+    /// Clears persisted currency and loadout keys and restores the starter $250 balance + 1 starter Flashlight.
+    /// </summary>
+    public void ResetProgressionToDefault()
+    {
+        ClearPersistedProgressionPrefs(Catalog);
+        InitializeDefaultProgressionPrefs();
+        if (IsNetworkHostOrOffline)
+        {
+            InitializeServerLobbyLedger();
+            NetworkController.Instance?.BroadcastLobbyLoadoutSync();
+        }
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    public static void ClearPersistedProgressionPrefs(IEnumerable<EquipmentCatalogEntry> catalog = null)
+    {
+        PlayerPrefs.DeleteKey(PREF_CURRENCY_INIT_LEGACY);
+        PlayerPrefs.DeleteKey(PREF_CURRENCY_LEGACY);
+        PlayerPrefs.DeleteKey(PREF_CURRENCY_INIT);
+        PlayerPrefs.DeleteKey(PREF_CURRENCY);
+
+        if (catalog != null)
+        {
+            foreach (var entry in catalog)
+            {
+                PlayerPrefs.DeleteKey(PREF_LOADOUT_PREFIX_LEGACY + entry.id);
+                PlayerPrefs.DeleteKey(PREF_LOADOUT_PREFIX + entry.id);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < KnownEquipmentIds.Length; i++)
+            {
+                string eqId = KnownEquipmentIds[i];
+                PlayerPrefs.DeleteKey(PREF_LOADOUT_PREFIX_LEGACY + eqId);
+                PlayerPrefs.DeleteKey(PREF_LOADOUT_PREFIX + eqId);
+            }
+        }
+        PlayerPrefs.Save();
+    }
+
+    private void SaveCurrencyOnlyToPrefs()
     {
         PlayerPrefs.SetInt(PREF_CURRENCY, Currency);
+        PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
+        PlayerPrefs.Save();
+    }
+
+    private void SaveStateToPrefs()
+    {
+        // Connected non-host clients only persist their personal currency so they never overwrite
+        // the host's loadout/contract PlayerPrefs when testing multiplayer on the same machine.
+        if (isMultiplayerClientSession || IsConnectedMultiplayerClient)
+        {
+            SaveCurrencyOnlyToPrefs();
+            return;
+        }
+
+        PlayerPrefs.SetInt(PREF_CURRENCY, Currency);
+        PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
         PlayerPrefs.SetInt(PREF_DIFFICULTY, (int)SelectedDifficulty);
         PlayerPrefs.SetInt(PREF_MAP_INDEX, SelectedMapIndex);
 
+        // On an active multiplayer server, persist ONLY the host's own personal contributions,
+        // never the combined team loadoutCounts (which include remote players' purchases).
+        bool useServerOwnContributions = NetworkManager.Singleton != null &&
+                                         NetworkManager.Singleton.IsListening &&
+                                         NetworkManager.Singleton.IsServer &&
+                                         multiplayerContributions.Count > 0;
+
         foreach (var entry in Catalog)
         {
-            int count = GetLoadoutCount(entry.id);
+            int count = useServerOwnContributions ? GetOwnContributionCount(entry.id) : GetLoadoutCount(entry.id);
             PlayerPrefs.SetInt(PREF_LOADOUT_PREFIX + entry.id, count);
         }
 
@@ -176,6 +331,85 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     {
         if (string.IsNullOrEmpty(equipmentId)) return 0;
         return loadoutCounts.TryGetValue(equipmentId, out int count) ? count : 0;
+    }
+
+    public int GetOwnContributionCount(string equipmentId)
+    {
+        if (string.IsNullOrEmpty(equipmentId)) return 0;
+        if (!isMultiplayerClientSession && (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening))
+        {
+            return GetLoadoutCount(equipmentId);
+        }
+
+        if (multiplayerContributions.TryGetValue(equipmentId, out var map) &&
+            map.TryGetValue(LocalNetworkClientId, out int own))
+        {
+            return own;
+        }
+        return 0;
+    }
+
+    public int GetPendingRemoveCount(string equipmentId)
+    {
+        if (string.IsNullOrEmpty(equipmentId)) return 0;
+        return pendingRemoveCounts.TryGetValue(equipmentId, out int pending) ? pending : 0;
+    }
+
+    public IReadOnlyList<LobbyPlayerSlotEntry> GetLobbyPlayerSlots()
+    {
+        if (lobbyPlayerSlots.Count == 0 && (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening))
+        {
+            lobbyPlayerSlots.Add(new LobbyPlayerSlotEntry { clientId = 0UL, slotIndex = 0 });
+        }
+        return lobbyPlayerSlots;
+    }
+
+    public int GetPlayerSlotIndex(ulong clientId)
+    {
+        for (int i = 0; i < lobbyPlayerSlots.Count; i++)
+        {
+            if (lobbyPlayerSlots[i].clientId == clientId) return lobbyPlayerSlots[i].slotIndex;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Returns per-player contribution breakdown (sorted by player color slot) for UI indicator badges.
+    /// </summary>
+    public List<LoadoutContributorEntry> GetEquipmentContributors(string equipmentId)
+    {
+        var result = new List<LoadoutContributorEntry>();
+        if (string.IsNullOrEmpty(equipmentId)) return result;
+
+        bool networkActive = isMultiplayerClientSession ||
+                             (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening);
+
+        if (!networkActive)
+        {
+            int soloCount = GetLoadoutCount(equipmentId);
+            if (soloCount > 0)
+            {
+                result.Add(new LoadoutContributorEntry { clientId = 0UL, slotIndex = 0, count = soloCount });
+            }
+            return result;
+        }
+
+        if (multiplayerContributions.TryGetValue(equipmentId, out var map))
+        {
+            foreach (var kvp in map)
+            {
+                if (kvp.Value <= 0) continue;
+                result.Add(new LoadoutContributorEntry
+                {
+                    clientId = kvp.Key,
+                    slotIndex = GetPlayerSlotIndex(kvp.Key),
+                    count = kvp.Value
+                });
+            }
+            result.Sort((a, b) => a.slotIndex.CompareTo(b.slotIndex));
+        }
+
+        return result;
     }
 
     public int GetLoadoutCountByType(Type componentType)
@@ -218,7 +452,26 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
         int current = GetLoadoutCount(equipmentId);
         if (current >= entry.maxCount) return false;
-        if (Currency < entry.cost) return false;
+        if (GetAvailableCurrency() < entry.cost) return false;
+
+        if (IsConnectedMultiplayerClient)
+        {
+            if (NetworkController.Instance == null) return false;
+            pendingPurchaseCost += entry.cost;
+            OnCurrencyOrLoadoutChanged?.Invoke();
+            NetworkController.Instance.SendLobbyLoadoutRequestToServer(1, equipmentId);
+            return true;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
+        {
+            if (!ServerProcessBuyRequest(LocalNetworkClientId, equipmentId)) return false;
+            Currency -= entry.cost;
+            SaveStateToPrefs();
+            NetworkController.Instance?.BroadcastLobbyLoadoutSync();
+            OnCurrencyOrLoadoutChanged?.Invoke();
+            return true;
+        }
 
         Currency -= entry.cost;
         loadoutCounts[equipmentId] = current + 1;
@@ -232,15 +485,369 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         var entry = Catalog.Find(e => e.id == equipmentId);
         if (entry == null) return false;
 
-        int current = GetLoadoutCount(equipmentId);
-        if (current <= 0) return false;
+        int removableOwn = GetOwnContributionCount(equipmentId) - GetPendingRemoveCount(equipmentId);
+        if (removableOwn <= 0) return false;
+
+        if (IsConnectedMultiplayerClient)
+        {
+            if (NetworkController.Instance == null) return false;
+            pendingRemoveCounts[equipmentId] = GetPendingRemoveCount(equipmentId) + 1;
+            OnCurrencyOrLoadoutChanged?.Invoke();
+            NetworkController.Instance.SendLobbyLoadoutRequestToServer(2, equipmentId);
+            return true;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
+        {
+            if (!ServerProcessRemoveRequest(LocalNetworkClientId, equipmentId)) return false;
+            Currency += entry.cost;
+            SaveStateToPrefs();
+            NetworkController.Instance?.BroadcastLobbyLoadoutSync();
+            OnCurrencyOrLoadoutChanged?.Invoke();
+            return true;
+        }
 
         Currency += entry.cost;
-        loadoutCounts[equipmentId] = current - 1;
+        loadoutCounts[equipmentId] = Mathf.Max(0, GetLoadoutCount(equipmentId) - 1);
         SaveStateToPrefs();
         OnCurrencyOrLoadoutChanged?.Invoke();
         return true;
     }
+
+    #region Multiplayer Shared Lobby Loadout Sync
+
+    /// <summary>
+    /// Seeds the server's authoritative Van loadout ledger from the host's persisted loadout.
+    /// </summary>
+    public void InitializeServerLobbyLedger()
+    {
+        isMultiplayerClientSession = false;
+        pendingPurchaseCost = 0;
+        pendingRemoveCounts.Clear();
+        lobbyPlayerSlots.Clear();
+        multiplayerContributions.Clear();
+
+        ulong hostId = NetworkManager.ServerClientId;
+        EnsurePlayerSlot(hostId);
+
+        foreach (var entry in Catalog)
+        {
+            var contrib = new Dictionary<ulong, int>();
+            int count = Mathf.Clamp(GetLoadoutCount(entry.id), 0, entry.maxCount);
+            if (count > 0)
+            {
+                contrib[hostId] = count;
+            }
+            multiplayerContributions[entry.id] = contrib;
+        }
+
+        RecalculateTotalCountsFromContributions();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    public void ServerOnClientConnected(ulong clientId)
+    {
+        if (!IsNetworkHostOrOffline) return;
+        EnsurePlayerSlot(clientId);
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    public void ServerOnClientDisconnected(ulong clientId)
+    {
+        if (!IsNetworkHostOrOffline) return;
+        if (clientId == NetworkManager.ServerClientId) return;
+
+        for (int i = lobbyPlayerSlots.Count - 1; i >= 0; i--)
+        {
+            if (lobbyPlayerSlots[i].clientId == clientId)
+            {
+                lobbyPlayerSlots.RemoveAt(i);
+            }
+        }
+
+        if (IsInLobbyScene)
+        {
+            foreach (var entry in Catalog)
+            {
+                if (multiplayerContributions.TryGetValue(entry.id, out var map))
+                {
+                    map.Remove(clientId);
+                }
+            }
+            RecalculateTotalCountsFromContributions();
+        }
+
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    public bool ServerProcessBuyRequest(ulong clientId, string equipmentId)
+    {
+        var entry = Catalog.Find(e => e.id == equipmentId);
+        if (entry == null) return false;
+
+        EnsurePlayerSlot(clientId);
+        int currentTotal = GetLoadoutCount(equipmentId);
+        if (currentTotal >= entry.maxCount) return false;
+
+        if (!multiplayerContributions.TryGetValue(equipmentId, out var map))
+        {
+            map = new Dictionary<ulong, int>();
+            multiplayerContributions[equipmentId] = map;
+        }
+
+        map[clientId] = (map.TryGetValue(clientId, out int curOwn) ? curOwn : 0) + 1;
+        RecalculateTotalCountsFromContributions();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+        return true;
+    }
+
+    public bool ServerProcessRemoveRequest(ulong clientId, string equipmentId)
+    {
+        var entry = Catalog.Find(e => e.id == equipmentId);
+        if (entry == null) return false;
+
+        if (!multiplayerContributions.TryGetValue(equipmentId, out var map) ||
+            !map.TryGetValue(clientId, out int curOwn) ||
+            curOwn <= 0)
+        {
+            return false;
+        }
+
+        if (curOwn <= 1) map.Remove(clientId);
+        else map[clientId] = curOwn - 1;
+
+        RecalculateTotalCountsFromContributions();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+        return true;
+    }
+
+    public void OnJoinedMultiplayerLobbyAsClient()
+    {
+        isMultiplayerClientSession = true;
+        pendingPurchaseCost = 0;
+        pendingRemoveCounts.Clear();
+        lobbyPlayerSlots.Clear();
+        multiplayerContributions.Clear();
+        foreach (var entry in Catalog)
+        {
+            loadoutCounts[entry.id] = 0;
+            multiplayerContributions[entry.id] = new Dictionary<ulong, int>();
+        }
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    public void OnLeftMultiplayerLobbyAsClient()
+    {
+        if (!isMultiplayerClientSession) return;
+
+        // If the client exits before a match starts, refund what they contributed in this lobby.
+        if (IsInLobbyScene)
+        {
+            int refund = 0;
+            foreach (var entry in Catalog)
+            {
+                int own = GetOwnContributionCount(entry.id);
+                if (own > 0) refund += own * entry.cost;
+            }
+            if (refund > 0)
+            {
+                Currency += refund;
+                SaveCurrencyOnlyToPrefs();
+            }
+        }
+
+        isMultiplayerClientSession = false;
+        pendingPurchaseCost = 0;
+        pendingReliefFlashlightAfterMatch = false;
+        hasConsumedCurrentMatchLoadout = false;
+        pendingRemoveCounts.Clear();
+        lobbyPlayerSlots.Clear();
+        multiplayerContributions.Clear();
+        LoadStateFromPrefs();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+        OnContractSettingsChanged?.Invoke();
+    }
+
+    public void HandleClientPurchaseAck(byte op, string equipmentId, bool approved)
+    {
+        var entry = Catalog.Find(e => e.id == equipmentId);
+        if (entry != null)
+        {
+            if (op == 1)
+            {
+                pendingPurchaseCost = Mathf.Max(0, pendingPurchaseCost - entry.cost);
+                if (approved)
+                {
+                    Currency = Mathf.Max(0, Currency - entry.cost);
+                    SaveCurrencyOnlyToPrefs();
+                }
+            }
+            else if (op == 2)
+            {
+                int pending = GetPendingRemoveCount(equipmentId);
+                if (pending > 0) pendingRemoveCounts[equipmentId] = pending - 1;
+                if (approved)
+                {
+                    Currency += entry.cost;
+                    SaveCurrencyOnlyToPrefs();
+                }
+            }
+        }
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    public void WriteSyncSnapshot(FastBufferWriter writer)
+    {
+        writer.WriteValueSafe((byte)SelectedDifficulty);
+        writer.WriteValueSafe(SelectedMapIndex);
+
+        ushort slotCount = (ushort)Mathf.Min(lobbyPlayerSlots.Count, ushort.MaxValue);
+        writer.WriteValueSafe(slotCount);
+        for (int i = 0; i < slotCount; i++)
+        {
+            writer.WriteValueSafe(lobbyPlayerSlots[i].clientId);
+            writer.WriteValueSafe((ushort)lobbyPlayerSlots[i].slotIndex);
+        }
+
+        byte catCount = (byte)Mathf.Min(Catalog.Count, byte.MaxValue);
+        writer.WriteValueSafe(catCount);
+        for (int c = 0; c < catCount; c++)
+        {
+            string eqId = Catalog[c].id;
+            if (multiplayerContributions.TryGetValue(eqId, out var map))
+            {
+                int nonZero = 0;
+                foreach (var kvp in map) if (kvp.Value > 0) nonZero++;
+                byte n = (byte)Mathf.Min(nonZero, byte.MaxValue);
+                writer.WriteValueSafe(n);
+                int written = 0;
+                foreach (var kvp in map)
+                {
+                    if (kvp.Value <= 0 || written >= n) continue;
+                    writer.WriteValueSafe(kvp.Key);
+                    writer.WriteValueSafe((ushort)kvp.Value);
+                    written++;
+                }
+            }
+            else
+            {
+                writer.WriteValueSafe((byte)0);
+            }
+        }
+    }
+
+    public void ApplySyncSnapshot(FastBufferReader reader)
+    {
+        isMultiplayerClientSession = !IsNetworkHostOrOffline;
+
+        reader.ReadValueSafe(out byte diffByte);
+        reader.ReadValueSafe(out int mapIndex);
+
+        ContractDifficulty syncedDiff = (ContractDifficulty)Mathf.Clamp(diffByte, 0, 3);
+        int syncedMap = Mathf.Clamp(mapIndex, 0, Mathf.Max(0, AvailableMaps.Length - 1));
+        bool contractChanged = SelectedDifficulty != syncedDiff || SelectedMapIndex != syncedMap;
+        SelectedDifficulty = syncedDiff;
+        SelectedMapIndex = syncedMap;
+
+        lobbyPlayerSlots.Clear();
+        reader.ReadValueSafe(out ushort slotCount);
+        for (int i = 0; i < slotCount; i++)
+        {
+            reader.ReadValueSafe(out ulong cid);
+            reader.ReadValueSafe(out ushort slotIdx);
+            lobbyPlayerSlots.Add(new LobbyPlayerSlotEntry { clientId = cid, slotIndex = slotIdx });
+        }
+
+        multiplayerContributions.Clear();
+        for (int i = 0; i < Catalog.Count; i++)
+        {
+            multiplayerContributions[Catalog[i].id] = new Dictionary<ulong, int>();
+        }
+
+        reader.ReadValueSafe(out byte catCount);
+        for (int c = 0; c < catCount; c++)
+        {
+            reader.ReadValueSafe(out byte contributorCount);
+            if (c < Catalog.Count)
+            {
+                var map = multiplayerContributions[Catalog[c].id];
+                for (int j = 0; j < contributorCount; j++)
+                {
+                    reader.ReadValueSafe(out ulong cid);
+                    reader.ReadValueSafe(out ushort cnt);
+                    if (cnt > 0) map[cid] = cnt;
+                }
+            }
+            else
+            {
+                for (int j = 0; j < contributorCount; j++)
+                {
+                    reader.ReadValueSafe(out ulong _);
+                    reader.ReadValueSafe(out ushort _);
+                }
+            }
+        }
+
+        RecalculateTotalCountsFromContributions();
+        if (contractChanged) OnContractSettingsChanged?.Invoke();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+
+        if (IsInLobbyScene && ConsumePendingReliefFlashlightIfBroke())
+        {
+            NetworkController.Instance?.SendLobbyLoadoutRequestToServer(3, "Flashlight");
+        }
+    }
+
+    private void EnsurePlayerSlot(ulong clientId)
+    {
+        for (int i = 0; i < lobbyPlayerSlots.Count; i++)
+        {
+            if (lobbyPlayerSlots[i].clientId == clientId) return;
+        }
+
+        if (clientId == NetworkManager.ServerClientId)
+        {
+            lobbyPlayerSlots.Insert(0, new LobbyPlayerSlotEntry { clientId = clientId, slotIndex = 0 });
+            return;
+        }
+
+        int candidate = 1;
+        bool used = true;
+        while (used)
+        {
+            used = false;
+            for (int i = 0; i < lobbyPlayerSlots.Count; i++)
+            {
+                if (lobbyPlayerSlots[i].slotIndex == candidate)
+                {
+                    used = true;
+                    candidate++;
+                    break;
+                }
+            }
+        }
+
+        lobbyPlayerSlots.Add(new LobbyPlayerSlotEntry { clientId = clientId, slotIndex = candidate });
+    }
+
+    private void RecalculateTotalCountsFromContributions()
+    {
+        for (int i = 0; i < Catalog.Count; i++)
+        {
+            var entry = Catalog[i];
+            int sum = 0;
+            if (multiplayerContributions.TryGetValue(entry.id, out var map))
+            {
+                foreach (var kvp in map)
+                {
+                    sum += kvp.Value;
+                }
+            }
+            loadoutCounts[entry.id] = Mathf.Clamp(sum, 0, entry.maxCount);
+        }
+    }
+
+    #endregion
 
     public void AddCurrency(int amount)
     {
@@ -250,21 +857,145 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         OnCurrencyOrLoadoutChanged?.Invoke();
     }
 
+    public void SetCurrency(int amount)
+    {
+        int clamped = Mathf.Max(0, amount);
+        if (Currency == clamped) return;
+        Currency = clamped;
+        SaveStateToPrefs();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Adjusts currency by delta in either Play Mode (live manager) or Edit Mode (PlayerPrefs directly).
+    /// Returns the resulting clamped currency balance.
+    /// </summary>
+    public static int AdjustCurrencyPersisted(int delta)
+    {
+        var mgr = Instance ?? FindAnyObjectByType<ProgressionAndLoadoutManager>();
+        if (mgr != null)
+        {
+            mgr.AddCurrency(delta);
+            return mgr.Currency;
+        }
+
+        int current = PlayerPrefs.GetInt(PREF_CURRENCY_INIT, 0) == 0
+            ? STARTER_CURRENCY
+            : Mathf.Max(0, PlayerPrefs.GetInt(PREF_CURRENCY, STARTER_CURRENCY));
+        return SetCurrencyPersisted(current + delta);
+    }
+
+    /// <summary>
+    /// Sets currency in either Play Mode (live manager) or Edit Mode (PlayerPrefs directly).
+    /// Returns the resulting clamped currency balance.
+    /// </summary>
+    public static int SetCurrencyPersisted(int amount)
+    {
+        int clamped = Mathf.Max(0, amount);
+        var mgr = Instance ?? FindAnyObjectByType<ProgressionAndLoadoutManager>();
+        if (mgr != null)
+        {
+            mgr.SetCurrency(clamped);
+            return mgr.Currency;
+        }
+
+        if (PlayerPrefs.GetInt(PREF_CURRENCY_INIT, 0) == 0)
+        {
+            // Seed starter Flashlight so first Play Mode run keeps default starter gear.
+            PlayerPrefs.SetInt(PREF_LOADOUT_PREFIX + "Flashlight", 1);
+            PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
+        }
+
+        PlayerPrefs.SetInt(PREF_CURRENCY, clamped);
+        PlayerPrefs.Save();
+        return clamped;
+    }
+
+    private bool pendingReliefFlashlightAfterMatch = false;
+    private bool hasConsumedCurrentMatchLoadout = false;
+
+    public void MarkMatchLoadoutActive()
+    {
+        hasConsumedCurrentMatchLoadout = false;
+        pendingReliefFlashlightAfterMatch = false;
+    }
+
+    public void EnsureMatchLoadoutConsumedOnExit()
+    {
+        if (!hasConsumedCurrentMatchLoadout)
+        {
+            ConsumeLoadoutAfterCompletedMatch();
+        }
+    }
+
+    public bool ConsumePendingReliefFlashlightIfBroke()
+    {
+        if (!pendingReliefFlashlightAfterMatch) return false;
+        pendingReliefFlashlightAfterMatch = false;
+        return Currency < 20 && GetOwnContributionCount("Flashlight") == 0;
+    }
+
+    public bool ServerProcessReliefFlashlightRequest(ulong clientId)
+    {
+        var entry = Catalog.Find(e => e.id == "Flashlight");
+        if (entry == null) return false;
+
+        EnsurePlayerSlot(clientId);
+        if (GetLoadoutCount("Flashlight") >= entry.maxCount) return false;
+
+        if (!multiplayerContributions.TryGetValue("Flashlight", out var map))
+        {
+            map = new Dictionary<ulong, int>();
+            multiplayerContributions["Flashlight"] = map;
+        }
+
+        if (map.TryGetValue(clientId, out int own) && own > 0) return false;
+
+        map[clientId] = 1;
+        RecalculateTotalCountsFromContributions();
+        SaveStateToPrefs();
+        OnCurrencyOrLoadoutChanged?.Invoke();
+        return true;
+    }
+
     /// <summary>
     /// Clears the consumed van loadout at the end of a completed match so players purchase fresh gear
-    /// for the next investigation using their earned payout. Ensures broke players still get a free Flashlight.
+    /// for the next investigation using their earned payout. Ensures broke players still get a free $0-relief Flashlight.
     /// </summary>
     public void ConsumeLoadoutAfterCompletedMatch()
     {
+        hasConsumedCurrentMatchLoadout = true;
+        pendingPurchaseCost = 0;
+        pendingRemoveCounts.Clear();
+
         foreach (var entry in Catalog)
         {
             loadoutCounts[entry.id] = 0;
+            if (multiplayerContributions.TryGetValue(entry.id, out var map))
+            {
+                map.Clear();
+            }
         }
 
-        // If player has less than $20 and 0 items, provide a free relief Flashlight so they are never stuck
+        // Provide a free $0-relief Flashlight if a player ends broke (< $20)
         if (Currency < 20)
         {
-            loadoutCounts["Flashlight"] = 1;
+            if (IsNetworkHostOrOffline)
+            {
+                loadoutCounts["Flashlight"] = 1;
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
+                {
+                    if (!multiplayerContributions.ContainsKey("Flashlight"))
+                    {
+                        multiplayerContributions["Flashlight"] = new Dictionary<ulong, int>();
+                    }
+                    multiplayerContributions["Flashlight"][NetworkManager.ServerClientId] = 1;
+                }
+            }
+            else if (isMultiplayerClientSession || IsConnectedMultiplayerClient)
+            {
+                pendingReliefFlashlightAfterMatch = true;
+            }
         }
 
         SaveStateToPrefs();
@@ -273,15 +1004,20 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public void SetDifficulty(ContractDifficulty difficulty)
     {
+        if (!IsNetworkHostOrOffline) return;
         SelectedDifficulty = difficulty;
         SaveStateToPrefs();
+        NetworkController.Instance?.BroadcastLobbyLoadoutSync();
         OnContractSettingsChanged?.Invoke();
     }
 
     public void SetMapIndex(int mapIndex)
     {
-        SelectedMapIndex = Mathf.Clamp(mapIndex, 0, AvailableMaps.Length - 1);
+        if (!IsNetworkHostOrOffline) return;
+        int len = Mathf.Max(1, AvailableMaps.Length);
+        SelectedMapIndex = ((mapIndex % len) + len) % len;
         SaveStateToPrefs();
+        NetworkController.Instance?.BroadcastLobbyLoadoutSync();
         OnContractSettingsChanged?.Invoke();
     }
 
@@ -292,7 +1028,13 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public string GetSelectedSceneName()
     {
-        return GAME_MAP_SCENE_NAME;
+        // REMOVE index 1 branch below if removing GameMapScene from AvailableMaps
+        return SelectedMapIndex == 1 ? GAME_MAP_SCENE_NAME : BARANGAY_MAP_SCENE_NAME;
+    }
+
+    public static bool IsGameplayMapScene(string sceneName)
+    {
+        return sceneName == BARANGAY_MAP_SCENE_NAME || sceneName == GAME_MAP_SCENE_NAME;
     }
 
     public static float GetDifficultyRewardMultiplier(ContractDifficulty difficulty)
@@ -345,9 +1087,9 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         float multiplier = GetDifficultyRewardMultiplier(SelectedDifficulty);
         int totalEarned = Mathf.RoundToInt(baseReward * multiplier);
 
-        // Consume the brought equipment for this completed contract and credit the payout
-        ConsumeLoadoutAfterCompletedMatch();
+        // Credit the payout BEFORE consuming/resetting loadout so post-match broke relief checks the updated balance
         AddCurrency(totalEarned);
+        ConsumeLoadoutAfterCompletedMatch();
 
         return new MatchPayoutBreakdown
         {

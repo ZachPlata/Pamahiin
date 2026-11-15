@@ -30,7 +30,13 @@ public class EquipmentSpawnPoint : MonoBehaviour
 
     private void Start()
     {
-        // Guarantee TruckGearSpawner spawns equipment into this EquipmentSpawn area
+        // Guarantee TruckGearSpawner spawns equipment automatically in standalone/offline mode.
+        // In multiplayer, NetworkController triggers TruckGearSpawner once all clients finish scene synchronization.
+        if (Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening)
+        {
+            return;
+        }
+
         if (TruckGearSpawner.Instance == null)
         {
             var existing = FindAnyObjectByType<TruckGearSpawner>();
@@ -60,7 +66,7 @@ public class EquipmentSpawnPoint : MonoBehaviour
         hasCachedBounds = true;
 
         var sr = GetComponent<SpriteRenderer>();
-        if (sr != null && hideSpriteInPlayMode && Application.isPlaying)
+        if (sr != null && Application.isPlaying && hideSpriteInPlayMode)
         {
             sr.enabled = false;
         }
@@ -122,6 +128,20 @@ public class EquipmentSpawnPoint : MonoBehaviour
         float t = (slotIndex + 0.5f) / totalSlots;
         float y = Mathf.Lerp(b.max.y, b.min.y, t);
         return new Vector3(b.center.x, y, 0f);
+    }
+
+    /// <summary>
+    /// Returns the padded maximum world width and height available per slot in this spawn zone,
+    /// reserving at least minSlotBudget vertical slots so partial loadouts do not inflate items.
+    /// </summary>
+    public Vector2 GetSlotMaxSize(int totalSlots, float paddingRatio = 0.88f, int minSlotBudget = 10)
+    {
+        Bounds b = GetWorldBounds();
+        int effectiveSlots = Mathf.Max(minSlotBudget, Mathf.Max(1, totalSlots));
+        float clampedPad = Mathf.Clamp(paddingRatio, 0.25f, 1f);
+        return new Vector2(
+            Mathf.Max(0.01f, b.size.x * clampedPad),
+            Mathf.Max(0.01f, (b.size.y / effectiveSlots) * clampedPad));
     }
 
     public static EquipmentSpawnPoint FindOrResolve()

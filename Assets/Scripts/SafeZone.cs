@@ -12,6 +12,13 @@ public class SafeZone : MonoBehaviour
         {
             col.isTrigger = true;
         }
+
+        // Prevent scene placeholder trigger squares from rendering or glowing under IR night vision
+        var sr = GetComponent<SpriteRenderer>();
+        if (sr != null)
+        {
+            sr.enabled = false;
+        }
     }
 
     private void OnEnable()

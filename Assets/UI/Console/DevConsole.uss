@@ -160,3 +160,47 @@
     background-color: rgba(120, 40, 45, 1);
     border-color: rgb(255, 80, 80);
 }
+
+.dev-balance-label {
+    color: rgb(140, 240, 175);
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin-bottom: 4px;
+}
+
+.dev-currency-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 3px;
+    margin-bottom: 3px;
+}
+
+.dev-currency-btn {
+    flex-grow: 1;
+    height: 32px;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    margin-left: 2px;
+    margin-right: 2px;
+    font-size: 12px;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+.dev-currency-input {
+    width: 72px;
+    height: 32px;
+    margin-right: 4px;
+    font-size: 13px;
+}
+
+.dev-currency-input > .unity-text-field__input {
+    background-color: rgba(24, 30, 36, 0.98);
+    color: rgb(240, 245, 240);
+    border-color: rgba(80, 100, 110, 0.85);
+    border-width: 1px;
+    border-radius: 5px;
+    -unity-text-align: middle-center;
+}

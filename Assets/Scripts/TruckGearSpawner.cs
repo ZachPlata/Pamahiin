@@ -26,6 +26,7 @@ public class TruckGearSpawner : MonoBehaviour
     [SerializeField] private List<GearSpawnSetup> gearToSpawn = new List<GearSpawnSetup>();
 
     private bool hasSpawnedLoadout = false;
+    public bool HasSpawnedLoadout => hasSpawnedLoadout;
 
     private void Awake()
     {
@@ -34,10 +35,55 @@ public class TruckGearSpawner : MonoBehaviour
 
     private void Start()
     {
-        if (!hasSpawnedLoadout && (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer))
+        // Only auto-spawn immediately in standalone/offline mode.
+        // In active Netcode sessions, NetworkController triggers spawning after OnLoadEventCompleted so all clients finish loading and syncing first.
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            return;
+        }
+
+        if (!hasSpawnedLoadout)
         {
             SpawnSelectedLoadoutInVan();
         }
+    }
+
+    /// <summary>
+    /// Ensures a TruckGearSpawner exists in the active scene and spawns equipment from the Server after clients finish loading.
+    /// </summary>
+    public static TruckGearSpawner EnsureSpawnerAndSpawnOnServer()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer)
+        {
+            return null;
+        }
+
+        var spawner = Instance ?? FindAnyObjectByType<TruckGearSpawner>(FindObjectsInactive.Include);
+        if (spawner == null)
+        {
+            var spawnPt = EquipmentSpawnPoint.FindOrResolve();
+            GameObject hostGo = spawnPt != null ? spawnPt.gameObject : new GameObject("TruckGearSpawner");
+            spawner = hostGo.GetComponent<TruckGearSpawner>() ?? hostGo.AddComponent<TruckGearSpawner>();
+        }
+
+        spawner.SpawnSelectedLoadoutInVan();
+        return spawner;
+    }
+
+    /// <summary>
+    /// Collects the NetworkObjectIds of all currently spawned EquipmentItems in the active scene.
+    /// </summary>
+    public static List<ulong> GetActiveSpawnedEquipmentNetworkIds()
+    {
+        var ids = new List<ulong>();
+        foreach (var eq in EquipmentItem.AllEquipment)
+        {
+            if (eq != null && eq.NetworkObject != null && eq.NetworkObject.IsSpawned)
+            {
+                ids.Add(eq.NetworkObject.NetworkObjectId);
+            }
+        }
+        return ids;
     }
 
     private void OnDestroy()
@@ -65,13 +111,42 @@ public class TruckGearSpawner : MonoBehaviour
             }
         }
 
-        EquipmentItem[] allItems = FindObjectsByType<EquipmentItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        EquipmentItem[] allItems = FindObjectsByType<EquipmentItem>(FindObjectsInactive.Include);
         foreach (var item in allItems)
         {
             if (item != null)
             {
                 DespawnOrDestroySceneItem(item);
             }
+        }
+
+        CleanupAllGhostOrbs();
+    }
+
+    /// <summary>
+    /// Despawns/destroys any Ghost Orb so match-specific orbs never leak into the next scene.
+    /// </summary>
+    public static void CleanupAllGhostOrbs()
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !NetworkManager.Singleton.IsServer)
+            return;
+
+        GhostOrbSystem[] orbs = FindObjectsByType<GhostOrbSystem>(FindObjectsInactive.Include);
+        foreach (var orb in orbs)
+        {
+            if (orb == null) continue;
+            NetworkObject netObj = orb.GetComponent<NetworkObject>();
+            if (netObj != null && netObj.IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                try
+                {
+                    netObj.Despawn(true);
+                    continue;
+                }
+                catch { }
+            }
+            orb.gameObject.SetActive(false);
+            Destroy(orb.gameObject);
         }
     }
 
@@ -94,7 +169,7 @@ public class TruckGearSpawner : MonoBehaviour
                              SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME;
 
         // 1. Collect all pre-placed equipment items in the scene by their EquipmentItem subclass type
-        EquipmentItem[] allSceneEquipment = FindObjectsByType<EquipmentItem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        EquipmentItem[] allSceneEquipment = FindObjectsByType<EquipmentItem>(FindObjectsInactive.Include);
         Dictionary<Type, List<EquipmentItem>> sceneItemsByType = new Dictionary<Type, List<EquipmentItem>>();
 
         foreach (var item in allSceneEquipment)
@@ -274,10 +349,17 @@ public class TruckGearSpawner : MonoBehaviour
                     cloneObj.transform.rotation = baseWorldRot;
                     cloneObj.transform.localScale = baseLocalScale;
                     cloneObj.name = $"{baseItemName}(Clone)";
-                    ConfigureShelfItem(cloneObj, i);
+                    ConfigureShelfItem(cloneObj, i, equipSpawn, totalSlots, slotWorldPos, isLobbyArmory);
                     cloneObj.SetActive(true);
+                    spawnPos = cloneObj.transform.position;
 
+                    cloneObj.transform.position = spawnPos;
                     var eq = cloneObj.GetComponent<EquipmentItem>();
+                    if (eq != null)
+                    {
+                        eq.SetSyncedScale(cloneObj.transform.localScale);
+                    }
+
                     NetworkObject netObj = cloneObj.GetComponent<NetworkObject>();
                     if (netObj != null && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkManager.Singleton.IsServer)
                     {
@@ -288,6 +370,7 @@ public class TruckGearSpawner : MonoBehaviour
                             cloneObj.transform.position = spawnPos;
                             if (eq != null)
                             {
+                                eq.SetSyncedScale(cloneObj.transform.localScale);
                                 eq.DropItemRpc(spawnPos);
                             }
                         }
@@ -308,7 +391,15 @@ public class TruckGearSpawner : MonoBehaviour
         }
     }
 
-    private static void ConfigureShelfItem(GameObject itemObj, int stackIndex)
+    private static readonly Vector2 MaxRackSlotWorldSize = new Vector2(0.0585f, 0.0347f);
+
+    private static void ConfigureShelfItem(
+        GameObject itemObj,
+        int stackIndex,
+        EquipmentSpawnPoint equipSpawn,
+        int totalSlots,
+        Vector3 slotWorldPos,
+        bool isLobbyArmory)
     {
         if (itemObj == null) return;
 
@@ -342,14 +433,107 @@ public class TruckGearSpawner : MonoBehaviour
 
             if (sr.sprite != null)
             {
-                float maxWorldDim = Mathf.Max(sr.bounds.size.x, sr.bounds.size.y);
-                if (maxWorldDim > 0.055f)
+                Vector2 slotMax = equipSpawn != null
+                    ? equipSpawn.GetSlotMaxSize(totalSlots)
+                    : MaxRackSlotWorldSize;
+                if (!isLobbyArmory)
                 {
-                    float scaleFactor = 0.042f / maxWorldDim;
-                    itemObj.transform.localScale *= scaleFactor;
+                    slotMax = Vector2.Min(slotMax, MaxRackSlotWorldSize);
+                }
+
+                // Clamp down only if visible tight artwork overflows the padded slot ceiling
+                if (TryGetVisibleSpriteWorldMetrics(sr.sprite, itemObj.transform.rotation, itemObj.transform.localScale, out Vector2 visSize, out _))
+                {
+                    if (visSize.x > slotMax.x || visSize.y > slotMax.y)
+                    {
+                        float fitFactor = Mathf.Min(
+                            slotMax.x / Mathf.Max(0.0001f, visSize.x),
+                            slotMax.y / Mathf.Max(0.0001f, visSize.y));
+                        itemObj.transform.localScale *= Mathf.Clamp(fitFactor, 0.05f, 1f);
+                    }
+                }
+
+                // Sync specialized scaling hooks BEFORE reading final centered pivot offset
+                var book = itemObj.GetComponent<GhostWritingBookItem>();
+                if (book != null)
+                {
+                    book.SetBaseScale(itemObj.transform.localScale);
+                }
+
+                var chalk = itemObj.GetComponent<RitualChalkItem>();
+                if (chalk != null)
+                {
+                    float spriteW = (sr.sprite.pixelsPerUnit > 0f) ? (sr.sprite.rect.width / sr.sprite.pixelsPerUnit) : 4.64f;
+                    float shelfLength = Mathf.Clamp(Mathf.Abs(itemObj.transform.localScale.x) * spriteW, 0.012f, 0.035f);
+                    chalk.SetShelfTargetLength(shelfLength);
+                }
+
+                // Center visible artwork silhouette inside the slot (handles off-center canvas pivots)
+                if (TryGetVisibleSpriteWorldMetrics(sr.sprite, itemObj.transform.rotation, itemObj.transform.localScale, out _, out Vector2 visibleCenterOffset))
+                {
+                    itemObj.transform.position = new Vector3(
+                        slotWorldPos.x - visibleCenterOffset.x,
+                        slotWorldPos.y - visibleCenterOffset.y,
+                        0f);
                 }
             }
         }
+    }
+
+    private static bool TryGetVisibleSpriteWorldMetrics(
+        Sprite sprite,
+        Quaternion worldRotation,
+        Vector3 localScale,
+        out Vector2 worldSize,
+        out Vector2 visibleCenterOffset)
+    {
+        worldSize = Vector2.zero;
+        visibleCenterOffset = Vector2.zero;
+        if (sprite == null) return false;
+
+        Vector2 min = new Vector2(float.MaxValue, float.MaxValue);
+        Vector2 max = new Vector2(float.MinValue, float.MinValue);
+
+        Vector2[] verts = sprite.vertices;
+        if (verts != null && verts.Length > 0)
+        {
+            for (int i = 0; i < verts.Length; i++)
+            {
+                Vector3 localPt = new Vector3(verts[i].x * localScale.x, verts[i].y * localScale.y, 0f);
+                Vector3 rotPt = worldRotation * localPt;
+                if (rotPt.x < min.x) min.x = rotPt.x;
+                if (rotPt.y < min.y) min.y = rotPt.y;
+                if (rotPt.x > max.x) max.x = rotPt.x;
+                if (rotPt.y > max.y) max.y = rotPt.y;
+            }
+        }
+        else
+        {
+            Bounds sb = sprite.bounds;
+            Vector3 c = sb.center;
+            Vector3 e = sb.extents;
+            Vector3[] corners =
+            {
+                new Vector3((c.x - e.x) * localScale.x, (c.y - e.y) * localScale.y, 0f),
+                new Vector3((c.x + e.x) * localScale.x, (c.y - e.y) * localScale.y, 0f),
+                new Vector3((c.x - e.x) * localScale.x, (c.y + e.y) * localScale.y, 0f),
+                new Vector3((c.x + e.x) * localScale.x, (c.y + e.y) * localScale.y, 0f)
+            };
+            for (int i = 0; i < corners.Length; i++)
+            {
+                Vector3 rotPt = worldRotation * corners[i];
+                if (rotPt.x < min.x) min.x = rotPt.x;
+                if (rotPt.y < min.y) min.y = rotPt.y;
+                if (rotPt.x > max.x) max.x = rotPt.x;
+                if (rotPt.y > max.y) max.y = rotPt.y;
+            }
+        }
+
+        if (max.x <= min.x || max.y <= min.y) return false;
+
+        worldSize = new Vector2(max.x - min.x, max.y - min.y);
+        visibleCenterOffset = new Vector2((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f);
+        return true;
     }
 
     private static void DespawnOrDestroySceneItem(EquipmentItem item)

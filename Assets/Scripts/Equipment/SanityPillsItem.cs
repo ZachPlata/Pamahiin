@@ -24,6 +24,10 @@ public class SanityPillsItem : EquipmentItem
         EnsureProperCollider();
 
         audioSource = GetComponent<AudioSource>();
+        if (audioSource != null)
+        {
+            GameAudioManager.ConfigureProximityAudioSource(audioSource, 0.45f, 2.6f, 1.0f);
+        }
         if (consumeAudioClip == null) consumeAudioClip = GameAudioManager.GetClip("sanity_pills");
     }
 
@@ -154,13 +158,17 @@ public class SanityPillsItem : EquipmentItem
     {
         if (consumeAudioClip != null)
         {
+            float floorMult = GameAudioManager.GetFloorAttenuation(transform.position, 0f);
+            if (floorMult <= 0.01f) return;
+
             if (audioSource != null)
             {
-                audioSource.PlayOneShot(consumeAudioClip);
+                GameAudioManager.ConfigureProximityAudioSource(audioSource, 0.45f, 2.6f, 1.0f);
+                audioSource.PlayOneShot(consumeAudioClip, GameAudioManager.GetEffectiveSfxVolume(0.85f * floorMult));
             }
             else
             {
-                AudioSource.PlayClipAtPoint(consumeAudioClip, transform.position);
+                GameAudioManager.PlayClipAt(consumeAudioClip, transform.position, 0.85f, 1.0f, 1f, 0.45f, 2.6f, 0f);
             }
         }
     }

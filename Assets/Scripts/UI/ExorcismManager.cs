@@ -68,8 +68,14 @@ public class ExorcismManager : NetworkBehaviour
     private readonly string[] promptKeyNames = new string[] { "A", "E", "R", "G", "B" };
     private int currentKeyIndex = 0;
 
-    // Red volume for failure state
+    [Header("Exorcism Failure Atmosphere")]
+    [SerializeField] private float redLightTransitionDuration = 3.2f;
+
+    // Red volume & smooth transition state for failure state
     private Volume redAtmosphereVolume;
+    private readonly Dictionary<Light2D, Color> originalLightColors = new Dictionary<Light2D, Color>();
+    private Coroutine redEnvTransitionCoroutine;
+    private Coroutine summonSequenceCoroutine;
     private Coroutine repelCoroutine;
     private Coroutine bannerHideCoroutine;
     private bool isExorcismActive = false;
@@ -79,6 +85,7 @@ public class ExorcismManager : NetworkBehaviour
     public bool IsMinigameActive => isMinigameActive;
     public bool IsExorcismActive => isExorcismActive || isMinigameActive;
     public bool IsExorcismCompleted => isExorcismCompleted;
+    public bool IsRedEnvironmentActive { get; private set; }
 
     private void Awake()
     {
@@ -244,16 +251,44 @@ public class ExorcismManager : NetworkBehaviour
         chalkDiagramPos = diagramPos;
         EnsureUIReferences();
 
-        // 1. Teleport and freeze the hunter ghost inside the chalk circle
+        if (summonSequenceCoroutine != null)
+        {
+            StopCoroutine(summonSequenceCoroutine);
+        }
+        summonSequenceCoroutine = StartCoroutine(SummonAndBeginMinigameRoutine(diagramPos));
+    }
+
+    private IEnumerator SummonAndBeginMinigameRoutine(Vector3 diagramPos)
+    {
+        isExorcismActive = true;
+        isMinigameActive = false;
+        if (exorcismOverlay != null) exorcismOverlay.AddToClassList("hidden");
+
+        SummoningCircle circle = SummoningCircle.FindClosest(diagramPos, 0.75f);
+        if (circle != null)
+        {
+            bool candlesLit = false;
+            circle.PlayIgnitionSequence(() => candlesLit = true);
+
+            float waitElapsed = 0f;
+            while (!candlesLit && waitElapsed < 4.5f)
+            {
+                waitElapsed += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        // 1. Teleport and freeze the hunter ghost inside the burning summoning circle
         SetupGhostInRitualCircle(diagramPos);
 
-        // 2. Reset minigame parameters
+        // 2. Reset minigame parameters after all 5 flames finish lighting
         needleAngle = 0f;
         currentLoops = 0;
         mistakesCount = 0;
         successfulChants = 0;
         currentRotationSpeed = baseRotationSpeed;
         isMinigameActive = true;
+        summonSequenceCoroutine = null;
 
         PickNewKeyAndTarget();
         UpdateMinigameUI();
@@ -268,7 +303,7 @@ public class ExorcismManager : NetworkBehaviour
         if (ghostHandler != null && ghostHandler.hunterGhost != null)
         {
             var hunter = ghostHandler.hunterGhost;
-            hunter.transform.position = centerPos;
+            hunter.transform.position = new Vector3(centerPos.x, centerPos.y, 0f);
 
             var agent = hunter.GetComponent<UnityEngine.AI.NavMeshAgent>();
             if (agent != null)
@@ -277,16 +312,18 @@ public class ExorcismManager : NetworkBehaviour
                 agent.isStopped = true;
             }
 
-            // Disable movement script so ghost is frozen in place
+            // Disable movement script so ghost is frozen in place during chanting
             hunter.enabled = false;
+            hunter.GetComponent<GhostPixelAnimator>()?.SetDyingOverride(false);
 
-            // Enable its SpriteRenderer and set sorting layer to Van so it is clearly visible
+            // Enable its SpriteRenderer above the summoning circle (Item order 10)
             var sr = hunter.GetComponentInChildren<SpriteRenderer>();
             if (sr != null)
             {
                 sr.enabled = true;
-                sr.sortingLayerName = "Van";
-                sr.sortingOrder = 10;
+                sr.color = Color.white;
+                sr.sortingLayerName = "Item";
+                sr.sortingOrder = 50;
             }
         }
     }
@@ -471,7 +508,10 @@ public class ExorcismManager : NetworkBehaviour
             {
                 // Manifest the dying ghost directly at the ritual chalk position so players clearly witness the dying sequence
                 Vector3 manifestPos = (chalkDiagramPos != Vector3.zero) ? chalkDiagramPos : transform.position;
-                ghostHandler.hunterGhost.StartDyingSequence(dyingShriekClip, manifestPos);
+                AudioClip shriekClip = dyingShriekClip != null
+                    ? dyingShriekClip
+                    : GameAudioManager.GetClip("ghost_dying_shriek");
+                ghostHandler.hunterGhost.StartDyingSequence(shriekClip, manifestPos);
             }
             else
             {
@@ -511,13 +551,30 @@ public class ExorcismManager : NetworkBehaviour
 
     private void TriggerFailureLocal()
     {
-        Debug.Log("[ExorcismManager] FAILURE! Triggering standard hunt process with failed exorcism condition.");
+        Debug.Log("[ExorcismManager] FAILURE! Activating ghost angered state and turning global light red.");
+
+        SummoningCircle circle = SummoningCircle.FindClosest(chalkDiagramPos, 0.75f);
+        if (circle != null)
+        {
+            circle.ResetToUnlit();
+        }
 
         // Reusing the standard hunt process on GhostHandler with isFromFailedExorcism = true
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
         if (ghostHandler != null)
         {
-            if (IsServer || !IsSpawned)
+            bool networkActive = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+            if (!networkActive)
+            {
+                if (ghostHandler.hunterGhost != null)
+                {
+                    ghostHandler.hunterGhost.enabled = true;
+                    ghostHandler.hunterGhost.OnHuntStarted();
+                    ghostHandler.hunterGhost.EnterAngeredState();
+                }
+                SetRedEnvironment(true);
+            }
+            else if (IsServer || !IsSpawned)
             {
                 ghostHandler.StartHunt(true);
             }
@@ -525,6 +582,10 @@ public class ExorcismManager : NetworkBehaviour
             {
                 RequestFailedExorcismHuntServerRpc();
             }
+        }
+        else
+        {
+            SetRedEnvironment(true);
         }
 
         // Show failure warning dialogue banner
@@ -549,6 +610,7 @@ public class ExorcismManager : NetworkBehaviour
     {
         if (active)
         {
+            IsRedEnvironmentActive = true;
             TurnEnvironmentRed();
         }
         else
@@ -557,37 +619,109 @@ public class ExorcismManager : NetworkBehaviour
         }
     }
 
+    private static bool ShouldTintLightRed(Light2D l)
+    {
+        if (l == null) return false;
+        string lowerName = l.gameObject.name.ToLowerInvariant();
+        if (lowerName.Contains("candle") || lowerName.Contains("ghostauralight") || lowerName.Contains("flashlight"))
+        {
+            return false;
+        }
+        if (l.transform.parent != null && l.transform.parent.name.ToLowerInvariant().Contains("flashlight"))
+        {
+            return false;
+        }
+        return true;
+    }
+
     private void TurnEnvironmentRed()
     {
-        // 1. Tint 2D lights blood-red
-        var lights = Object.FindObjectsByType<Light2D>(FindObjectsInactive.Exclude);
-        foreach (var l in lights)
-        {
-            if (l.transform.parent != null && l.transform.parent.name.ToLower().Contains("flashlight")) continue;
-            l.color = new Color(1f, 0.12f, 0.12f, 1f);
-        }
-
-        // 2. Global Volume red color adjustments
         EnsureRedAtmosphereVolume();
-        if (redAtmosphereVolume != null)
+        if (redEnvTransitionCoroutine != null)
         {
-            redAtmosphereVolume.weight = 1f;
+            StopCoroutine(redEnvTransitionCoroutine);
         }
+        redEnvTransitionCoroutine = StartCoroutine(TransitionRedEnvironmentRoutine(true, Mathf.Max(0.5f, redLightTransitionDuration)));
     }
 
     private void RestoreEnvironmentLighting()
     {
-        if (redAtmosphereVolume != null)
+        if (redEnvTransitionCoroutine != null)
         {
-            redAtmosphereVolume.weight = 0f;
+            StopCoroutine(redEnvTransitionCoroutine);
         }
+        redEnvTransitionCoroutine = StartCoroutine(TransitionRedEnvironmentRoutine(false, 1.5f));
+    }
 
+    private IEnumerator TransitionRedEnvironmentRoutine(bool toRed, float duration)
+    {
         var lights = Object.FindObjectsByType<Light2D>(FindObjectsInactive.Exclude);
+        var activeTargets = new List<Light2D>();
+        var startColors = new Dictionary<Light2D, Color>();
+
         foreach (var l in lights)
         {
-            if (l.transform.parent != null && l.transform.parent.name.ToLower().Contains("flashlight")) continue;
-            l.color = Color.white;
+            if (!ShouldTintLightRed(l)) continue;
+            activeTargets.Add(l);
+            startColors[l] = l.color;
+            if (toRed && !originalLightColors.ContainsKey(l))
+            {
+                originalLightColors[l] = l.color;
+            }
         }
+
+        float startWeight = redAtmosphereVolume != null ? redAtmosphereVolume.weight : 0f;
+        float targetWeight = toRed ? 1f : 0f;
+        Color targetRedLight = new Color(1f, 0.08f, 0.08f, 1f);
+        Color targetRedGlobal = new Color(0.85f, 0.06f, 0.06f, 1f);
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+
+            for (int i = 0; i < activeTargets.Count; i++)
+            {
+                Light2D l = activeTargets[i];
+                if (l == null) continue;
+
+                Color from = startColors[l];
+                Color dest = toRed
+                    ? (l.lightType == Light2D.LightType.Global ? targetRedGlobal : targetRedLight)
+                    : (originalLightColors.TryGetValue(l, out Color orig) ? orig : Color.white);
+                l.color = Color.Lerp(from, dest, t);
+            }
+
+            if (redAtmosphereVolume != null)
+            {
+                redAtmosphereVolume.weight = Mathf.Lerp(startWeight, targetWeight, t);
+            }
+
+            yield return null;
+        }
+
+        for (int i = 0; i < activeTargets.Count; i++)
+        {
+            Light2D l = activeTargets[i];
+            if (l == null) continue;
+            l.color = toRed
+                ? (l.lightType == Light2D.LightType.Global ? targetRedGlobal : targetRedLight)
+                : (originalLightColors.TryGetValue(l, out Color orig) ? orig : Color.white);
+        }
+
+        if (redAtmosphereVolume != null)
+        {
+            redAtmosphereVolume.weight = targetWeight;
+        }
+
+        if (!toRed)
+        {
+            originalLightColors.Clear();
+            IsRedEnvironmentActive = false;
+        }
+
+        redEnvTransitionCoroutine = null;
     }
 
     private void EnsureRedAtmosphereVolume()

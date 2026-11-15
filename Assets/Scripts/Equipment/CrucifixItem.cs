@@ -43,7 +43,7 @@ public class CrucifixItem : EquipmentItem
         // Check if an Angered ghost is nearby to repel it (applies when placed on the ground or held)
         if (!isBurned.Value)
         {
-            var hunterGhost = Object.FindAnyObjectByType<HunterGhostBehavior>();
+            var hunterGhost = HunterGhostBehavior.Instance;
             if (hunterGhost != null && hunterGhost.IsAngeredState && !hunterGhost.IsRepelled)
             {
                 float dist = Vector2.Distance(transform.position, hunterGhost.transform.position);

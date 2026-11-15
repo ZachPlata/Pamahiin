@@ -32,6 +32,12 @@ public class EventGhostBehavior : NetworkBehaviour
     public float eventIntervalMin = 8f;
     public float eventIntervalMax = 15f;
 
+    [Header("Prop Disruption Frequency")]
+    [SerializeField] private float propScanRadius = 2.6f;
+    [SerializeField] private float propDisruptCooldownMin = 28f;
+    [SerializeField] private float propDisruptCooldownMax = 48f;
+    private float nextPropDisruptTime = 0f;
+
     // DOTS Dash state
     private bool isDashing = false;
     private Vector2 dashTarget;
@@ -50,6 +56,29 @@ public class EventGhostBehavior : NetworkBehaviour
     private float waitTimer = 0f;
     private float wanderStuckTimer = 0f;
     private bool isInitialized = false;
+
+    // Temporary orb only used if no native Ghost Orb exists yet (never duplicates the native one)
+    private GhostOrbSystem temporaryEventOrb;
+
+    private System.Collections.IEnumerator DespawnTemporaryOrbRoutine(GhostOrbSystem orb, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        if (orb != null)
+        {
+            var netObj = orb.GetComponent<NetworkObject>();
+            if (netObj != null && netObj.IsSpawned)
+            {
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+                    netObj.Despawn(true);
+            }
+            else
+            {
+                Destroy(orb.gameObject);
+            }
+        }
+        temporaryEventOrb = null;
+    }
 
     // Network synced state for visibility
     private NetworkVariable<bool> isVisiblyManifested = new NetworkVariable<bool>(
@@ -110,6 +139,7 @@ public class EventGhostBehavior : NetworkBehaviour
         rb.position = origin;
         isInitialized = true;
         nextEventTime = Time.time + Random.Range(eventIntervalMin, eventIntervalMax);
+        nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin * 0.5f, propDisruptCooldownMax * 0.65f);
     }
 
     private void Update()
@@ -137,7 +167,8 @@ public class EventGhostBehavior : NetworkBehaviour
         {
             if (!isDashing && !isManifesting && Time.time >= nextEventTime)
             {
-                nextEventTime = Time.time + Random.Range(eventIntervalMin, eventIntervalMax);
+                float interval = Random.Range(eventIntervalMin, eventIntervalMax) * WeatherManager.GetEventIntervalMultiplier();
+                nextEventTime = Time.time + interval;
                 ChooseAndExecuteEvent();
             }
         }
@@ -323,6 +354,23 @@ public class EventGhostBehavior : NetworkBehaviour
             }
         }
 
+        // Check nearby sprite-animated ghost throwable/breakable props on the same floor
+        bool propCooldownElapsed = Time.time >= nextPropDisruptTime;
+        bool hasGhostProp = false;
+        if (propCooldownElapsed)
+        {
+            foreach (var prop in GhostPropInteractable.AllProps)
+            {
+                if (prop != null && prop.CanGhostDisrupt &&
+                    GameAudioManager.IsBasementPosition(prop.transform.position) == GameAudioManager.IsBasementPosition(rb.position) &&
+                    Vector2.Distance(rb.position, prop.transform.position) <= propScanRadius)
+                {
+                    hasGhostProp = true;
+                    break;
+                }
+            }
+        }
+
         var spiritBoxes = Object.FindObjectsByType<SpiritBoxItem>(FindObjectsInactive.Exclude);
         bool hasActiveSpiritBox = false;
         SpiritBoxItem targetBox = null;
@@ -395,7 +443,7 @@ public class EventGhostBehavior : NetworkBehaviour
         }
 
         // Build valid pool based on evidence & environment
-        if (hasDynamicRb) validEvents.Add(GhostEventType.ThrowObject);
+        if ((hasGhostProp || hasDynamicRb) && propCooldownElapsed) validEvents.Add(GhostEventType.ThrowObject);
         
         if (hasBook && ghostHandler != null && ghostHandler.HasEvidence(EvidenceType.GhostWriting)) 
             validEvents.Add(GhostEventType.WriteInBook);
@@ -505,18 +553,28 @@ public class EventGhostBehavior : NetworkBehaviour
 
                     if (ghostHandler.ghostroomMarker.OverlapPoint(spawnPos))
                     {
-                        GameObject orb = Instantiate(ghostHandler.ghostOrbPrefab, spawnPos, Quaternion.identity);
-                        var orbNetwork = orb.GetComponent<NetworkObject>();
-                        if (orbNetwork != null) orbNetwork.Spawn();
-                        
-                        var orbSystem = orb.GetComponent<GhostOrbSystem>();
-                        if (orbSystem != null) 
+                        // Reuse the existing native orb instead of spawning a duplicate Ghost Orbs(Clone)
+                        GhostOrbSystem existingOrb = ghostHandler.ActiveGhostOrb;
+                        if (existingOrb == null) existingOrb = FindAnyObjectByType<GhostOrbSystem>();
+
+                        if (existingOrb != null)
                         {
-                            orbSystem.Initialize(ghostHandler.ghostroomMarker);
+                            existingOrb.NudgeTo(spawnPos);
                         }
-                        
-                        // Destroy this temporary event orb after 5 seconds
-                        Destroy(orb, 5f);
+                        else if (temporaryEventOrb == null)
+                        {
+                            GameObject orb = Instantiate(ghostHandler.ghostOrbPrefab, spawnPos, Quaternion.identity);
+                            var orbNetwork = orb.GetComponent<NetworkObject>();
+                            if (orbNetwork != null) orbNetwork.Spawn();
+
+                            var orbSystem = orb.GetComponent<GhostOrbSystem>();
+                            if (orbSystem != null)
+                            {
+                                orbSystem.Initialize(ghostHandler.ghostroomMarker);
+                                temporaryEventOrb = orbSystem;
+                                StartCoroutine(DespawnTemporaryOrbRoutine(orbSystem, 5f));
+                            }
+                        }
                     }
                 }
                 break;
@@ -543,26 +601,49 @@ public class EventGhostBehavior : NetworkBehaviour
 
     private void DoGenericInteraction()
     {
+        // Limit prop throws/knockdowns to an infrequent cooldown on the ghost's own floor.
+        bool canDisruptProp = Time.time >= nextPropDisruptTime;
+        var nearbyProps = new System.Collections.Generic.List<GhostPropInteractable>();
+        if (canDisruptProp)
+        {
+            foreach (var prop in GhostPropInteractable.AllProps)
+            {
+                if (prop != null && prop.CanGhostDisrupt &&
+                    GameAudioManager.IsBasementPosition(prop.transform.position) == GameAudioManager.IsBasementPosition(rb.position) &&
+                    Vector2.Distance(rb.position, prop.transform.position) <= propScanRadius)
+                {
+                    nearbyProps.Add(prop);
+                }
+            }
+        }
+
+        if (canDisruptProp && nearbyProps.Count > 0 && Random.value < 0.42f)
+        {
+            var chosen = nearbyProps[Random.Range(0, nearbyProps.Count)];
+            if (chosen.TriggerGhostDisruption(false))
+            {
+                nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin, propDisruptCooldownMax) * WeatherManager.GetEventIntervalMultiplier();
+                return;
+            }
+        }
+
         Collider2D[] cols = Physics2D.OverlapCircleAll(rb.position, interactionScanRadius, interactionLayer);
         foreach (var col in cols)
         {
             var door = col.GetComponent<NetworkDoor>();
-            if (door != null && Random.value < 0.3f)
+            if (door != null && Random.value < 0.45f)
             {
                 door.GhostInteract();
                 return;
             }
+        }
 
-            var rbObj = col.GetComponent<Rigidbody2D>();
-            if (rbObj != null && rbObj != rb && rbObj.bodyType == RigidbodyType2D.Dynamic && Random.value < 0.3f)
+        if (canDisruptProp && nearbyProps.Count > 0 && Random.value < 0.45f)
+        {
+            var chosen = nearbyProps[Random.Range(0, nearbyProps.Count)];
+            if (chosen.TriggerGhostDisruption(false))
             {
-                if (col.GetComponent<EquipmentItem>() == null)
-                {
-                    Vector2 throwForce = Random.insideUnitCircle * Random.Range(3f, 8f);
-                    rbObj.AddForce(throwForce, ForceMode2D.Impulse);
-                    if (ParanormalManager.Instance != null) ParanormalManager.Instance.RegisterEvent(rb.position, 3, 15f);
-                    return;
-                }
+                nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin, propDisruptCooldownMax) * WeatherManager.GetEventIntervalMultiplier();
             }
         }
     }

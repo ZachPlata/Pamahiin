@@ -18,14 +18,21 @@ public class ThermometerItem : EquipmentItem
     public float SampleDistance => sampleDistance;
 
     private NetworkVariable<bool> isPoweredOn = new NetworkVariable<bool>(
-        true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public override bool IsPoweredOn => isPoweredOn.Value;
+    private bool localFallbackPower = false;
+
+    private bool UseNetworkPower => NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned;
+
+    public override bool IsPoweredOn => UseNetworkPower ? isPoweredOn.Value : localFallbackPower;
     public float CurrentTemperature { get; private set; } = 20.0f;
     public bool IsFreezing => CurrentTemperature < 0.0f;
 
     private float nextSampleTime = 0f;
     private float displayedTemperature = 20.0f;
+    private int lastDisplayedTempTenths = int.MinValue;
+    private bool lastDisplayedFreezing = false;
+    private bool wasOffDisplay = false;
     
     public float DisplayedTemperature => displayedTemperature;
 
@@ -33,6 +40,7 @@ public class ThermometerItem : EquipmentItem
     {
         base.Awake();
         itemName = "Thermometer";
+        localFallbackPower = false;
         if (digitalDisplay == null) digitalDisplay = GetComponentInChildren<TMP_Text>();
     }
 
@@ -44,12 +52,28 @@ public class ThermometerItem : EquipmentItem
             if (oldVal != newVal) GameAudioManager.PlayFlashlightClick(transform.position);
             UpdateVisuals();
         };
+        localFallbackPower = false;
+        UpdateVisuals();
+    }
+
+    private void Start()
+    {
+        if (!UseNetworkPower) localFallbackPower = false;
         UpdateVisuals();
     }
 
     public override void UsePrimary()
     {
-        TogglePowerRpc();
+        if (UseNetworkPower)
+        {
+            TogglePowerRpc();
+        }
+        else
+        {
+            localFallbackPower = !localFallbackPower;
+            GameAudioManager.PlayFlashlightClick(transform.position);
+            UpdateVisuals();
+        }
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
@@ -62,9 +86,14 @@ public class ThermometerItem : EquipmentItem
     {
         base.Update();
 
-        if (!isPoweredOn.Value)
+        if (!IsPoweredOn)
         {
-            if (digitalDisplay != null) digitalDisplay.text = "--.-°C";
+            if (!wasOffDisplay)
+            {
+                wasOffDisplay = true;
+                lastDisplayedTempTenths = int.MinValue;
+                if (digitalDisplay != null) digitalDisplay.text = "--.-°C";
+            }
             return;
         }
 
@@ -80,9 +109,21 @@ public class ThermometerItem : EquipmentItem
             displayedTemperature = Mathf.MoveTowards(displayedTemperature, CurrentTemperature, Time.deltaTime * 2.5f);
             if (digitalDisplay != null)
             {
-                digitalDisplay.text = $"{displayedTemperature:F1}°C";
-                digitalDisplay.color = displayedTemperature < 0f ? Color.cyan : Color.white;
+                int tempTenths = Mathf.RoundToInt(displayedTemperature * 10f);
+                if (wasOffDisplay || tempTenths != lastDisplayedTempTenths)
+                {
+                    lastDisplayedTempTenths = tempTenths;
+                    digitalDisplay.text = $"{tempTenths * 0.1f:F1}°C";
+                }
+
+                bool isFreezing = displayedTemperature < 0f;
+                if (wasOffDisplay || isFreezing != lastDisplayedFreezing)
+                {
+                    lastDisplayedFreezing = isFreezing;
+                    digitalDisplay.color = isFreezing ? Color.cyan : Color.white;
+                }
             }
+            wasOffDisplay = false;
 
             // Cold breath effect check when held by local player
             if (isInHand.Value && ownerClientId.Value == NetworkManager.Singleton?.LocalClientId)
@@ -125,7 +166,7 @@ public class ThermometerItem : EquipmentItem
 
         if (digitalDisplay != null)
         {
-            digitalDisplay.gameObject.SetActive(isVisible && isPoweredOn.Value);
+            digitalDisplay.gameObject.SetActive(isVisible && IsPoweredOn);
         }
     }
 }

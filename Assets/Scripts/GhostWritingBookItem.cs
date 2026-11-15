@@ -46,9 +46,29 @@ public class GhostWritingBookItem : EquipmentItem
             UpdateVisuals();
             if (newVal && !oldVal && writingSound != null)
             {
-                AudioSource.PlayClipAtPoint(writingSound, transform.position, 1f);
+                GameAudioManager.PlayClipAt(writingSound, transform.position, 0.9f, 1.0f, 1f, 0.45f, 3.0f, 0f);
             }
         };
+    }
+
+    /// <summary>Updates the unscaled reference size preserved across closed/open/written sprite swaps.</summary>
+    public void SetBaseScale(Vector3 scale)
+    {
+        if (scale.sqrMagnitude <= 1e-8f) return;
+        baseLocalScale = scale;
+        hasBaseScale = true;
+        UpdateVisuals();
+    }
+
+    protected override void OnSyncedScaleApplied(Vector3 appliedScale)
+    {
+        if (appliedScale.sqrMagnitude <= 1e-8f) return;
+        baseLocalScale = appliedScale;
+        hasBaseScale = true;
+        if (spriteRenderer != null && spriteRenderer.sprite != null)
+        {
+            AdjustScaleForSprite(spriteRenderer.sprite);
+        }
     }
 
     protected override void UpdateEquipState(ulong newOwnerId)

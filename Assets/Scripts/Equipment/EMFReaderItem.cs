@@ -37,12 +37,16 @@ public class EMFReaderItem : EquipmentItem
     public int CurrentEmfLevel { get; private set; } = 1;
 
     private float nextBeepTime = 0f;
+    private int lastAppliedLedLevel = -1;
 
     protected override void Awake()
     {
         base.Awake();
         itemName = "EMF Reader";
         if (audioSource == null) audioSource = GetComponent<AudioSource>();
+        if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.playOnAwake = false;
+        GameAudioManager.ConfigureProximityAudioSource(audioSource, 0.45f, 2.6f, 1.0f);
         if (emf2Sound == null) emf2Sound = GameAudioManager.GetClip("emf_2");
         if (emf3Sound == null) emf3Sound = GameAudioManager.GetClip("emf_3");
         if (emf4Sound == null) emf4Sound = GameAudioManager.GetClip("emf_4");
@@ -77,9 +81,15 @@ public class EMFReaderItem : EquipmentItem
 
         if (!isPoweredOn.Value)
         {
-            CurrentEmfLevel = 0;
-            UpdateLeds(0);
-            if (directionalPointer != null) directionalPointer.gameObject.SetActive(false);
+            if (CurrentEmfLevel != 0 || lastAppliedLedLevel != 0)
+            {
+                CurrentEmfLevel = 0;
+                UpdateLeds(0);
+            }
+            if (directionalPointer != null && directionalPointer.gameObject.activeSelf)
+            {
+                directionalPointer.gameObject.SetActive(false);
+            }
             if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
             return;
         }
@@ -115,11 +125,14 @@ public class EMFReaderItem : EquipmentItem
         {
             if (CurrentEmfLevel > 1 && sourceDirection != Vector2.zero)
             {
-                directionalPointer.gameObject.SetActive(true);
+                if (!directionalPointer.gameObject.activeSelf)
+                {
+                    directionalPointer.gameObject.SetActive(true);
+                }
                 float angle = Mathf.Atan2(sourceDirection.y, sourceDirection.x) * Mathf.Rad2Deg - 90f;
                 directionalPointer.rotation = Quaternion.Euler(0, 0, angle);
             }
-            else
+            else if (directionalPointer.gameObject.activeSelf)
             {
                 directionalPointer.gameObject.SetActive(false);
             }
@@ -128,6 +141,9 @@ public class EMFReaderItem : EquipmentItem
 
     private void UpdateLeds(int level)
     {
+        if (level == lastAppliedLedLevel) return;
+        lastAppliedLedLevel = level;
+
         if (ledRenderers == null || ledRenderers.Length == 0) return;
 
         for (int i = 0; i < ledRenderers.Length; i++)
@@ -179,9 +195,12 @@ public class EMFReaderItem : EquipmentItem
 
             if (clipToPlay != null)
             {
+                float floorMult = GameAudioManager.GetFloorAttenuation(transform.position, 0f);
+                if (floorMult <= 0.01f) return;
+
                 audioSource.pitch = 1.0f; // Reset pitch since we have dedicated clips
                 audioSource.clip = clipToPlay;
-                audioSource.volume = 0.4f;
+                audioSource.volume = GameAudioManager.GetEffectiveSfxVolume(0.45f * floorMult);
                 audioSource.Play();
             }
         }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="LoadingScreen.uss" />
+    <ui:VisualElement name="loading-overlay" class="loading-overlay hidden" picking-mode="Ignore">
+        <ui:VisualElement class="loading-vignette" picking-mode="Ignore" />
+        <ui:VisualElement class="loading-frame" picking-mode="Ignore">
+            <ui:VisualElement class="loading-header-row" picking-mode="Ignore">
+                <ui:Label name="lbl-loading-tag" text="PAMAHIIN // FIELD DISPATCH" class="loading-tag" />
+                <ui:Label name="lbl-loading-percent" text="0%" class="loading-percent" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="loading-divider" picking-mode="Ignore" />
+
+            <ui:Label name="lbl-loading-title" text="TRAVELING TO INVESTIGATION SITE" class="loading-title" />
+            <ui:Label name="lbl-loading-subtitle" text="Barangay San Nicolas — 6 Tanglewood Drive" class="loading-subtitle" />
+
+            <ui:VisualElement class="loading-progress-section" picking-mode="Ignore">
+                <ui:VisualElement name="loading-progress-track" class="loading-progress-track" picking-mode="Ignore">
+                    <ui:VisualElement name="loading-progress-fill" class="loading-progress-fill" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:Label name="lbl-loading-status" text="Synchronizing dossier &amp; van equipment..." class="loading-status" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="loading-tip-card" picking-mode="Ignore">
+                <ui:Label text="FIELD ADVISORY" class="loading-tip-header" />
+                <ui:Label name="lbl-loading-tip" text="Place Ritual Chalk inside the active Ghost Room before lighting the summoning circle." class="loading-tip" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
