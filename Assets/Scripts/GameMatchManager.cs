@@ -93,6 +93,22 @@ public class GameMatchManager : NetworkBehaviour
         -1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     private readonly NetworkVariable<int> ghostCaseNumber = new NetworkVariable<int>(
         -1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private readonly NetworkVariable<bool> netIsTeamWipeGraceActive = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private readonly NetworkVariable<float> netTeamWipeSecondsRemaining = new NetworkVariable<float>(
+        0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    public static bool WasLocalPlayerDeadAtMatchEnd { get; private set; }
+
+    public static void ResetLocalMatchEndFlags()
+    {
+        WasLocalPlayerDeadAtMatchEnd = false;
+    }
+
+    public static float GetTeamWipeGraceDuration(bool isMultiplayer)
+    {
+        return isMultiplayer ? 3f : 15f;
+    }
 
     private int localGenderIndex = -1;
     private int localFirstNameIndex = -1;
@@ -100,15 +116,25 @@ public class GameMatchManager : NetworkBehaviour
     private int localBackgroundIndex = -1;
     private int localCaseNumber = -1;
     private bool hasSubscribedProfileCallbacks = false;
+    private bool hasSubscribedNetworkCallbacks = false;
 
     private Dictionary<ulong, string> playerDeductions = new Dictionary<ulong, string>();
     private string cachedTrueGhostName = "";
     private bool isGhostDefeated = false;
     private bool hasPlayedArrivalSequence = false;
     private bool isMatchEnding = false;
+    private bool localTeamWipeGraceActive = false;
+    private float localTeamWipeSecondsRemaining = 0f;
+    private int maxObservedConnectedPlayers = 1;
+    private Coroutine teamWipeCoroutine;
     private NetworkDoor cachedRampDoor;
 
     public bool IsGhostDefeated => isGhostDefeated;
+    public bool IsMatchEnding => isMatchEnding;
+    public bool IsTeamWipeGraceActive =>
+        (UseNetworkedContractProfile ? netIsTeamWipeGraceActive.Value : localTeamWipeGraceActive) && !isMatchEnding;
+    public float TeamWipeSecondsRemaining =>
+        UseNetworkedContractProfile ? netTeamWipeSecondsRemaining.Value : localTeamWipeSecondsRemaining;
 
     private bool UseNetworkedContractProfile =>
         NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned;
@@ -205,8 +231,9 @@ public class GameMatchManager : NetworkBehaviour
 
     private void Start()
     {
-        // Reset previous match deduction guess at start of a new investigation
+        // Reset previous match deduction guess & local death status at start of a new investigation
         JournalController.LastLockedInGuess = "None";
+        ResetLocalMatchEndFlags();
 
         if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || NetworkManager.Singleton.IsServer)
         {
@@ -219,9 +246,15 @@ public class GameMatchManager : NetworkBehaviour
     public override void OnNetworkSpawn()
     {
         SubscribeProfileCallbacks();
+        SubscribeServerNetworkCallbacks();
+        ResetLocalMatchEndFlags();
 
         if (IsServer)
         {
+            if (NetworkManager.Singleton != null)
+            {
+                maxObservedConnectedPlayers = Mathf.Max(1, NetworkManager.Singleton.ConnectedClientsIds.Count);
+            }
             EnsureGhostContractProfileAssigned();
             EnsureVanLoadoutAndDifficultyApplied();
         }
@@ -233,14 +266,50 @@ public class GameMatchManager : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         UnsubscribeProfileCallbacks();
+        UnsubscribeServerNetworkCallbacks();
+        StopTeamWipeRoutine();
         base.OnNetworkDespawn();
     }
 
     public override void OnDestroy()
     {
         UnsubscribeProfileCallbacks();
+        UnsubscribeServerNetworkCallbacks();
+        StopTeamWipeRoutine();
         if (Instance == this) Instance = null;
         base.OnDestroy();
+    }
+
+    private void SubscribeServerNetworkCallbacks()
+    {
+        if (hasSubscribedNetworkCallbacks || !IsServer || NetworkManager.Singleton == null) return;
+        hasSubscribedNetworkCallbacks = true;
+        NetworkManager.Singleton.OnClientConnectedCallback += HandleServerClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback += HandleServerClientDisconnected;
+    }
+
+    private void UnsubscribeServerNetworkCallbacks()
+    {
+        if (!hasSubscribedNetworkCallbacks) return;
+        hasSubscribedNetworkCallbacks = false;
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback -= HandleServerClientConnected;
+            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleServerClientDisconnected;
+        }
+    }
+
+    private void HandleServerClientConnected(ulong clientId)
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            maxObservedConnectedPlayers = Mathf.Max(maxObservedConnectedPlayers, NetworkManager.Singleton.ConnectedClientsIds.Count);
+        }
+    }
+
+    private void HandleServerClientDisconnected(ulong clientId)
+    {
+        CheckAllPlayersDead(clientId);
     }
 
     private void SubscribeProfileCallbacks()
@@ -422,10 +491,168 @@ public class GameMatchManager : NetworkBehaviour
         ForceEndMatch();
     }
 
+    public void RequestEarlyTeamWipeEndMatch()
+    {
+        if (isMatchEnding) return;
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && !NetworkManager.Singleton.IsServer)
+        {
+            RequestEarlyTeamWipeEndMatchServerRpc();
+            return;
+        }
+
+        if (IsTeamWipeGraceActive)
+        {
+            ForceEndMatch();
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestEarlyTeamWipeEndMatchServerRpc()
+    {
+        if (isMatchEnding || !IsTeamWipeGraceActive) return;
+        ForceEndMatch();
+    }
+
+    /// <summary>
+    /// Evaluates whether all active connected players have finished dying and entered GhostSpectator.
+    /// Starts the 3s multiplayer / 15s solo wipe countdown when zero Alive or DyingSequence players remain,
+    /// and cancels cleanly if any player revives.
+    /// </summary>
+    public void CheckAllPlayersDead(ulong? disconnectedClientId = null)
+    {
+        if (isMatchEnding) return;
+
+        bool isListening = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        if (isListening && !NetworkManager.Singleton.IsServer) return;
+
+        if (AreAllConnectedPlayersDeadAndSettled(disconnectedClientId, out int totalCount))
+        {
+            if (totalCount > 0 && teamWipeCoroutine == null)
+            {
+                teamWipeCoroutine = StartCoroutine(TeamWipeGraceRoutine());
+            }
+        }
+        else
+        {
+            StopTeamWipeRoutine();
+        }
+    }
+
+    private bool AreAllConnectedPlayersDeadAndSettled(ulong? disconnectedClientId, out int totalPlayers)
+    {
+        totalPlayers = 0;
+        int aliveOrDyingCount = 0;
+        int spectatorCount = 0;
+
+        bool isListening = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        if (isListening)
+        {
+            var clients = NetworkManager.Singleton.ConnectedClientsList;
+            for (int i = 0; i < clients.Count; i++)
+            {
+                var client = clients[i];
+                if (disconnectedClientId.HasValue && client.ClientId == disconnectedClientId.Value) continue;
+
+                PlayerController pc = null;
+                if (client.PlayerObject != null)
+                {
+                    pc = client.PlayerObject.GetComponent<PlayerController>();
+                }
+                if (pc == null)
+                {
+                    PlayerController.TryGetByClientId(client.ClientId, out pc);
+                }
+                if (pc == null) continue;
+
+                totalPlayers++;
+                if (pc.IsAlive || pc.IsDyingSequence) aliveOrDyingCount++;
+                else if (pc.IsGhostSpectator) spectatorCount++;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+            {
+                var pc = PlayerController.AllPlayers[i];
+                if (pc == null) continue;
+                totalPlayers++;
+                if (pc.IsAlive || pc.IsDyingSequence) aliveOrDyingCount++;
+                else if (pc.IsGhostSpectator) spectatorCount++;
+            }
+        }
+
+        maxObservedConnectedPlayers = Mathf.Max(maxObservedConnectedPlayers, totalPlayers);
+        return totalPlayers > 0 && spectatorCount > 0 && aliveOrDyingCount == 0;
+    }
+
+    private IEnumerator TeamWipeGraceRoutine()
+    {
+        bool isListening = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        bool isMultiplayer = isListening && (NetworkManager.Singleton.ConnectedClientsIds.Count > 1 || maxObservedConnectedPlayers > 1);
+        float remaining = GetTeamWipeGraceDuration(isMultiplayer);
+
+        SetTeamWipeState(true, remaining);
+        float nextSyncTime = 0.25f;
+
+        while (remaining > 0f && !isMatchEnding)
+        {
+            if (!AreAllConnectedPlayersDeadAndSettled(null, out _))
+            {
+                SetTeamWipeState(false, 0f);
+                teamWipeCoroutine = null;
+                yield break;
+            }
+
+            float dt = Time.unscaledDeltaTime;
+            remaining = Mathf.Max(0f, remaining - dt);
+            nextSyncTime -= dt;
+
+            if (nextSyncTime <= 0f || remaining <= 0f)
+            {
+                nextSyncTime = 0.25f;
+                SetTeamWipeState(true, remaining);
+            }
+
+            yield return null;
+        }
+
+        teamWipeCoroutine = null;
+        SetTeamWipeState(false, 0f);
+
+        if (!isMatchEnding)
+        {
+            ForceEndMatch();
+        }
+    }
+
+    private void StopTeamWipeRoutine()
+    {
+        if (teamWipeCoroutine != null)
+        {
+            StopCoroutine(teamWipeCoroutine);
+            teamWipeCoroutine = null;
+        }
+        SetTeamWipeState(false, 0f);
+    }
+
+    private void SetTeamWipeState(bool active, float secondsRemaining)
+    {
+        localTeamWipeGraceActive = active;
+        localTeamWipeSecondsRemaining = secondsRemaining;
+
+        if (IsSpawned && IsServer)
+        {
+            netIsTeamWipeGraceActive.Value = active;
+            netTeamWipeSecondsRemaining.Value = secondsRemaining;
+        }
+    }
+
     public void ForceEndMatch()
     {
         if (isMatchEnding) return;
         isMatchEnding = true;
+        StopTeamWipeRoutine();
 
         string actualGhostName = cachedTrueGhostName;
         var ghost = UnityEngine.Object.FindAnyObjectByType<GhostHandler>();
@@ -475,6 +702,12 @@ public class GameMatchManager : NetworkBehaviour
     private void ExecuteLocalEndMatchReveal(string trueName, bool defeated)
     {
         isGhostDefeated = defeated;
+        WasLocalPlayerDeadAtMatchEnd = PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive;
+
+        // Clear spectator fog/burial visuals smoothly as the debrief transition begins
+        WeatherManager.SetLocalInBurialMap(false);
+        DeathSequenceController.Instance?.CancelAndReset();
+        GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
 
         // Lock player controls immediately so players cannot exit once departing
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClient != null && NetworkManager.Singleton.LocalClient.PlayerObject != null)

@@ -152,37 +152,14 @@ public class LoadingScreenManager : MonoBehaviour
 
     private PanelSettings ResolvePanelSettings()
     {
-        if (resolvedAssetPanelSettings != null) return resolvedAssetPanelSettings;
-
-        var docs = FindObjectsByType<UIDocument>(FindObjectsInactive.Include);
-        foreach (var doc in docs)
+        if (resolvedAssetPanelSettings != null && resolvedAssetPanelSettings.themeStyleSheet != null)
         {
-            if (doc != null && doc != uiDocument && doc.panelSettings != null && doc.panelSettings != fallbackPanelSettings)
-            {
-                resolvedAssetPanelSettings = doc.panelSettings;
-                return resolvedAssetPanelSettings;
-            }
+            return resolvedAssetPanelSettings;
         }
 
-        var loadedSettings = Resources.FindObjectsOfTypeAll<PanelSettings>();
-        foreach (var ps in loadedSettings)
-        {
-            if (ps != null && ps != fallbackPanelSettings)
-            {
-                resolvedAssetPanelSettings = ps;
-                return resolvedAssetPanelSettings;
-            }
-        }
-
-        if (fallbackPanelSettings == null)
-        {
-            fallbackPanelSettings = ScriptableObject.CreateInstance<PanelSettings>();
-            fallbackPanelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-            fallbackPanelSettings.referenceResolution = new Vector2Int(1920, 1080);
-            fallbackPanelSettings.match = 0.5f;
-        }
-
-        return fallbackPanelSettings;
+        PanelSettings current = uiDocument != null ? uiDocument.panelSettings : null;
+        resolvedAssetPanelSettings = PamahiinUIThemeUtility.ResolveRuntimePanelSettings(current);
+        return resolvedAssetPanelSettings;
     }
 
     private void BindVisualElements(VisualElement root)

@@ -154,6 +154,7 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         ToggleLightServerRpc();
     }
 
@@ -172,8 +173,12 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     public void OnDragEnd(ulong clientId) { }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ToggleLightServerRpc()
+    private void ToggleLightServerRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         // Block turning ON lights if the fuse box is off
         if (!isLightOn.Value && FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
         {

@@ -22,15 +22,20 @@ public class PlayerHUDManager : MonoBehaviour
     private float nvRecBlinkTimer = 0f;
     private bool nvRecBlinkState = true;
 
-    // Death / End Game Screen elements
+    // Death / Spectator HUD elements
     private VisualElement deathOverlay;
     private Button btnEndGame;
+    private VisualElement spectatorBanner;
+    private Label spectatorGraceLabel;
+    private Button btnSpectatorEndMatch;
     private PlayerController localPlayerController;
 
     // Dirty-state caches so we don't mutate UI Toolkit styles/text every frame unnecessarily
     private int lastSortingOrder = -1;
     private bool? lastHudRootVisible;
-    private bool? lastDeadState;
+    private bool? lastSpectatorVisible;
+    private bool? lastWipeGraceVisible;
+    private int lastWipeSecondsShown = -1;
     private bool? lastHoldingNvCam;
     private int lastNvClockSecond = -1;
     private readonly bool?[] lastPowerVisible = new bool?[PlayerInventory.MaxSlots];
@@ -86,6 +91,28 @@ public class PlayerHUDManager : MonoBehaviour
             deathOverlay.style.display = DisplayStyle.None;
         }
 
+        spectatorBanner = root.Q<VisualElement>("SpectatorHudBanner");
+        if (spectatorBanner != null)
+        {
+            spectatorBanner.AddToClassList("spectator-banner-hidden");
+            spectatorBanner.style.display = DisplayStyle.None;
+        }
+
+        spectatorGraceLabel = root.Q<Label>("SpectatorGraceLabel");
+        if (spectatorGraceLabel != null)
+        {
+            spectatorGraceLabel.AddToClassList("spectator-grace-hidden");
+            spectatorGraceLabel.style.display = DisplayStyle.None;
+        }
+
+        btnSpectatorEndMatch = root.Q<Button>("BtnSpectatorEndMatch");
+        if (btnSpectatorEndMatch != null)
+        {
+            btnSpectatorEndMatch.AddToClassList("spectator-grace-hidden");
+            btnSpectatorEndMatch.style.display = DisplayStyle.None;
+            btnSpectatorEndMatch.clicked += OnSpectatorEndMatchClicked;
+        }
+
         btnEndGame = root.Q<Button>("BtnEndGame");
         if (btnEndGame != null)
         {
@@ -102,45 +129,34 @@ public class PlayerHUDManager : MonoBehaviour
     private void Update()
     {
         bool isMainMenu = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene";
-        if (hudDocument != null && hudDocument.rootVisualElement != null && lastHudRootVisible != !isMainMenu)
-        {
-            lastHudRootVisible = !isMainMenu;
-            hudDocument.rootVisualElement.style.display = isMainMenu ? DisplayStyle.None : DisplayStyle.Flex;
-        }
-        if (isMainMenu) return;
-
         if (localInventory == null || localPlayerController == null)
         {
             FindLocalPlayer();
         }
 
-        if (deathOverlay != null)
+        bool isDying = !isMainMenu && localPlayerController != null && localPlayerController.IsDyingSequence;
+        bool shouldShowHudRoot = !isMainMenu && !isDying;
+        if (hudDocument != null && hudDocument.rootVisualElement != null && lastHudRootVisible != shouldShowHudRoot)
         {
-            bool isDead = localPlayerController != null && !localPlayerController.IsAlive;
-            if (lastDeadState != isDead)
-            {
-                lastDeadState = isDead;
-                int desiredOrder = isDead ? 100 : 1;
-                if (hudDocument != null && lastSortingOrder != desiredOrder)
-                {
-                    lastSortingOrder = desiredOrder;
-                    hudDocument.sortingOrder = desiredOrder;
-                }
-
-                if (isDead)
-                {
-                    deathOverlay.RemoveFromClassList("death-overlay-hidden");
-                    deathOverlay.style.display = DisplayStyle.Flex;
-                    UnityEngine.Cursor.lockState = CursorLockMode.None;
-                    UnityEngine.Cursor.visible = true;
-                }
-                else
-                {
-                    deathOverlay.AddToClassList("death-overlay-hidden");
-                    deathOverlay.style.display = DisplayStyle.None;
-                }
-            }
+            lastHudRootVisible = shouldShowHudRoot;
+            hudDocument.rootVisualElement.style.display = shouldShowHudRoot ? DisplayStyle.Flex : DisplayStyle.None;
         }
+        if (!shouldShowHudRoot) return;
+
+        // Suppress legacy blocking DeathOverlay (players transition into translucent ghost spectating instead)
+        if (deathOverlay != null && deathOverlay.style.display != DisplayStyle.None)
+        {
+            deathOverlay.AddToClassList("death-overlay-hidden");
+            deathOverlay.style.display = DisplayStyle.None;
+        }
+
+        if (hudDocument != null && lastSortingOrder != 1)
+        {
+            lastSortingOrder = 1;
+            hudDocument.sortingOrder = 1;
+        }
+
+        UpdateSpectatorBanner();
 
         UpdateDynamicHUD();
     }
@@ -224,9 +240,10 @@ public class PlayerHUDManager : MonoBehaviour
             }
         }
 
-        // Handheld Camera Night Vision Viewfinder logic
+        // Handheld Camera Night Vision Viewfinder logic (disabled for dead spectators)
         bool isHoldingCamWithNV = false;
-        if (localInventory.currentSlotIndex >= 0 && localInventory.currentSlotIndex < PlayerInventory.MaxSlots)
+        if ((localPlayerController == null || localPlayerController.IsAlive) &&
+            localInventory.currentSlotIndex >= 0 && localInventory.currentSlotIndex < PlayerInventory.MaxSlots)
         {
             var heldItem = localInventory.slots[localInventory.currentSlotIndex];
             if (heldItem is VideoCameraItem cam && cam.IsPoweredOn)
@@ -329,6 +346,65 @@ public class PlayerHUDManager : MonoBehaviour
         {
             btnEndGame.clicked -= OnEndGameClicked;
         }
+        if (btnSpectatorEndMatch != null)
+        {
+            btnSpectatorEndMatch.clicked -= OnSpectatorEndMatchClicked;
+        }
+    }
+
+    private void UpdateSpectatorBanner()
+    {
+        bool isSpectator = localPlayerController != null && localPlayerController.IsGhostSpectator;
+        if (spectatorBanner != null && lastSpectatorVisible != isSpectator)
+        {
+            lastSpectatorVisible = isSpectator;
+            if (isSpectator)
+            {
+                spectatorBanner.RemoveFromClassList("spectator-banner-hidden");
+                spectatorBanner.style.display = DisplayStyle.Flex;
+            }
+            else
+            {
+                spectatorBanner.AddToClassList("spectator-banner-hidden");
+                spectatorBanner.style.display = DisplayStyle.None;
+            }
+        }
+
+        var matchMgr = GameMatchManager.Instance;
+        bool showWipeControls = isSpectator && matchMgr != null && matchMgr.IsTeamWipeGraceActive && !matchMgr.IsMatchEnding;
+        if (lastWipeGraceVisible != showWipeControls)
+        {
+            lastWipeGraceVisible = showWipeControls;
+            lastWipeSecondsShown = -1;
+
+            if (spectatorGraceLabel != null)
+            {
+                if (showWipeControls) spectatorGraceLabel.RemoveFromClassList("spectator-grace-hidden");
+                else spectatorGraceLabel.AddToClassList("spectator-grace-hidden");
+                spectatorGraceLabel.style.display = showWipeControls ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            if (btnSpectatorEndMatch != null)
+            {
+                if (showWipeControls) btnSpectatorEndMatch.RemoveFromClassList("spectator-grace-hidden");
+                else btnSpectatorEndMatch.AddToClassList("spectator-grace-hidden");
+                btnSpectatorEndMatch.style.display = showWipeControls ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+        }
+
+        if (showWipeControls && spectatorGraceLabel != null)
+        {
+            int secs = Mathf.Max(0, Mathf.CeilToInt(matchMgr.TeamWipeSecondsRemaining));
+            if (secs != lastWipeSecondsShown)
+            {
+                lastWipeSecondsShown = secs;
+                spectatorGraceLabel.text = $"TEAM WIPE — ENDING IN {secs}s";
+            }
+        }
+    }
+
+    private void OnSpectatorEndMatchClicked()
+    {
+        GameMatchManager.Instance?.RequestEarlyTeamWipeEndMatch();
     }
 
     private void HandleSlotChanged(int newSlotIndex)

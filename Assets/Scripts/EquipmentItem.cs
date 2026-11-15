@@ -132,10 +132,19 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         ownerClientId.OnValueChanged += (oldVal, newVal) =>
         {
-            if (oldVal == ulong.MaxValue && newVal != ulong.MaxValue)
-                GameAudioManager.PlayItemPickup(transform.position);
-            else if (oldVal != ulong.MaxValue && newVal == ulong.MaxValue && !isPlaced.Value)
-                GameAudioManager.PlayItemDrop(transform.position);
+            ulong actorId = newVal != ulong.MaxValue ? newVal : oldVal;
+            bool actorDead = actorId != ulong.MaxValue &&
+                             PlayerController.TryGetByClientId(actorId, out var actorCtrl) &&
+                             !actorCtrl.IsAlive;
+            bool viewerAlive = PlayerController.LocalInstance == null || PlayerController.LocalInstance.IsAlive;
+
+            if (!(actorDead && viewerAlive))
+            {
+                if (oldVal == ulong.MaxValue && newVal != ulong.MaxValue)
+                    GameAudioManager.PlayItemPickup(transform.position);
+                else if (oldVal != ulong.MaxValue && newVal == ulong.MaxValue && !isPlaced.Value)
+                    GameAudioManager.PlayItemDrop(transform.position);
+            }
             UpdateEquipState(newVal);
         };
         isInHand.OnValueChanged += (oldVal, newVal) => OnInHandChanged(newVal);
@@ -153,6 +162,10 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         UpdateEquipState(ownerClientId.Value);
         OnInHandChanged(isInHand.Value);
         OnPlacedChanged(isPlaced.Value);
+        if (ownerClientId.Value != ulong.MaxValue)
+        {
+            ResolvePlayerInventory(ownerClientId.Value)?.SyncSlotsFromNetworkVariables();
+        }
     }
 
     private void OnDraggingClientIdChanged(ulong previousValue, ulong newValue)
@@ -253,6 +266,19 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         }
 
         return null;
+    }
+
+    private PlayerInventory ResolvePlayerInventory(ulong clientId)
+    {
+        if (clientId == ulong.MaxValue) return null;
+
+        if (PlayerController.TryGetByClientId(clientId, out var player) && player != null)
+        {
+            return player.GetComponent<PlayerInventory>();
+        }
+
+        var playerTransform = ResolvePlayerTransform(clientId);
+        return playerTransform != null ? playerTransform.GetComponent<PlayerInventory>() : null;
     }
 
     private Transform ResolveOwnerHandTarget(ulong clientId)
@@ -375,6 +401,16 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         if (IsOnGround || IsPlaced)
         {
+            var localCtrl = PlayerController.LocalInstance;
+            if (localCtrl != null)
+            {
+                if (localCtrl.IsDyingSequence) return;
+                if (localCtrl.IsGhostSpectator)
+                {
+                    if (!IsOnGround || !PlayerController.IsEquipmentAllowedForGhostSpectator(this)) return;
+                }
+            }
+
             var localPlayer = NetworkManager.Singleton?.LocalClient?.PlayerObject;
             if (localPlayer != null)
             {
@@ -391,6 +427,15 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         if (IsOnGround || IsPlaced)
         {
+            var localCtrl = PlayerController.LocalInstance;
+            if (localCtrl != null && !localCtrl.IsAlive)
+            {
+                if (!localCtrl.IsGhostSpectator || !PlayerController.IsEquipmentAllowedForGhostSpectator(this))
+                {
+                    return string.Empty;
+                }
+            }
+
             var localPlayer = NetworkManager.Singleton?.LocalClient?.PlayerObject;
             if (localPlayer != null)
             {
@@ -406,9 +451,22 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void PickupItemRpc(ulong clientId)
+    public void PickupItemRpc(ulong clientId, RpcParams rpcParams = default)
     {
         if (ownerClientId.Value != ulong.MaxValue) return;
+
+        // Dead spectators can ONLY pick up IsOnGround non-consumable equipment (never IsPlaced gear, pills, or chalk)
+        bool allowed = isPlaced.Value
+            ? IsPlayerAliveAndPresent(clientId)
+            : IsPlayerAllowedGroundEquip(clientId);
+        if (!allowed) return;
+
+        var holderInventory = ResolvePlayerInventory(clientId);
+        if (holderInventory != null && !holderInventory.CanAssignItem(this))
+        {
+            Debug.Log($"[EquipmentItem] Pickup rejected for {itemName}: player {clientId} inventory is full.");
+            return;
+        }
 
         Debug.Log($"Player {clientId} picked up {itemName}");
         ClearDragStateOnServer();
@@ -417,13 +475,50 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         isInHand.Value = true;
         cachedHandOwnerId = ulong.MaxValue;
         cachedHandTarget = null;
-        SnapToOwnerHand(clientId);
-        SyncPickupStateClientRpc(clientId, true, ++serverEquipSeq);
+
+        if (holderInventory != null)
+        {
+            holderInventory.ServerAssignItemToSlot(this);
+        }
+
+        if (isInHand.Value)
+        {
+            SnapToOwnerHand(clientId);
+        }
+        else
+        {
+            UpdateVisuals();
+        }
+
+        if (IsSpawned)
+        {
+            SyncPickupStateClientRpc(clientId, isInHand.Value, ++serverEquipSeq);
+        }
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public virtual void DropItemRpc(Vector3 dropPosition)
+    public virtual void DropItemRpc(Vector3 dropPosition, RpcParams rpcParams = default)
     {
+        if (ownerClientId.Value != ulong.MaxValue &&
+            NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.IsListening &&
+            IsSpawned &&
+            rpcParams.Receive.SenderClientId != ownerClientId.Value)
+        {
+            return;
+        }
+
+        ServerDropAtPosition(dropPosition);
+    }
+
+    /// <summary>
+    /// Server-authoritative drop helper used both by DropItemRpc and PlayerInventory.ServerDropAllItemsOnDeath.
+    /// </summary>
+    public void ServerDropAtPosition(Vector3 dropPosition)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !IsServer) return;
+
+        ulong prevOwner = ownerClientId.Value;
         Debug.Log($"Player dropped {itemName}");
         ClearDragStateOnServer();
         ownerClientId.Value = ulong.MaxValue;
@@ -432,10 +527,22 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         cachedHandOwnerId = ulong.MaxValue;
         cachedHandTarget = null;
 
+        if (prevOwner != ulong.MaxValue)
+        {
+            ResolvePlayerInventory(prevOwner)?.ServerRemoveItem(this);
+        }
+
         Vector3 finalPos = new Vector3(dropPosition.x, dropPosition.y, 0f);
         transform.position = finalPos;
         syncedDragPosition.Value = new Vector2(finalPos.x, finalPos.y);
-        SyncDroppedTransformClientRpc(finalPos, transform.rotation, ++serverEquipSeq);
+        if (IsSpawned)
+        {
+            SyncDroppedTransformClientRpc(finalPos, transform.rotation, ++serverEquipSeq);
+        }
+        else
+        {
+            UpdateVisuals();
+        }
     }
 
     /// <summary>
@@ -445,14 +552,25 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     public virtual bool CanPlace(Vector3 targetPosition) => true;
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public virtual void PlaceItemRpc(Vector3 placePosition, Quaternion placeRotation)
+    public virtual void PlaceItemRpc(Vector3 placePosition, Quaternion placeRotation, RpcParams rpcParams = default)
     {
+        ulong senderId = rpcParams.Receive.SenderClientId;
+        if (!IsPlayerAliveAndPresent(senderId)) return;
+        if (ownerClientId.Value != ulong.MaxValue &&
+            NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.IsListening &&
+            IsSpawned &&
+            senderId != ownerClientId.Value)
+        {
+            return;
+        }
         if (!CanPlace(placePosition))
         {
             Debug.Log($"[EquipmentItem] Placement rejected for {itemName} at {placePosition}: validation failed.");
             return;
         }
 
+        ulong prevOwner = ownerClientId.Value;
         Debug.Log($"Player placed {itemName}");
         ClearDragStateOnServer();
         ownerClientId.Value = ulong.MaxValue;
@@ -461,11 +579,23 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         cachedHandOwnerId = ulong.MaxValue;
         cachedHandTarget = null;
 
+        if (prevOwner != ulong.MaxValue)
+        {
+            ResolvePlayerInventory(prevOwner)?.ServerRemoveItem(this);
+        }
+
         Vector3 finalPos = new Vector3(placePosition.x, placePosition.y, 0f);
         transform.position = finalPos;
         transform.rotation = placeRotation;
         syncedDragPosition.Value = new Vector2(finalPos.x, finalPos.y);
-        SyncPlacedTransformClientRpc(finalPos, placeRotation, ++serverEquipSeq);
+        if (IsSpawned)
+        {
+            SyncPlacedTransformClientRpc(finalPos, placeRotation, ++serverEquipSeq);
+        }
+        else
+        {
+            UpdateVisuals();
+        }
     }
 
     [Rpc(SendTo.ClientsAndHost)]
@@ -477,7 +607,10 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         cachedHandOwnerId = ulong.MaxValue;
         cachedHandTarget = null;
         if (interactCollider != null) interactCollider.enabled = false;
-        SnapToOwnerHand(clientId);
+        if (inHand)
+        {
+            SnapToOwnerHand(clientId);
+        }
         ApplySyncedScale();
         UpdateVisuals();
     }
@@ -513,10 +646,42 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void SetInHandRpc(bool inHand)
+    public void SetInHandRpc(bool inHand, RpcParams rpcParams = default)
     {
+        if (ownerClientId.Value != ulong.MaxValue &&
+            NetworkManager.Singleton != null &&
+            NetworkManager.Singleton.IsListening &&
+            IsSpawned &&
+            rpcParams.Receive.SenderClientId != ownerClientId.Value)
+        {
+            return;
+        }
+        ServerSetInHand(inHand);
+    }
+
+    /// <summary>
+    /// Server-authoritative helper to toggle whether an item is currently held in hand.
+    /// Also works in unspawned/offline unit tests where RPC dispatch is unavailable.
+    /// </summary>
+    public void ServerSetInHand(bool inHand)
+    {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            if (!IsServer) return;
+            isInHand.Value = inHand;
+            if (IsSpawned)
+            {
+                SyncInHandStateClientRpc(inHand, ++serverEquipSeq);
+            }
+            return;
+        }
+
         isInHand.Value = inHand;
-        SyncInHandStateClientRpc(inHand, ++serverEquipSeq);
+        if (inHand && ownerClientId.Value != ulong.MaxValue)
+        {
+            SnapToOwnerHand(ownerClientId.Value);
+        }
+        UpdateVisuals();
     }
 
     [Rpc(SendTo.ClientsAndHost)]
@@ -536,13 +701,15 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     /// </summary>
     public virtual void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         Debug.Log($"Player used primary action on {itemName}");
         UsePrimaryRpc();
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public virtual void UsePrimaryRpc()
+    public virtual void UsePrimaryRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
     }
 
     /// <summary>
@@ -550,13 +717,15 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     /// </summary>
     public virtual void UseSecondary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         Debug.Log($"Player used secondary action on {itemName}");
         UseSecondaryRpc();
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public virtual void UseSecondaryRpc()
+    public virtual void UseSecondaryRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
     }
 
     protected virtual void UpdateEquipState(ulong newOwnerId)
@@ -594,7 +763,10 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
                 if (localInventory != null)
                 {
                     localInventory.AddItem(this);
-                    TriggerEquipmentTutorial();
+                    if (!IsHeldByDeadPlayer())
+                    {
+                        TriggerEquipmentTutorial();
+                    }
                 }
             }
         }
@@ -605,7 +777,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     protected virtual void OnInHandChanged(bool inHand)
     {
         UpdateVisuals();
-        if (inHand && IsHeldByLocalPlayer)
+        if (inHand && IsHeldByLocalPlayer && !IsHeldByDeadPlayer())
         {
             TriggerEquipmentTutorial();
         }
@@ -646,12 +818,41 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         UpdateVisuals();
     }
 
+    public bool IsHeldByDeadPlayer()
+    {
+        ulong holder = ownerClientId.Value;
+        if (holder == ulong.MaxValue) return false;
+        return PlayerController.TryGetByClientId(holder, out var p) && !p.IsAlive;
+    }
+
+    public void RefreshVisualsForHolderState()
+    {
+        UpdateVisuals();
+    }
+
     protected virtual void UpdateVisuals()
     {
+        bool heldByDead = IsHeldByDeadPlayer();
+        bool viewerIsAlive = PlayerController.LocalInstance == null || PlayerController.LocalInstance.IsAlive;
         bool isVisible = isInHand.Value || IsOnGround || IsPlaced;
+
+        if (heldByDead && viewerIsAlive)
+        {
+            // Living players see zero trace of equipment carried by dead spectators
+            isVisible = false;
+        }
+
         if (spriteRenderer != null)
         {
             spriteRenderer.enabled = isVisible;
+            if (heldByDead && !viewerIsAlive && isVisible)
+            {
+                spriteRenderer.color = new Color(0.55f, 0.77f, 1.0f, 0.45f);
+            }
+            else
+            {
+                spriteRenderer.color = Color.white;
+            }
         }
     }
 
@@ -659,6 +860,14 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     public virtual bool CanDrag()
     {
         if (!IsOnGround) return false;
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive)
+        {
+            if (!PlayerController.LocalInstance.IsGhostSpectator ||
+                !PlayerController.IsEquipmentAllowedForGhostSpectator(this))
+            {
+                return false;
+            }
+        }
         if (!IsSpawned || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening) return true;
 
         ulong localClientId = NetworkManager.Singleton.LocalClientId;
@@ -701,7 +910,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         bool canBegin = IsOnGround &&
                         (draggingClientId.Value == ulong.MaxValue || draggingClientId.Value == senderClientId) &&
-                        IsPlayerAliveAndPresent(senderClientId);
+                        IsPlayerAllowedGroundEquip(senderClientId);
 
         if (!canBegin)
         {
@@ -779,7 +988,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         ulong senderClientId = rpcParams.Receive.SenderClientId;
         if (!IsOnGround || draggingClientId.Value != senderClientId) return;
 
-        if (!IsPlayerAliveAndPresent(senderClientId))
+        if (!IsPlayerAllowedGroundEquip(senderClientId))
         {
             EndServerDrag(null);
             return;
@@ -875,13 +1084,28 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         ApplyDragEnd();
     }
 
-    private bool IsPlayerAliveAndPresent(ulong clientId)
+    protected bool IsPlayerAliveAndPresent(ulong clientId)
     {
         Transform playerTr = ResolvePlayerTransform(clientId);
         if (playerTr == null) return false;
 
         var playerCtrl = playerTr.GetComponent<PlayerController>();
         return playerCtrl == null || playerCtrl.IsAlive;
+    }
+
+    protected bool IsPlayerAllowedGroundEquip(ulong clientId)
+    {
+        Transform playerTr = ResolvePlayerTransform(clientId);
+        if (playerTr == null) return false;
+
+        var playerCtrl = playerTr.GetComponent<PlayerController>();
+        if (playerCtrl == null) return true;
+        if (playerCtrl.IsAlive) return true;
+        if (playerCtrl.IsGhostSpectator)
+        {
+            return !(this is SanityPillsItem) && !(this is RitualChalkItem);
+        }
+        return false;
     }
 
     private Vector2 ClampDragTargetToSender(ulong senderClientId, Vector2 targetPos)

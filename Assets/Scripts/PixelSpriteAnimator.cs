@@ -218,8 +218,9 @@ public class GhostPixelAnimator : MonoBehaviour
             if (next != null) sr.sprite = next;
         }
 
-        // Play eerie 16-bit ghost footsteps while moving and visible/hunting
-        if ((isMoving || isHunting) && isHunting)
+        // Play eerie 16-bit ghost footsteps while moving and visible/hunting (living observers only)
+        bool localAlive = PlayerController.LocalInstance == null || PlayerController.LocalInstance.IsAlive;
+        if (localAlive && (isMoving || isHunting) && isHunting)
         {
             footstepTimer -= Time.deltaTime;
             float interval = hunter != null && hunter.IsAngeredState ? 0.34f : 0.48f;

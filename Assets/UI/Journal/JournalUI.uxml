@@ -13,7 +13,7 @@
                 <ui:Button name="tab-equip" text="EQUIPMENT" class="journal-tab" />
                 <ui:Button name="tab-ghosts" text="ENTITIES" class="journal-tab" />
                 <ui:Button name="tab-evidence" text="DEDUCTION" class="journal-tab" />
-                <ui:Button name="btn-close-top" text="✕" class="journal-tab tab-close-btn" />
+                <ui:Button name="btn-close-top" text="X" class="journal-tab tab-close-btn" />
             </ui:VisualElement>
 
             <!-- Book Body Container -->
@@ -52,21 +52,13 @@
                                 <ui:Label text="03. Optical &amp; Defensive Equipment" class="toc-item-text" />
                                 <ui:Label text="Page 4  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-tikbalang" class="toc-item-button">
-                                <ui:Label text="04. Entity Dossier: Tikbalang" class="toc-item-text" />
+                            <ui:Button name="btn-toc-ghosts" class="toc-item-button">
+                                <ui:Label text="04. Entity Compendium (20 Spirits)" class="toc-item-text" />
                                 <ui:Label text="Page 5  ▶" class="toc-item-page" />
                             </ui:Button>
-                            <ui:Button name="btn-toc-kapre" class="toc-item-button">
-                                <ui:Label text="05. Entity Dossier: Kapre" class="toc-item-text" />
-                                <ui:Label text="Page 6  ▶" class="toc-item-page" />
-                            </ui:Button>
-                            <ui:Button name="btn-toc-manananggal" class="toc-item-button">
-                                <ui:Label text="06. Entity Dossier: Manananggal" class="toc-item-text" />
-                                <ui:Label text="Page 7  ▶" class="toc-item-page" />
-                            </ui:Button>
                             <ui:Button name="btn-toc-evidence" class="toc-item-button">
-                                <ui:Label text="07. Evidence Checklist &amp; Deduction" class="toc-item-text" />
-                                <ui:Label text="Page 8  ▶" class="toc-item-page" />
+                                <ui:Label text="05. Evidence Checklist &amp; Deduction" class="toc-item-text" />
+                                <ui:Label text="Page 6  ▶" class="toc-item-page" />
                             </ui:Button>
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -227,120 +219,61 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 5: GHOST 1 - TIKBALANG ================= -->
+                <!-- ================= SPREAD 5: ENTITY COMPENDIUM (20 GHOSTS) ================= -->
                 <ui:VisualElement name="spread-5" class="journal-spread hidden-spread">
-                    <!-- Left Page: Illustration -->
-                    <ui:VisualElement class="journal-page left-page ghost-art-page">
-                        <ui:VisualElement class="ghost-art-frame">
-                            <ui:VisualElement class="ghost-art-image ghost-art-tikbalang" />
+                    <!-- Left Page: Entity Index (2-column scrollable grid) -->
+                    <ui:VisualElement class="journal-page left-page">
+                        <ui:Label text="Entity Compendium" class="page-title" />
+                        <ui:Label text="Select any Philippine folklore entity to read its dossier:" class="instruction-text dossier-tight-instruction" />
+
+                        <ui:ScrollView name="dossier-selector-scroll" class="dossier-selector-scroll" vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden">
+                            <ui:VisualElement name="dossier-selector-grid" class="dossier-selector-grid" />
+                        </ui:ScrollView>
+
+                        <ui:VisualElement class="dossier-nav-row">
+                            <ui:Button name="btn-dossier-prev" text="◀ Prev" class="dossier-nav-btn" />
+                            <ui:Label name="lbl-dossier-counter" text="01 / 20" class="dossier-counter-label" />
+                            <ui:Button name="btn-dossier-next" text="Next ▶" class="dossier-nav-btn" />
                         </ui:VisualElement>
-                        <ui:Label text="Fig 1.0 — Tikbalang (Equus daemonium)" class="ghost-caption-text" />
                     </ui:VisualElement>
 
-                    <!-- Right Page: Lore & Evidence -->
+                    <!-- Right Page: Selected Entity Illustration, Lore & Evidence -->
                     <ui:VisualElement class="journal-page right-page">
-                        <ui:Label text="TIKBALANG" class="ghost-header-name" />
-                        <ui:Label text="The Forest Trickster (Mapaglarong Nilalang)" class="ghost-sub-title" />
-                        
-                        <ui:Label text="A towering half-human, half-horse demon of Philippine folklore. Roams dense forests and secluded properties, delighting in disorienting wanderers and leading them into endless loops." class="ghost-lore-paragraph" />
-                        
-                        <ui:VisualElement class="ghost-traits-section">
-                            <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
-                            <ui:Label text="• Provoked heavily by running and rapid investigator movement." class="ghost-trait-bullet" />
-                            <ui:Label text="• Highly communicative; responds frequently through the Spirit Box." class="ghost-trait-bullet" />
-                            <ui:Label text="• Emits intense electromagnetic surges and luminous Ghost Orbs." class="ghost-trait-bullet" />
-                        </ui:VisualElement>
+                        <ui:VisualElement class="dossier-right-header">
+                            <ui:VisualElement class="dossier-right-title-col">
+                                <ui:Label name="lbl-dossier-name" text="TIKBALANG" class="ghost-header-name" />
+                                <ui:Label name="lbl-dossier-subtitle" text="The Forest Trickster (Mapaglarong Nilalang)" class="ghost-sub-title" />
+                                <ui:Label name="lbl-dossier-caption" text="Fig 1.0 — Tikbalang (Equus daemonium)" class="dossier-caption-text" />
+                                <ui:VisualElement class="ghost-evidence-tag-box">
+                                    <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
+                                    <ui:VisualElement name="dossier-evidence-chips" class="ghost-evidence-chips" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
 
-                        <ui:VisualElement class="ghost-evidence-tag-box">
-                            <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
-                            <ui:VisualElement class="ghost-evidence-chips">
-                                <ui:Label text="EMF Level 5" class="evidence-chip" />
-                                <ui:Label text="Spirit Box" class="evidence-chip" />
-                                <ui:Label text="Ghost Orbs" class="evidence-chip" />
+                            <ui:VisualElement name="dossier-art-frame" class="dossier-right-art-frame">
+                                <ui:VisualElement name="dossier-art-image" class="ghost-art-image ghost-art-tikbalang" />
+                                <ui:VisualElement name="dossier-sigil-box" class="dossier-sigil-box hidden">
+                                    <ui:Label name="lbl-dossier-sigil-index" text="#04" class="dossier-sigil-index" />
+                                    <ui:Label name="lbl-dossier-sigil-mono" text="MLT" class="dossier-sigil-mono" />
+                                </ui:VisualElement>
                             </ui:VisualElement>
                         </ui:VisualElement>
 
-                        <ui:Label text="Tip: Invert your outerwear (baliktarin ang damit) if illusions cloud your path." class="ghost-tip-text" />
+                        <ui:ScrollView name="dossier-detail-scroll" class="dossier-detail-scroll" vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden">
+                            <ui:Label name="lbl-dossier-lore" text="" class="ghost-lore-paragraph" />
+
+                            <ui:VisualElement class="ghost-traits-section">
+                                <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
+                                <ui:VisualElement name="dossier-traits-container" />
+                            </ui:VisualElement>
+
+                            <ui:Label name="lbl-dossier-tip" text="" class="ghost-tip-text" />
+                        </ui:ScrollView>
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 6: GHOST 2 - KAPRE ================= -->
+                <!-- ================= SPREAD 6: EVIDENCE CHECKLIST & DEDUCTION ================= -->
                 <ui:VisualElement name="spread-6" class="journal-spread hidden-spread">
-                    <!-- Left Page: Illustration -->
-                    <ui:VisualElement class="journal-page left-page ghost-art-page">
-                        <ui:VisualElement class="ghost-art-frame">
-                            <ui:VisualElement class="ghost-art-image ghost-art-kapre" />
-                        </ui:VisualElement>
-                        <ui:Label text="Fig 2.0 — Kapre (Gigantus balete)" class="ghost-caption-text" />
-                    </ui:VisualElement>
-
-                    <!-- Right Page: Lore & Evidence -->
-                    <ui:VisualElement class="journal-page right-page">
-                        <ui:Label text="KAPRE" class="ghost-header-name" />
-                        <ui:Label text="The Balete Giant (Higante sa Dilim)" class="ghost-sub-title" />
-                        
-                        <ui:Label text="A colossal, dark-furred tree titan standing over seven feet tall. The Kapre dwells in ancient Balete trees and ceilings, perpetually smoking an amber-lit cigar that fills rooms with eerie supernatural haze." class="ghost-lore-paragraph" />
-                        
-                        <ui:VisualElement class="ghost-traits-section">
-                            <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
-                            <ui:Label text="• Extremely territorial; drains investigator sanity rapidly when near." class="ghost-trait-bullet" />
-                            <ui:Label text="• Radiates severe supernatural cold, plunging temperatures below zero." class="ghost-trait-bullet" />
-                            <ui:Label text="• Towering spectral form easily reveals itself in D.O.T.S. laser beams." class="ghost-trait-bullet" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="ghost-evidence-tag-box">
-                            <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
-                            <ui:VisualElement class="ghost-evidence-chips">
-                                <ui:Label text="EMF Level 5" class="evidence-chip" />
-                                <ui:Label text="Freezing Temps" class="evidence-chip" />
-                                <ui:Label text="D.O.T.S. Projector" class="evidence-chip" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:Label text="Tip: A faint aroma of burning tobacco in the air signals its immediate presence." class="ghost-tip-text" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- ================= SPREAD 7: GHOST 3 - MANANANGGAL ================= -->
-                <ui:VisualElement name="spread-7" class="journal-spread hidden-spread">
-                    <!-- Left Page: Illustration -->
-                    <ui:VisualElement class="journal-page left-page ghost-art-page">
-                        <ui:VisualElement class="ghost-art-frame">
-                            <ui:VisualElement class="ghost-art-image ghost-art-manananggal" />
-                        </ui:VisualElement>
-                        <ui:Label text="Fig 3.0 — Manananggal (Vampyrus volans)" class="ghost-caption-text" />
-                    </ui:VisualElement>
-
-                    <!-- Right Page: Lore & Evidence -->
-                    <ui:VisualElement class="journal-page right-page">
-                        <ui:Label text="MANANANGGAL" class="ghost-header-name" />
-                        <ui:Label text="The Severed Predator (Lumilipad na Aswang)" class="ghost-sub-title" />
-                        
-                        <ui:Label text="The most feared vampiric demon of Philippine folklore. By night, it detaches its upper torso from its waist and takes flight with massive bat wings, descending from the rafters upon unsuspecting prey." class="ghost-lore-paragraph" />
-                        
-                        <ui:VisualElement class="ghost-traits-section">
-                            <ui:Label text="BEHAVIOR &amp; TRAITS:" class="ghost-section-label" />
-                            <ui:Label text="• Lethal hunter with rapid pursuit speed once a hunt commences." class="ghost-trait-bullet" />
-                            <ui:Label text="• Chills ambient room temperatures into sub-zero freezing ranges." class="ghost-trait-bullet" />
-                            <ui:Label text="• Obsessively scrawls demonic verses inside Ghost Writing Books." class="ghost-trait-bullet" />
-                            <ui:Label text="• Floats silently through hallways shedding luminous Ghost Orbs." class="ghost-trait-bullet" />
-                        </ui:VisualElement>
-
-                        <ui:VisualElement class="ghost-evidence-tag-box">
-                            <ui:Label text="CONCLUSIVE EVIDENCE:" class="ghost-section-label" />
-                            <ui:VisualElement class="ghost-evidence-chips">
-                                <ui:Label text="Freezing Temps" class="evidence-chip" />
-                                <ui:Label text="Ghost Writing" class="evidence-chip" />
-                                <ui:Label text="Ghost Orbs" class="evidence-chip" />
-                            </ui:VisualElement>
-                        </ui:VisualElement>
-
-                        <ui:Label text="Tip: Listen closely for leathery wing flaps and rooftop ticking noises." class="ghost-tip-text" />
-                    </ui:VisualElement>
-                </ui:VisualElement>
-
-                <!-- ================= SPREAD 8: EVIDENCE CHECKLIST & DEDUCTION ================= -->
-                <ui:VisualElement name="spread-8" class="journal-spread hidden-spread">
                     <!-- Left Page: Evidence Checklist -->
                     <ui:VisualElement class="journal-page left-page">
                         <ui:Label text="Evidence Collected" class="page-title" />
@@ -354,20 +287,18 @@
                             <ui:Toggle name="tgl-orbs" label="Ghost Orbs" class="evidence-toggle" />
                         </ui:VisualElement>
                         
-                        <ui:Label text="Select 3 evidences to narrow down the entity type." class="instruction-text" />
+                        <ui:Label name="lbl-deduction-status" text="Select up to 3 evidences to narrow down all 20 entities." class="instruction-text deduction-status-text" />
                     </ui:VisualElement>
 
                     <!-- Right Page: Deduction -->
                     <ui:VisualElement class="journal-page right-page">
                         <ui:Label text="Deduction" class="page-title" />
                         
-                        <ui:Label text="Based on your findings, what is haunting this location?" class="instruction-text" />
+                        <ui:Label text="Based on your findings, select the haunting entity:" class="instruction-text deduction-tight-instruction" />
                         
-                        <ui:VisualElement class="ghost-buttons-container">
-                            <ui:Button name="btn-ghost-tikbalang" text="Tikbalang" class="ghost-button" />
-                            <ui:Button name="btn-ghost-kapre" text="Kapre" class="ghost-button" />
-                            <ui:Button name="btn-ghost-manananggal" text="Manananggal" class="ghost-button" />
-                        </ui:VisualElement>
+                        <ui:ScrollView name="deduction-ghosts-scroll" class="deduction-ghosts-scroll" vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden">
+                            <ui:VisualElement name="ghost-buttons-container" class="ghost-buttons-container" />
+                        </ui:ScrollView>
                         
                         <ui:VisualElement class="button-container">
                             <ui:Button name="btn-close" text="Close Journal" class="close-button" />
@@ -375,8 +306,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- ================= SPREAD 9: LOBBY, MULTIPLAYER & EQUIPMENT SHOP ================= -->
-                <ui:VisualElement name="spread-9" class="journal-spread hidden-spread">
+                <!-- ================= SPREAD 7: LOBBY, MULTIPLAYER & EQUIPMENT SHOP ================= -->
+                <ui:VisualElement name="spread-7" class="journal-spread hidden-spread">
                     <!-- Left Page: Map, Difficulty & Multiplayer Party -->
                     <ui:VisualElement class="journal-page left-page">
                         <ui:Label text="Contract &amp; Multiplayer" class="page-title" />
@@ -443,8 +374,8 @@
             <!-- Bottom Navigation Bar -->
             <ui:VisualElement class="journal-nav-bar">
                 <ui:Button name="btn-prev-page" text="◀ Previous Page" class="nav-button" />
-                <ui:Label name="lbl-page-indicator" text="Page 1 of 8" class="page-indicator-label" />
-                <ui:Button name="btn-toc-jump" text="📖 Table of Contents" class="nav-button" />
+                <ui:Label name="lbl-page-indicator" text="Page 1 of 6" class="page-indicator-label" />
+                <ui:Button name="btn-toc-jump" text="Table of Contents" class="nav-button" />
                 <ui:Button name="btn-next-page" text="Next Page ▶" class="nav-button" />
             </ui:VisualElement>
 

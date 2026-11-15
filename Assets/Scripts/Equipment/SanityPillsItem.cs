@@ -73,6 +73,7 @@ public class SanityPillsItem : EquipmentItem
     /// </summary>
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         // Must be held by local player
         if (NetworkManager.Singleton == null || ownerClientId.Value != NetworkManager.Singleton.LocalClientId)
         {
@@ -100,9 +101,10 @@ public class SanityPillsItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public override void UsePrimaryRpc()
+    public override void UsePrimaryRpc(RpcParams rpcParams = default)
     {
-        base.UsePrimaryRpc();
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
+        base.UsePrimaryRpc(rpcParams);
         if (ownerClientId.Value != ulong.MaxValue)
         {
             ConsumePillsServerRpc(ownerClientId.Value);
@@ -110,9 +112,10 @@ public class SanityPillsItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void ConsumePillsServerRpc(ulong consumingClientId)
+    public void ConsumePillsServerRpc(ulong consumingClientId, RpcParams rpcParams = default)
     {
         if (!IsServer) return;
+        if (!IsPlayerAliveAndPresent(consumingClientId)) return;
 
         Debug.Log($"[SanityPills] Server received consume request from client {consumingClientId}");
 

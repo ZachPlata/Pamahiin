@@ -112,6 +112,13 @@ public class GameAudioManager : MonoBehaviour
 
     public static bool TryGetListenerWorldPosition(out Vector3 listenerPos)
     {
+        if (WeatherManager.IsLocalInBurialMap && Camera.main != null)
+        {
+            var camPos = Camera.main.transform.position;
+            listenerPos = new Vector3(camPos.x, camPos.y, 0f);
+            return true;
+        }
+
         if (PlayerController.LocalInstance != null)
         {
             var localPos = PlayerController.LocalInstance.transform.position;

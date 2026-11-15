@@ -578,6 +578,7 @@ public class SummoningCircle : MonoBehaviour, IInteractable
 
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         var exorcismManager = ExorcismManager.Instance != null
             ? ExorcismManager.Instance
             : FindAnyObjectByType<ExorcismManager>();

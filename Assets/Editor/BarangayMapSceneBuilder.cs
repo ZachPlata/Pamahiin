@@ -190,7 +190,10 @@ public static class BarangayMapSceneBuilder
         // 11. Add WeatherManager (server rolls 48% Night, 25% Fog, 25% Rain, 2% Red Moon)
         CreateWeatherManager(envRoot.transform, globalLight);
 
-        // 12. Bake 2D NavMesh & wire bidirectional Stair NavMeshLink
+        // 12. Stage Off-Bounds Burial Sequence Pit at (25, 25, 0)
+        CreateBurialMapStage();
+
+        // 13. Bake 2D NavMesh & wire bidirectional Stair NavMeshLink
         BakeNavMeshAndLink(envRoot.transform);
 
         // 13. Clean SoundSystem triggers & legacy ambient noise loop, and adjust Camera background
@@ -221,6 +224,23 @@ public static class BarangayMapSceneBuilder
         RegisterSceneInBuildSettings();
 
         Debug.Log("[BarangayMapSceneBuilder] Successfully built and baked Assets/Scenes/BarangayMap.unity!");
+    }
+
+    /// <summary>Creates the inactive off-bounds Burial Pit stage at (25, 25, 0) inside BarangayMap.</summary>
+    public static void CreateBurialMapStage()
+    {
+        foreach (var existing in Object.FindObjectsByType<BurialMapStage>(FindObjectsInactive.Include))
+        {
+            if (existing != null) Object.DestroyImmediate(existing.gameObject);
+        }
+
+        var existingByName = GameObject.Find("BurialMapStage");
+        if (existingByName != null) Object.DestroyImmediate(existingByName);
+
+        GameObject stageGo = new GameObject("BurialMapStage");
+        stageGo.transform.position = BurialMapStage.STAGE_CENTER;
+        var stage = stageGo.AddComponent<BurialMapStage>();
+        stage.BuildStageIfEmpty();
     }
 
     private static bool StripDuplicateGameSettingsManager()
@@ -769,19 +789,10 @@ public static class BarangayMapSceneBuilder
         }
     }
 
-    private static List<RoomSpec> BuildHouseAndBasementGeometry(
-        Transform houseRoot, Transform basementRoot, Transform wallsRoot, Transform doorsRoot, Transform furnRoot,
-        Transform ghostMarkers, Transform lightSys, int wallLayer, int interactLayer, int groundLayer)
+    private static List<RoomSpec> GetHouseAndBasementRoomSpecs()
     {
-        Sprite wallSpr = LoadSprite("House/wall_concrete_top");
-        Sprite doorClosed = LoadSprite("House/door_wood_closed");
-        Sprite doorOpen = LoadSprite("House/door_wood_open");
-        Sprite cabClosed = LoadSprite("House/cabinet_closed");
-        Sprite cabOpen = LoadSprite("House/cabinet_open");
-        Sprite windowSpr = LoadSprite("House/window_frame_top");
-
         // Complete 6 Tanglewood Drive Main Floor (x=[0..4.48], y=[-1.85..+1.65]) + Basement ([0.64..3.80, -5.80..-4.10])
-        List<RoomSpec> rooms = new List<RoomSpec>
+        return new List<RoomSpec>
         {
             new RoomSpec { Name = "BoysBedroom", Bounds = new Rect(0.00f, 0.40f, 0.92f, 1.15f), ExtraBounds = new Rect(0.00f, 0.22f, 0.28f, 0.18f), FloorSprite = "House/floor_wood_tile", Surface = SurfaceType.Wood, SwitchPos = new Vector2(0.80f, 0.48f) },
             new RoomSpec { Name = "MainBathroom", Bounds = new Rect(0.92f, 0.40f, 0.62f, 1.15f), FloorSprite = "House/floor_bathroom_tile", Surface = SurfaceType.Concrete, SwitchPos = new Vector2(1.00f, 0.48f) },
@@ -799,6 +810,20 @@ public static class BarangayMapSceneBuilder
             new RoomSpec { Name = "DiningRoom", Bounds = new Rect(3.25f, -1.85f, 1.23f, 1.07f), FloorSprite = "House/floor_wood_tile", Surface = SurfaceType.Wood, SwitchPos = new Vector2(3.35f, -0.86f) },
             new RoomSpec { Name = "Basement", Bounds = new Rect(1.00f, -5.80f, 2.80f, 1.70f), ExtraBounds = new Rect(0.64f, -5.55f, 0.36f, 0.80f), FloorSprite = "House/floor_basement_concrete", Surface = SurfaceType.Concrete, SwitchPos = new Vector2(1.08f, -4.58f) }
         };
+    }
+
+    private static List<RoomSpec> BuildHouseAndBasementGeometry(
+        Transform houseRoot, Transform basementRoot, Transform wallsRoot, Transform doorsRoot, Transform furnRoot,
+        Transform ghostMarkers, Transform lightSys, int wallLayer, int interactLayer, int groundLayer)
+    {
+        Sprite wallSpr = LoadSprite("House/wall_concrete_top");
+        Sprite doorClosed = LoadSprite("House/door_wood_closed");
+        Sprite doorOpen = LoadSprite("House/door_wood_open");
+        Sprite cabClosed = LoadSprite("House/cabinet_closed");
+        Sprite cabOpen = LoadSprite("House/cabinet_open");
+        Sprite windowSpr = LoadSprite("House/window_frame_top");
+
+        List<RoomSpec> rooms = GetHouseAndBasementRoomSpecs();
 
         // Instantiate tiled floors, FloorSurface triggers, GhostRoomMarkers, Lights + Switches + SafeZones
         foreach (var r in rooms)
@@ -818,7 +843,7 @@ public static class BarangayMapSceneBuilder
 
             if (r.HasSwitch)
             {
-                CreateRoomLightingAndSwitch(lightSys, r.Name, r.Bounds, wallLayer, interactLayer, r.SwitchPos);
+                CreateRoomLightingAndSwitch(lightSys, r.Name, r.Bounds, wallLayer, interactLayer, r.SwitchPos, r.ExtraBounds);
             }
         }
 
@@ -1556,7 +1581,7 @@ public static class BarangayMapSceneBuilder
         marker.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
     }
 
-    private static void CreateRoomLightingAndSwitch(Transform lightSys, string roomName, Rect rect, int wallLayer, int interactLayer, Vector2? switchPos = null)
+    private static void CreateRoomLightingAndSwitch(Transform lightSys, string roomName, Rect rect, int wallLayer, int interactLayer, Vector2? switchPos = null, Rect? extraBounds = null)
     {
         if (lightSys == null) return;
 
@@ -1606,11 +1631,8 @@ public static class BarangayMapSceneBuilder
         // SafeZone trigger (starts inactive, NO visible SpriteRenderer!)
         GameObject szGo = new GameObject($"{roomName}_SafeZone");
         szGo.transform.SetParent(lightSys, false);
-        szGo.transform.position = new Vector3(rect.center.x, rect.center.y, 0f);
-        var szCol = szGo.AddComponent<BoxCollider2D>();
-        szCol.isTrigger = true;
-        szCol.size = new Vector2(rect.width, rect.height);
-        szGo.AddComponent<SafeZone>();
+        ApplySafeZoneBounds(szGo, rect, extraBounds);
+        szGo.AddComponent<SafeZone>().RefreshColliders();
         szGo.SetActive(false);
 
         SerializedObject swSo = new SerializedObject(hls);
@@ -1623,6 +1645,211 @@ public static class BarangayMapSceneBuilder
         swSo.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    private static void ApplySafeZoneBounds(GameObject szGo, Rect bounds, Rect? extraBounds)
+    {
+        if (szGo == null) return;
+
+        szGo.transform.localPosition = new Vector3(bounds.center.x, bounds.center.y, 0f);
+        szGo.transform.localRotation = Quaternion.identity;
+        szGo.transform.localScale = Vector3.one;
+
+        var existingColliders = szGo.GetComponents<Collider2D>();
+        for (int i = 0; i < existingColliders.Length; i++)
+        {
+            if (existingColliders[i] != null && !(existingColliders[i] is BoxCollider2D))
+            {
+                Object.DestroyImmediate(existingColliders[i]);
+            }
+        }
+
+        int desiredBoxCount = extraBounds.HasValue ? 2 : 1;
+        var boxColliders = new List<BoxCollider2D>(szGo.GetComponents<BoxCollider2D>());
+        while (boxColliders.Count > desiredBoxCount)
+        {
+            int last = boxColliders.Count - 1;
+            Object.DestroyImmediate(boxColliders[last]);
+            boxColliders.RemoveAt(last);
+        }
+        while (boxColliders.Count < desiredBoxCount)
+        {
+            boxColliders.Add(szGo.AddComponent<BoxCollider2D>());
+        }
+
+        BoxCollider2D primary = boxColliders[0];
+        primary.enabled = true;
+        primary.isTrigger = true;
+        primary.offset = Vector2.zero;
+        primary.size = bounds.size;
+
+        if (extraBounds.HasValue)
+        {
+            BoxCollider2D extra = boxColliders[1];
+            extra.enabled = true;
+            extra.isTrigger = true;
+            extra.offset = extraBounds.Value.center - bounds.center;
+            extra.size = extraBounds.Value.size;
+        }
+    }
+
+    [MenuItem("Pamahiin/Normalize BarangayMap SafeZones")]
+    public static void NormalizeBarangayMapSafeZones()
+    {
+        Scene activeScene = SceneManager.GetActiveScene();
+        if (activeScene.path != BARANGAY_SCENE_PATH)
+        {
+            if (!FileExists(BARANGAY_SCENE_PATH))
+            {
+                Debug.LogError($"[BarangayMapSceneBuilder] Scene not found at '{BARANGAY_SCENE_PATH}'.");
+                return;
+            }
+            activeScene = EditorSceneManager.OpenScene(BARANGAY_SCENE_PATH, OpenSceneMode.Single);
+        }
+
+        GameObject envGo = null;
+        foreach (var rootGo in activeScene.GetRootGameObjects())
+        {
+            if (rootGo.name == "Environment")
+            {
+                envGo = rootGo;
+                break;
+            }
+        }
+        if (envGo == null) envGo = GameObject.Find("Environment");
+        if (envGo == null)
+        {
+            Debug.LogError("[BarangayMapSceneBuilder] Could not find 'Environment' root in BarangayMap.");
+            return;
+        }
+
+        Transform lightSys = envGo.transform.Find("LightSystem");
+        if (lightSys == null)
+        {
+            Debug.LogError("[BarangayMapSceneBuilder] Could not find 'Environment/LightSystem' in BarangayMap.");
+            return;
+        }
+
+        // Preserve world transforms of switch/light children while resetting LightSystem's scaled transform to identity
+        var children = new List<Transform>(lightSys.childCount);
+        for (int i = 0; i < lightSys.childCount; i++)
+        {
+            children.Add(lightSys.GetChild(i));
+        }
+        for (int i = 0; i < children.Count; i++)
+        {
+            children[i].SetParent(null, true);
+        }
+
+        lightSys.localPosition = Vector3.zero;
+        lightSys.localRotation = Quaternion.identity;
+        lightSys.localScale = Vector3.one;
+
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] != null)
+            {
+                children[i].SetParent(lightSys, true);
+            }
+        }
+
+        List<RoomSpec> rooms = GetHouseAndBasementRoomSpecs();
+        var expectedSafeZoneNames = new HashSet<string>();
+        foreach (var r in rooms)
+        {
+            if (r.HasSwitch)
+            {
+                expectedSafeZoneNames.Add($"{r.Name}_SafeZone");
+            }
+        }
+
+        // Remove duplicate / stray SafeZone clones such as "Nursery_SafeZone (1)"
+        var seenSafeZoneNames = new HashSet<string>();
+        for (int i = lightSys.childCount - 1; i >= 0; i--)
+        {
+            Transform child = lightSys.GetChild(i);
+            bool isStrayClone = child.name.Contains("_SafeZone (") ||
+                                (expectedSafeZoneNames.Contains(child.name) && !seenSafeZoneNames.Add(child.name));
+            if (isStrayClone)
+            {
+                Object.DestroyImmediate(child.gameObject);
+            }
+        }
+
+        int normalizedCount = 0;
+        foreach (var r in rooms)
+        {
+            if (!r.HasSwitch) continue;
+
+            string szName = $"{r.Name}_SafeZone";
+            Transform szTr = lightSys.Find(szName);
+            GameObject szGo;
+            if (szTr == null)
+            {
+                szGo = new GameObject(szName);
+                szGo.transform.SetParent(lightSys, false);
+            }
+            else
+            {
+                szGo = szTr.gameObject;
+            }
+
+            ApplySafeZoneBounds(szGo, r.Bounds, r.ExtraBounds);
+
+            var szComp = szGo.GetComponent<SafeZone>();
+            if (szComp == null) szComp = szGo.AddComponent<SafeZone>();
+            szComp.RefreshColliders();
+
+            var sr = szGo.GetComponent<SpriteRenderer>();
+            if (sr != null) sr.enabled = false;
+
+            Transform swTr = lightSys.Find($"{r.Name} LS");
+            if (swTr != null)
+            {
+                var hls = swTr.GetComponent<HouseLightSwitch>();
+                if (hls != null)
+                {
+                    SerializedObject swSo = new SerializedObject(hls);
+                    var szProp = swSo.FindProperty("litSafeZones");
+                    if (szProp != null)
+                    {
+                        szProp.arraySize = 1;
+                        szProp.GetArrayElementAtIndex(0).objectReferenceValue = szGo;
+                        swSo.ApplyModifiedPropertiesWithoutUndo();
+                        EditorUtility.SetDirty(hls);
+                    }
+                    szGo.SetActive(hls.IsOn);
+                }
+            }
+
+            EditorUtility.SetDirty(szGo);
+            EditorUtility.SetDirty(szComp);
+            normalizedCount++;
+        }
+
+        Transform jeepSzTr = FindChildRecursive(envGo.transform, "JeepneySafeZone");
+        if (jeepSzTr != null)
+        {
+            jeepSzTr.localRotation = Quaternion.identity;
+            jeepSzTr.localScale = Vector3.one;
+            var jeepCols = jeepSzTr.GetComponents<Collider2D>();
+            for (int i = 0; i < jeepCols.Length; i++)
+            {
+                if (jeepCols[i] != null) jeepCols[i].isTrigger = true;
+            }
+            var jeepSz = jeepSzTr.GetComponent<SafeZone>();
+            if (jeepSz == null) jeepSz = jeepSzTr.gameObject.AddComponent<SafeZone>();
+            jeepSz.RefreshColliders();
+            var jeepSr = jeepSzTr.GetComponent<SpriteRenderer>();
+            if (jeepSr != null) jeepSr.enabled = false;
+            EditorUtility.SetDirty(jeepSzTr.gameObject);
+            EditorUtility.SetDirty(jeepSz);
+        }
+
+        EditorUtility.SetDirty(lightSys.gameObject);
+        EditorSceneManager.MarkSceneDirty(activeScene);
+        EditorSceneManager.SaveScene(activeScene, BARANGAY_SCENE_PATH);
+        Debug.Log($"[BarangayMapSceneBuilder] Normalized {normalizedCount} room SafeZones and LightSystem in {BARANGAY_SCENE_PATH}.");
+    }
+
     private static Transform PrepareEmptyChild(Transform parent, string name)
     {
         Transform t = parent.Find(name);
@@ -1631,6 +1858,9 @@ public static class BarangayMapSceneBuilder
             t = new GameObject(name).transform;
             t.SetParent(parent, false);
         }
+        t.localPosition = Vector3.zero;
+        t.localRotation = Quaternion.identity;
+        t.localScale = Vector3.one;
         for (int i = t.childCount - 1; i >= 0; i--)
         {
             Object.DestroyImmediate(t.GetChild(i).gameObject);

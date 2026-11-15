@@ -110,6 +110,72 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     private ShadowCaster2D runtimeShadowCaster;
     private float currentProgress = 0f;
 
+    private static bool s_LocalSpectatorBypass;
+    private static Collider2D s_LocalSpectatorCollider;
+
+    public static void SetLocalSpectatorDoorBypass(bool bypass, Collider2D localPlayerCollider)
+    {
+        s_LocalSpectatorBypass = bypass;
+        s_LocalSpectatorCollider = bypass ? localPlayerCollider : null;
+        for (int i = 0; i < AllDoors.Count; i++)
+        {
+            var door = AllDoors[i];
+            if (door != null)
+            {
+                door.ApplyLocalSpectatorBypass(bypass, localPlayerCollider);
+            }
+        }
+    }
+
+    private bool IsExcludedFromSpectatorBypass()
+    {
+        string lower = gameObject.name.ToLowerInvariant();
+        return lower.Contains("jeepney") || lower.Contains("ramp");
+    }
+
+    public void ApplyLocalSpectatorBypass(bool bypass, Collider2D localPlayerCollider)
+    {
+        if (IsExcludedFromSpectatorBypass()) return;
+
+        // NEVER disable runtimeCollider.enabled (Host runs server ghost physics/LOS too);
+        // use Physics2D.IgnoreCollision so only the dead local player walks through closed/locked doors.
+        if (localPlayerCollider != null)
+        {
+            if (runtimeCollider != null)
+            {
+                Physics2D.IgnoreCollision(localPlayerCollider, runtimeCollider, bypass);
+            }
+            var rootCols = GetComponents<Collider2D>();
+            for (int i = 0; i < rootCols.Length; i++)
+            {
+                if (rootCols[i] != null && !rootCols[i].isTrigger)
+                {
+                    Physics2D.IgnoreCollision(localPlayerCollider, rootCols[i], bypass);
+                }
+            }
+        }
+
+        if (runtimeRenderer != null)
+        {
+            runtimeRenderer.enabled = !bypass;
+        }
+        if (!usesReferenceSprites)
+        {
+            var fallbackSr = GetComponent<SpriteRenderer>();
+            if (fallbackSr != null) fallbackSr.enabled = !bypass;
+        }
+
+        if (runtimeShadowCaster != null)
+        {
+            runtimeShadowCaster.enabled = !bypass && (!swapSpriteWhenOpen || currentProgress < 0.2f);
+        }
+        else if (!usesReferenceSprites)
+        {
+            var fallbackShadow = GetComponent<ShadowCaster2D>();
+            if (fallbackShadow != null) fallbackShadow.enabled = !bypass;
+        }
+    }
+
     // Cached poses
     private Vector3 closedPos;
     private Quaternion closedRot;
@@ -184,6 +250,10 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         {
             currentProgress = isOpen.Value ? 1f : 0f;
             ApplyProgress(currentProgress);
+        }
+        if (s_LocalSpectatorBypass && s_LocalSpectatorCollider != null)
+        {
+            ApplyLocalSpectatorBypass(true, s_LocalSpectatorCollider);
         }
         isOpen.OnValueChanged += (oldVal, newVal) =>
         {
@@ -520,9 +590,13 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
         // Swap sprite if configured and open sprite is different
         bool didSwapSprite = swapSpriteWhenOpen && runtimeRenderer != null && openDoorRef != null && openDoorRef.sprite != null && openDoorRef.sprite != closedDoorRef.sprite;
-        if (didSwapSprite)
+        if (runtimeRenderer != null)
         {
-            runtimeRenderer.sprite = (t >= 0.5f) ? openDoorRef.sprite : closedDoorRef.sprite;
+            runtimeRenderer.enabled = !(s_LocalSpectatorBypass && !IsExcludedFromSpectatorBypass());
+            if (didSwapSprite)
+            {
+                runtimeRenderer.sprite = (t >= 0.5f) ? openDoorRef.sprite : closedDoorRef.sprite;
+            }
         }
 
         // Disable obstacle collider when open if enabled (interactionTriggerCollider stays enabled)
@@ -537,9 +611,10 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
 
         // For non-swinging swap doors (e.g. cabinets / ramps), disable shadow blocker when open
-        if (runtimeShadowCaster != null && didSwapSprite)
+        if (runtimeShadowCaster != null)
         {
-            runtimeShadowCaster.enabled = (t < 0.2f);
+            bool bypassed = s_LocalSpectatorBypass && !IsExcludedFromSpectatorBypass();
+            runtimeShadowCaster.enabled = !bypassed && (!didSwapSprite || t < 0.2f);
         }
     }
 
@@ -584,6 +659,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     public void Interact()
     {
         if (!allowPlayerInteract) return;
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
 
         if (IsLocked)
         {
@@ -697,8 +773,12 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ToggleDoorRpc()
+    private void ToggleDoorRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         if (!allowPlayerInteract || isLocked.Value) return;
         ToggleDoor();
     }

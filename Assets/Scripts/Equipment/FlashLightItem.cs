@@ -65,6 +65,7 @@ public class FlashlightItem : EquipmentItem
     /// </summary>
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (IsOwner || IsHeldByLocalPlayer) // Only the person holding it can toggle it
         {
             ToggleLightRpc();
@@ -72,8 +73,9 @@ public class FlashlightItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void ToggleLightRpc()
+    public void ToggleLightRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         isLightOn.Value = !isLightOn.Value;
     }
 
@@ -85,9 +87,9 @@ public class FlashlightItem : EquipmentItem
     {
         base.UpdateVisuals();
 
-        // The item itself is visible if it is held, on the ground, or placed.
-        bool isVisible = isInHand.Value || IsOnGround || IsPlaced;
-        
+        // Living beams must stay completely off while carried by a dead spectator
+        bool isVisible = (isInHand.Value || IsOnGround || IsPlaced) && !IsHeldByDeadPlayer();
+
         if (spotlight != null)
         {
             // The light beam should ONLY be enabled if the flashlight is visible AND turned on

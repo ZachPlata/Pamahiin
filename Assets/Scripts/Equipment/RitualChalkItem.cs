@@ -380,6 +380,7 @@ public class RitualChalkItem : EquipmentItem
 
     public override void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (IsPlaced)
         {
             var exorcismManager = GetExorcismManager();
@@ -462,6 +463,7 @@ public class RitualChalkItem : EquipmentItem
     /// </summary>
     public override void UseSecondary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (!IsInsideGhostRoom())
         {
             Debug.Log("[RitualChalkItem] Location check failed: Ritual Chalk can only be right-clicked inside the Ghost Room.");

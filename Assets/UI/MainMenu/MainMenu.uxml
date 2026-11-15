@@ -78,12 +78,6 @@
                     <ui:Label name="lbl-sfx" text="100%" class="slider-value" />
                 </ui:VisualElement>
 
-                <ui:VisualElement class="slider-row">
-                    <ui:Label text="Voice" class="slider-label" />
-                    <ui:Slider name="slider-voice" low-value="0" high-value="1" class="setting-slider" />
-                    <ui:Label name="lbl-voice" text="100%" class="slider-value" />
-                </ui:VisualElement>
-
                 <!-- GRAPHICS -->
                 <ui:Label text="GRAPHICS" class="section-label" />
 

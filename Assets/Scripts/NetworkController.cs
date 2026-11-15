@@ -130,6 +130,11 @@ public class NetworkController : MonoBehaviour
                 LoadingScreenManager.Instance.SetProgress(0.72f, "Deploying van equipment...");
             }
 
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                PlayerCorpse.DespawnAllServer();
+            }
+
             foreach (var clientId in clientsCompleted)
             {
                 if (NetworkManager.Singleton.ConnectedClients.TryGetValue(clientId, out var client))
@@ -140,6 +145,10 @@ public class NetworkController : MonoBehaviour
                         var pc = client.PlayerObject.GetComponent<PlayerController>();
                         if (pc != null)
                         {
+                            if (NetworkManager.Singleton.IsServer && !pc.IsAlive)
+                            {
+                                pc.RevivePlayer();
+                            }
                             pc.ServerTeleportTo(spawnPos);
                             pc.RestoreSanity(100f);
                         }
@@ -163,6 +172,11 @@ public class NetworkController : MonoBehaviour
                 LoadingScreenManager.Instance.SetProgress(0.72f, "Restoring Safe House armory...");
             }
 
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+            {
+                PlayerCorpse.DespawnAllServer();
+            }
+
             var spawnPoint = UnityEngine.Object.FindAnyObjectByType<PlayerSpawnPoint>();
             Vector3 basePos = spawnPoint != null ? spawnPoint.transform.position : new Vector3(0f, -0.35f, 0f);
 
@@ -180,6 +194,10 @@ public class NetworkController : MonoBehaviour
                             if (client.PlayerObject.IsOwner)
                             {
                                 pc.enabled = true;
+                            }
+                            if (NetworkManager.Singleton.IsServer && !pc.IsAlive)
+                            {
+                                pc.RevivePlayer();
                             }
                             pc.ServerTeleportTo(spawnPos);
                             pc.RestoreSanity(100f);
@@ -424,6 +442,9 @@ public class NetworkController : MonoBehaviour
             activeClientIntermissionFailsafeRoutine = null;
         }
         EndGameRevealController.ClearPendingReveal();
+        WeatherManager.SetLocalInBurialMap(false);
+        DeathSequenceController.Instance?.CancelAndReset();
+        GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
         LoadingScreenManager.Instance?.HideIntermission(0.15f);
         StopLanResponder();
         CurrentPartyCode = string.Empty;
@@ -502,6 +523,7 @@ public class NetworkController : MonoBehaviour
 
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
         {
+            PlayerCorpse.DespawnAllServer();
             TruckGearSpawner.CleanupAllGhostOrbs();
         }
         TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();

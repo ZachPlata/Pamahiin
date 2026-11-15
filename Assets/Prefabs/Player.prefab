@@ -181,6 +181,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 1479513550
   InScenePlacedSourceGlobalObjectIdHash: 0
+  m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
@@ -216,11 +217,18 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   rotationDeadzone: 0.04
+  playerCorpsePrefab: {fileID: 697410921823162437, guid: 4fb8e6ac495dbf440b8f533e90e5b848, type: 3}
+  darkSanityDrainRate: 0.75
   isGodMode:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0
       MaxSecondsBetweenUpdates: 0
     m_InternalValue: 0
+  playerAmbientRadius: 0.58
+  playerAmbientInnerRadius: 0.08
+  playerAmbientIntensity: 0.34
+  playerAmbientFalloff: 0.72
+  playerAmbientColor: {r: 0.84, g: 0.89, b: 0.96, a: 1}
 --- !u!114 &4045949343375041383
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -309,7 +317,7 @@ MonoBehaviour:
   m_Intensity: 1
   m_LightVolumeIntensity: 1
   m_LightVolumeEnabled: 0
-  m_ApplyToSortingLayers: 6bc7a45e3569fbc0000000002b2edc1f9171b5bc71a0e42e
+  m_ApplyToSortingLayers: 6bc7a45e3569fbc0000000002b2edc1f9171b5bc71a0e42ei
   m_LightCookieSprite: {fileID: 0}
   m_DeprecatedPointLightCookieSprite: {fileID: 0}
   m_LightOrder: 0
@@ -324,6 +332,9 @@ MonoBehaviour:
   m_ShadowSoftnessFalloffIntensity: 0.5
   m_ShadowVolumeIntensityEnabled: 0
   m_ShadowVolumeIntensity: 0.75
+  m_RenderingLayersMask:
+    serializedVersion: 0
+    m_Bits: 1
   m_LocalBounds:
     m_Center: {x: 0, y: -0.00000011920929, z: 0}
     m_Extent: {x: 0.9985302, y: 0.99853027, z: 0}

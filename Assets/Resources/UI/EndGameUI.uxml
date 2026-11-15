@@ -8,6 +8,7 @@
             <ui:VisualElement class="result-box">
                 <ui:Label text="The entity haunting this location was a..." class="sub-title" />
                 <ui:Label name="lbl-true-ghost" text="[Ghost Name]" class="true-ghost-label" />
+                <ui:Label name="lbl-deceased-badge" text="DECEASED  •  50% PAYOUT PENALTY" class="deceased-badge hidden" />
             </ui:VisualElement>
 
             <ui:VisualElement class="guess-box">

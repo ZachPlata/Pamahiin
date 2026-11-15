@@ -326,12 +326,14 @@ public class VideoCameraItem : EquipmentItem
 
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         TogglePowerRpc();
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void TogglePowerRpc()
+    public void TogglePowerRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         isPoweredOn.Value = !isPoweredOn.Value;
     }
 
@@ -428,7 +430,8 @@ public class VideoCameraItem : EquipmentItem
             }
         }
 
-        bool nightVisionActive = IsLocallyHeldForNightVision() && isPoweredOn.Value;
+        bool localAlive = PlayerController.LocalInstance == null || PlayerController.LocalInstance.IsAlive;
+        bool nightVisionActive = localAlive && !IsHeldByDeadPlayer() && IsLocallyHeldForNightVision() && isPoweredOn.Value;
 
         if (localCamera != null)
         {
@@ -448,6 +451,10 @@ public class VideoCameraItem : EquipmentItem
             else
             {
                 RestoreLocalCameraOverridesIfIdle();
+                if (GhostSpectatorVisuals.Instance != null && GhostSpectatorVisuals.Instance.IsActive && cameraData != null)
+                {
+                    cameraData.renderPostProcessing = true;
+                }
             }
         }
 

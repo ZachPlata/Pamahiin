@@ -170,6 +170,11 @@ public class LobbySceneController : MonoBehaviour
     {
         yield return new WaitForSeconds(0.15f);
 
+        // Ensure any residual death cutscene, burial pit mode, or spectator post-FX are cleared upon entering Safe House Lobby
+        WeatherManager.SetLocalInBurialMap(false);
+        DeathSequenceController.Instance?.CancelAndReset();
+        GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
+
         Transform spawnTrans = defaultSpawnPoint;
         if (spawnTrans == null)
         {
@@ -181,11 +186,25 @@ public class LobbySceneController : MonoBehaviour
 
         // Position all spawned players inside the Safe House Lobby room cleanly with proper network authority
         bool isNetListening = Unity.Netcode.NetworkManager.Singleton != null && Unity.Netcode.NetworkManager.Singleton.IsListening;
+        if (!isNetListening || Unity.Netcode.NetworkManager.Singleton.IsServer)
+        {
+            PlayerCorpse.DespawnAllServer();
+        }
+
         int idx = 0;
         foreach (var player in PlayerController.AllPlayers)
         {
             if (player != null)
             {
+                if (player.IsOwner || !isNetListening || !player.IsSpawned)
+                {
+                    player.enabled = true;
+                }
+                if ((!isNetListening || Unity.Netcode.NetworkManager.Singleton.IsServer) && !player.IsAlive)
+                {
+                    player.RevivePlayer();
+                }
+
                 Vector3 spawnOffset = basePos + new Vector3((idx % 2 == 0 ? -0.2f : 0.2f), (idx / 2) * 0.2f, 0f);
                 if (!isNetListening || !player.IsSpawned || player.IsOwner)
                 {

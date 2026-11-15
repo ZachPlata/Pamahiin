@@ -91,6 +91,7 @@ public class PlayerFootstepAudio : MonoBehaviour
     public void PlayFootstep()
     {
         if (audioSource == null) return;
+        if (playerController != null && !playerController.IsAlive) return;
         if (Time.time - lastStepTime < minStepInterval) return;
         lastStepTime = Time.time;
 

@@ -12,6 +12,7 @@ public class EndGameRevealController : MonoBehaviour
         public string playerGuess;
         public bool isCorrectGhost;
         public bool isGhostDefeated;
+        public bool isDeceased;
         public bool hasPayout;
         public MatchPayoutBreakdown payout;
     }
@@ -26,6 +27,7 @@ public class EndGameRevealController : MonoBehaviour
     private VisualElement endgameOverlay;
 
     private Label lblTrueGhost;
+    private Label lblDeceasedBadge;
     private Label lblYourGuess;
     private Label lblResultStatus;
 
@@ -43,6 +45,7 @@ public class EndGameRevealController : MonoBehaviour
     public static void ClearPendingReveal()
     {
         pendingReveal = default;
+        GameMatchManager.ResetLocalMatchEndFlags();
     }
 
     /// <summary>
@@ -65,6 +68,9 @@ public class EndGameRevealController : MonoBehaviour
                                (GameMatchManager.Instance != null && GameMatchManager.Instance.IsGhostDefeated) ||
                                (ExorcismManager.Instance != null && ExorcismManager.Instance.IsExorcismCompleted);
 
+        bool isDeceased = GameMatchManager.WasLocalPlayerDeadAtMatchEnd ||
+                          (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive);
+
         ProgressionAndLoadoutManager.EnsureInstance();
         var mgr = ProgressionAndLoadoutManager.Instance;
         MatchPayoutBreakdown breakdown = default;
@@ -74,7 +80,8 @@ public class EndGameRevealController : MonoBehaviour
             breakdown = mgr.CalculateAndAwardMatchPayout(
                 correctEvidences,
                 isCorrectGhost,
-                isGhostDefeated);
+                isGhostDefeated,
+                isDeceased);
             hasPayout = true;
         }
 
@@ -85,6 +92,7 @@ public class EndGameRevealController : MonoBehaviour
             playerGuess = string.IsNullOrEmpty(playerGuess) ? "None" : playerGuess,
             isCorrectGhost = isCorrectGhost,
             isGhostDefeated = isGhostDefeated,
+            isDeceased = isDeceased,
             hasPayout = hasPayout,
             payout = breakdown
         };
@@ -141,27 +149,7 @@ public class EndGameRevealController : MonoBehaviour
 
     private static PanelSettings ResolvePanelSettings()
     {
-        var docs = UnityEngine.Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include);
-        for (int i = 0; i < docs.Length; i++)
-        {
-            if (docs[i] != null && docs[i].panelSettings != null)
-            {
-                return docs[i].panelSettings;
-            }
-        }
-
-        var loaded = Resources.FindObjectsOfTypeAll<PanelSettings>();
-        if (loaded != null && loaded.Length > 0 && loaded[0] != null)
-        {
-            return loaded[0];
-        }
-
-        var runtimeSettings = ScriptableObject.CreateInstance<PanelSettings>();
-        runtimeSettings.name = "EndGameRevealRuntimePanelSettings";
-        runtimeSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-        runtimeSettings.referenceResolution = new Vector2Int(1920, 1080);
-        runtimeSettings.match = 0.5f;
-        return runtimeSettings;
+        return PamahiinUIThemeUtility.ResolveRuntimePanelSettings();
     }
 
     private void Awake()
@@ -190,6 +178,7 @@ public class EndGameRevealController : MonoBehaviour
         endgameOverlay = root.Q<VisualElement>("endgame-overlay");
 
         lblTrueGhost = root.Q<Label>("lbl-true-ghost");
+        lblDeceasedBadge = root.Q<Label>("lbl-deceased-badge");
         lblYourGuess = root.Q<Label>("lbl-your-guess");
         lblResultStatus = root.Q<Label>("lbl-result-status");
 
@@ -277,6 +266,18 @@ public class EndGameRevealController : MonoBehaviour
         ReenableLocalPlayerComponent();
 
         if (lblTrueGhost != null) lblTrueGhost.text = (data.trueGhostName ?? "UNKNOWN").ToUpper();
+        if (lblDeceasedBadge != null)
+        {
+            if (data.isDeceased)
+            {
+                lblDeceasedBadge.text = "DECEASED  •  50% PAYOUT PENALTY";
+                lblDeceasedBadge.RemoveFromClassList("hidden");
+            }
+            else
+            {
+                lblDeceasedBadge.AddToClassList("hidden");
+            }
+        }
         if (lblYourGuess != null) lblYourGuess.text = string.IsNullOrEmpty(data.playerGuess) ? "None" : data.playerGuess;
 
         if (lblResultStatus != null)
@@ -307,7 +308,10 @@ public class EndGameRevealController : MonoBehaviour
             if (lblPayoutMultiplier != null)
                 lblPayoutMultiplier.text = $"Difficulty Multiplier ({breakdown.difficulty}): {breakdown.difficultyMultiplier:0.0}x";
             if (lblPayoutTotal != null)
-                lblPayoutTotal.text = $"TOTAL EARNED: +${breakdown.totalEarned}   |   NEW BALANCE: ${breakdown.newBalance}";
+            {
+                string penaltySuffix = breakdown.isDeceased ? "  (50% Deceased Penalty)" : string.Empty;
+                lblPayoutTotal.text = $"TOTAL EARNED: +${breakdown.totalEarned}{penaltySuffix}   |   NEW BALANCE: ${breakdown.newBalance}";
+            }
         }
 
         if (returnBtn != null)

@@ -55,7 +55,7 @@ public class StairTeleporter : MonoBehaviour
         if (destinationTeleporter == null) return;
 
         PlayerController player = other.GetComponentInParent<PlayerController>();
-        if (player == null || !player.IsAlive) return;
+        if (player == null || (!player.IsAlive && !player.IsGhostSpectator)) return;
 
         // Only the owner triggers teleports in a networked session; allow offline/unspawned testing.
         bool networked = Unity.Netcode.NetworkManager.Singleton != null
@@ -77,7 +77,10 @@ public class StairTeleporter : MonoBehaviour
     private IEnumerator TeleportRoutine(PlayerController player)
     {
         activeFadeRequests++;
-        GameAudioManager.PlayAt("stair_footsteps", player.transform.position, 0.8f, 1.0f, Random.Range(0.95f, 1.05f), 0.45f, 3.2f, 0.1f);
+        if (player != null && player.IsAlive)
+        {
+            GameAudioManager.PlayAt("stair_footsteps", player.transform.position, 0.8f, 1.0f, Random.Range(0.95f, 1.05f), 0.45f, 3.2f, 0.1f);
+        }
 
         float halfFade = Mathf.Max(0.05f, fadeDuration * 0.45f);
         float t = 0f;
@@ -89,7 +92,7 @@ public class StairTeleporter : MonoBehaviour
         }
         screenFadeAlpha = 1f;
 
-        if (player != null && player.IsAlive)
+        if (player != null && (player.IsAlive || player.IsGhostSpectator))
         {
             Vector3 destPos = destinationTeleporter.GetArrivalPosition();
             destPos.z = player.transform.position.z;

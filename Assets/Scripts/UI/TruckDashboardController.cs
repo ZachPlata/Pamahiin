@@ -36,6 +36,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     private VisualElement cctvRecDot;
     private Label cctvTimer;
     private Label cctvCamIdLabel;
+    private VisualElement cctvNvDot;
     private Label cctvNvBadge;
     private Label cctvTimestamp;
     private Label cctvHudSub;
@@ -68,6 +69,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private RoofFader[] cachedRoofFaders;
     private List<RoofFader> activeHiddenFaders = new List<RoofFader>();
+    private readonly List<PlayerController> sortedSanityPlayers = new List<PlayerController>(4);
 
     private void Awake()
     {
@@ -268,6 +270,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void OnDestroy()
     {
+        PlayerController.OnAnyPlayerSanityStateChanged -= HandlePlayerSanityStateChanged;
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
         RestoreActiveHiddenFaders();
@@ -290,6 +293,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void OnDisable()
     {
+        PlayerController.OnAnyPlayerSanityStateChanged -= HandlePlayerSanityStateChanged;
         RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering -= OnEndCameraRendering;
         RestoreActiveHiddenFaders();
@@ -531,6 +535,8 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void OnEnable()
     {
+        PlayerController.OnAnyPlayerSanityStateChanged -= HandlePlayerSanityStateChanged;
+        PlayerController.OnAnyPlayerSanityStateChanged += HandlePlayerSanityStateChanged;
         RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
         RenderPipelineManager.endCameraRendering += OnEndCameraRendering;
 
@@ -559,6 +565,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         cctvRecDot = root.Q<VisualElement>("cctv-rec-dot");
         cctvTimer = root.Q<Label>("cctv-timer");
         cctvCamIdLabel = root.Q<Label>("cctv-hud-cam-id");
+        cctvNvDot = root.Q<VisualElement>("cctv-nv-dot");
         cctvNvBadge = root.Q<Label>("cctv-nv-badge");
         cctvTimestamp = root.Q<Label>("cctv-timestamp");
         cctvHudSub = root.Q<Label>("cctv-hud-sub");
@@ -622,6 +629,19 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
         view.RemoveFromClassList("hidden-view");
         view.AddToClassList("active-view");
         tab.AddToClassList("active-tab");
+
+        if (view == viewSanity)
+        {
+            UpdateSanityMonitor();
+        }
+    }
+
+    private void HandlePlayerSanityStateChanged()
+    {
+        if (isDashboardOpen && sanityList != null)
+        {
+            UpdateSanityMonitor();
+        }
     }
 
     private void SwitchToPreviousCamera()
@@ -747,12 +767,12 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
             cctvNvColorFilter.style.display = DisplayStyle.None;
         }
 
-        // 3. Update HUD Badge
+        // 3. Update HUD Badge & Square Pixel LED
         if (cctvNvBadge != null)
         {
             if (isCCTVNightVisionOn)
             {
-                cctvNvBadge.text = "● IR NIGHT VISION: ON (B&W)";
+                cctvNvBadge.text = "IR NIGHT VISION: ON (B&W)";
                 cctvNvBadge.RemoveFromClassList("cctv-nv-off");
                 cctvNvBadge.AddToClassList("cctv-nv-on");
             }
@@ -761,6 +781,19 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
                 cctvNvBadge.text = "IR NIGHT VISION: OFF";
                 cctvNvBadge.RemoveFromClassList("cctv-nv-on");
                 cctvNvBadge.AddToClassList("cctv-nv-off");
+            }
+        }
+        if (cctvNvDot != null)
+        {
+            if (isCCTVNightVisionOn)
+            {
+                cctvNvDot.RemoveFromClassList("cctv-nv-dot-off");
+                cctvNvDot.AddToClassList("cctv-nv-dot-on");
+            }
+            else
+            {
+                cctvNvDot.RemoveFromClassList("cctv-nv-dot-on");
+                cctvNvDot.AddToClassList("cctv-nv-dot-off");
             }
         }
 
@@ -787,6 +820,7 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         ToggleDashboard();
     }
     
@@ -883,20 +917,55 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
 
     private void UpdateSanityMonitor()
     {
-        sanityList.Clear();
+        if (sanityList == null) return;
 
-        foreach (var player in PlayerController.AllPlayers)
+        sanityList.Clear();
+        sortedSanityPlayers.Clear();
+
+        var allPlayers = PlayerController.AllPlayers;
+        for (int i = 0; i < allPlayers.Count; i++)
         {
-            if (player == null) continue;
+            if (allPlayers[i] != null)
+            {
+                sortedSanityPlayers.Add(allPlayers[i]);
+            }
+        }
+
+        sortedSanityPlayers.Sort((a, b) => a.OwnerClientId.CompareTo(b.OwnerClientId));
+
+        for (int i = 0; i < sortedSanityPlayers.Count; i++)
+        {
+            var player = sortedSanityPlayers[i];
+            int displayIndex = i + 1;
 
             var row = new VisualElement();
             row.AddToClassList("sanity-row");
 
-            var nameLabel = new Label($"Player {player.OwnerClientId}");
+            string playerLabel = $"Player {displayIndex}" + (player.IsOwner ? " (YOU)" : "");
+            var nameLabel = new Label(playerLabel);
             nameLabel.AddToClassList("sanity-name");
 
-            var sanityValueLabel = new Label($"{Mathf.RoundToInt(player.Sanity)}%");
+            bool isDead = !player.IsAlive;
+            int roundedSanity = Mathf.Clamp(Mathf.RoundToInt(player.Sanity), 0, 100);
+            var sanityValueLabel = new Label(isDead ? "DEAD" : $"{roundedSanity}%");
             sanityValueLabel.AddToClassList("sanity-value");
+
+            if (isDead)
+            {
+                sanityValueLabel.style.color = new StyleColor(new Color(0.55f, 0.77f, 1f, 0.95f));
+            }
+            else if (roundedSanity >= 60)
+            {
+                sanityValueLabel.style.color = new StyleColor(new Color(0.78f, 1f, 0.78f, 1f));
+            }
+            else if (roundedSanity >= 25)
+            {
+                sanityValueLabel.style.color = new StyleColor(new Color(1f, 0.78f, 0.28f, 1f));
+            }
+            else
+            {
+                sanityValueLabel.style.color = new StyleColor(new Color(1f, 0.32f, 0.32f, 1f));
+            }
 
             row.Add(nameLabel);
             row.Add(sanityValueLabel);

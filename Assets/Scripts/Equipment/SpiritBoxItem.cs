@@ -196,7 +196,7 @@ public class SpiritBoxItem : EquipmentItem
     {
         if (staticAudioSource == null) return;
 
-        bool shouldPlay = IsPoweredOn && radioStaticAudio != null;
+        bool shouldPlay = IsPoweredOn && radioStaticAudio != null && !IsHeldByDeadPlayer();
         if (shouldPlay)
         {
             if (staticAudioSource.clip != radioStaticAudio)
@@ -253,6 +253,7 @@ public class SpiritBoxItem : EquipmentItem
     /// </summary>
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (!IsPoweredOn)
         {
             // Power ON (allowed anywhere)
@@ -294,14 +295,16 @@ public class SpiritBoxItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void TogglePowerRpc()
+    public void TogglePowerRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         isPoweredOn.Value = !isPoweredOn.Value;
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void SetPowerRpc(bool state)
+    public void SetPowerRpc(bool state, RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         isPoweredOn.Value = state;
     }
 
@@ -339,7 +342,8 @@ public class SpiritBoxItem : EquipmentItem
             else
             {
                 var uiGo = new GameObject("SpiritBoxDialogueUI");
-                uiGo.AddComponent<UIDocument>();
+                var doc = uiGo.AddComponent<UIDocument>();
+                doc.panelSettings = PamahiinUIThemeUtility.ResolveRuntimePanelSettings(doc.panelSettings);
                 uiGo.AddComponent<SpiritBoxDialogueUI>();
             }
         }
@@ -365,8 +369,9 @@ public class SpiritBoxItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void AskQuestionRpc(int questionIndex)
+    private void AskQuestionRpc(int questionIndex, RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         if (!isPoweredOn.Value) return;
 
         bool ghostResponded = CheckGhostResponse();

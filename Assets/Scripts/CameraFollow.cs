@@ -3,11 +3,42 @@ using Unity.Netcode;
 
 public class CameraFollow : MonoBehaviour
 {
+    public static CameraFollow Instance { get; private set; }
+
     private Transform target;
+    private Transform targetOverride;
 
     private void Awake()
     {
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
         Setup2DAudioListener();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+
+    /// <summary>
+    /// Temporarily redirects the camera (and its 2D_AudioListener child) away from the player
+    /// onto a stage anchor such as the off-bounds Burial Map pit. Pass null to restore normal tracking.
+    /// </summary>
+    public void SetTargetOverride(Transform overrideTarget)
+    {
+        targetOverride = overrideTarget;
+        if (targetOverride != null)
+        {
+            transform.position = new Vector3(targetOverride.position.x, targetOverride.position.y, -10f);
+        }
+        else if (target != null)
+        {
+            transform.position = new Vector3(target.position.x, target.position.y, -10f);
+        }
     }
 
     private void Setup2DAudioListener()
@@ -39,6 +70,12 @@ public class CameraFollow : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (targetOverride != null)
+        {
+            transform.position = new Vector3(targetOverride.position.x, targetOverride.position.y, -10f);
+            return;
+        }
+
         // If we don't have a target yet, look for the local player
         if (target == null)
         {

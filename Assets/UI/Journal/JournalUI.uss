@@ -1,10 +1,12 @@
+@import url("project://database/Assets/Resources/UI/PamahiinTheme.uss");
+
 /* ========================================================
-   PAMAHIIN - PARANORMAL FIELD JOURNAL STYLESHEET
+   PAMAHIIN - PARANORMAL FIELD JOURNAL STYLESHEET (16-BIT)
    ======================================================== */
 
 .overlay {
     flex-grow: 1;
-    background-color: rgba(5, 5, 10, 0.75);
+    background-color: rgba(5, 5, 10, 0.78);
     align-items: center;
     justify-content: center;
     position: absolute;
@@ -25,25 +27,28 @@
 .journal-tabs-bar {
     flex-direction: row;
     align-self: flex-end;
-    margin-right: 20px;
-    margin-bottom: -4px;
+    margin-right: 16px;
+    margin-bottom: -3px;
 }
 
 .journal-tab {
     background-color: rgb(75, 55, 35);
     color: rgb(215, 195, 160);
-    font-size: 12px;
-    -unity-font-style: bold;
-    padding: 6px 11px;
-    border-top-left-radius: 6px;
-    border-top-right-radius: 6px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    border-width: 1px;
+    font-size: 8px;
+    -unity-font-style: normal;
+    padding: 7px 9px;
+    border-radius: 0px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+    border-width: 2px;
     border-bottom-width: 0;
-    border-color: rgb(110, 85, 55);
-    margin-left: 4px;
-    transition-duration: 0.15s;
+    border-top-color: rgb(142, 110, 72);
+    border-left-color: rgb(142, 110, 72);
+    border-right-color: rgb(52, 36, 22);
+    margin-left: 3px;
+    transition-duration: 0.08s;
 }
 
 .journal-tab:hover {
@@ -54,7 +59,9 @@
 .active-tab {
     background-color: rgb(130, 95, 55);
     color: rgb(255, 235, 180);
-    border-color: rgb(160, 120, 75);
+    border-top-color: rgb(214, 174, 96);
+    border-left-color: rgb(214, 174, 96);
+    border-right-color: rgb(76, 52, 28);
 }
 
 .tab-close-btn {
@@ -71,7 +78,7 @@
     background-color: rgb(244, 238, 222); /* Aged Parchment */
     width: 960px;
     height: 610px;
-    border-radius: 8px;
+    border-radius: 0px;
     border-width: 3px;
     border-color: rgb(70, 50, 30);
     overflow: hidden;
@@ -89,8 +96,11 @@
 
 .journal-page {
     flex-grow: 1;
+    flex-shrink: 1;
     width: 50%;
-    padding: 24px 28px;
+    height: 100%;
+    overflow: hidden;
+    padding: 22px 26px;
     justify-content: flex-start;
 }
 
@@ -108,7 +118,7 @@
 .page-title {
     font-size: 24px;
     color: rgb(45, 35, 25);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     margin-bottom: 8px;
     -unity-text-align: middle-center;
     letter-spacing: 1px;
@@ -120,7 +130,7 @@
 .instruction-text {
     font-size: 13px;
     color: rgb(95, 80, 65);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
     white-space: normal;
     margin-bottom: 14px;
     -unity-text-align: middle-center;
@@ -140,7 +150,7 @@
     background-color: rgb(34, 28, 24);
     border-width: 4px;
     border-color: rgb(150, 115, 65);
-    border-radius: 10px;
+    border-radius: 0px;
     padding: 24px;
 }
 
@@ -149,18 +159,18 @@
     height: 100%;
     border-width: 2px;
     border-color: rgba(175, 135, 75, 0.45);
-    border-radius: 6px;
+    border-radius: 0px;
     align-items: center;
     justify-content: center;
     padding: 30px;
 }
 
 .cover-main-title {
-    font-size: 50px;
+    font-size: 36px;
     color: rgb(245, 210, 130);
-    -unity-font-style: bold;
-    letter-spacing: 8px;
-    text-shadow: 0 0 6px rgba(210, 160, 60, 0.4);
+    -unity-font-style: normal;
+    letter-spacing: 6px;
+    text-shadow: 3px 3px 0px rgba(24, 12, 8, 0.92);
 }
 
 .cover-divider {
@@ -172,37 +182,50 @@
 }
 
 .cover-sub-title {
-    font-size: 14px;
+    font-size: 10px;
     color: rgb(210, 185, 145);
-    -unity-font-style: bold;
-    letter-spacing: 3px;
-    margin-top: 2px;
+    -unity-font-style: normal;
+    letter-spacing: 2px;
+    margin-top: 4px;
+    white-space: normal;
+    -unity-text-align: middle-center;
 }
 
 .cover-edition-text {
-    font-size: 13px;
-    color: rgb(165, 140, 110);
-    -unity-font-style: italic;
-    margin-top: 4px;
-    margin-bottom: 35px;
+    font-size: 9px;
+    color: rgb(185, 158, 122);
+    -unity-font-style: normal;
+    margin-top: 6px;
+    margin-bottom: 30px;
+    white-space: normal;
+    -unity-text-align: middle-center;
 }
 
 .cover-open-btn {
     background-color: rgb(125, 40, 30);
     color: rgb(255, 240, 205);
-    font-size: 16px;
-    -unity-font-style: bold;
-    padding: 12px 36px;
-    border-radius: 4px;
-    border-width: 1px;
-    border-color: rgb(210, 165, 80);
+    font-size: 11px;
+    -unity-font-style: normal;
+    padding: 12px 26px;
+    border-radius: 0px;
+    border-width: 2px;
+    border-top-color: rgb(232, 188, 102);
+    border-left-color: rgb(232, 188, 102);
+    border-right-color: rgb(92, 46, 22);
+    border-bottom-color: rgb(92, 46, 22);
     letter-spacing: 1px;
-    transition-duration: 0.15s;
+    transition-duration: 0.08s;
 }
 
 .cover-open-btn:hover {
-    background-color: rgb(160, 50, 40);
-    scale: 1.03;
+    background-color: rgb(162, 52, 40);
+    color: rgb(255, 250, 224);
+    border-top-color: rgb(248, 214, 132);
+    border-left-color: rgb(248, 214, 132);
+}
+
+.cover-open-btn:active {
+    translate: 0px 2px;
 }
 
 /* ================= SPREAD 1: TABLE OF CONTENTS ================= */
@@ -217,51 +240,56 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    background-color: rgba(225, 215, 195, 0.45);
-    border-width: 1px;
-    border-color: rgb(190, 170, 145);
-    border-radius: 4px;
+    background-color: rgba(225, 215, 195, 0.52);
+    border-width: 2px;
+    border-top-color: rgb(210, 192, 164);
+    border-left-color: rgb(210, 192, 164);
+    border-right-color: rgb(146, 124, 96);
+    border-bottom-color: rgb(146, 124, 96);
+    border-radius: 0px;
     padding: 8px 14px;
     margin-bottom: 6px;
-    transition-duration: 0.15s;
+    transition-duration: 0.08s;
 }
 
 .toc-item-button:hover {
     background-color: rgb(235, 215, 175);
-    border-color: rgb(140, 100, 60);
-    scale: 1.02;
+    border-top-color: rgb(168, 122, 68);
+    border-left-color: rgb(168, 122, 68);
+    border-right-color: rgb(110, 76, 38);
+    border-bottom-color: rgb(110, 76, 38);
 }
 
 .toc-item-text {
-    font-size: 14px;
+    font-size: 8px;
     color: rgb(45, 35, 25);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .toc-item-page {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(130, 60, 40);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .protocol-box {
     background-color: rgba(230, 220, 200, 0.6);
     border-width: 1px;
     border-color: rgb(190, 175, 150);
-    border-radius: 6px;
+    border-radius: 0px;
     padding: 14px;
 }
 
 .protocol-heading {
-    font-size: 14px;
+    font-size: 10px;
     color: rgb(140, 45, 35);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     margin-top: 6px;
     margin-bottom: 2px;
 }
 
 .protocol-body {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(60, 50, 40);
     white-space: normal;
     margin-bottom: 8px;
@@ -282,7 +310,7 @@
     background-color: rgb(42, 32, 24);
     border-width: 1px;
     border-color: rgb(150, 115, 65);
-    border-radius: 4px;
+    border-radius: 0px;
     padding: 6px 10px;
     margin-right: 6px;
 }
@@ -292,24 +320,24 @@
 }
 
 .case-meta-key {
-    font-size: 10px;
+    font-size: 8px;
     color: rgb(205, 180, 140);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     letter-spacing: 0.5px;
     margin-right: 6px;
 }
 
 .case-meta-value {
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(245, 210, 130);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .case-section-card {
     background-color: rgba(230, 220, 200, 0.58);
     border-width: 1px;
     border-color: rgb(185, 165, 135);
-    border-radius: 5px;
+    border-radius: 0px;
     padding: 12px 14px;
     margin-bottom: 12px;
 }
@@ -319,51 +347,51 @@
 }
 
 .case-field-label {
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(130, 50, 40);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     letter-spacing: 1px;
     margin-bottom: 4px;
 }
 
 .case-ghost-name {
-    font-size: 22px;
+    font-size: 13px;
     color: rgb(35, 25, 18);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     letter-spacing: 0.5px;
     white-space: normal;
 }
 
 .case-bg-subtitle {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(85, 45, 25);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     margin-bottom: 6px;
 }
 
 .case-ghost-background {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(55, 45, 35);
     white-space: normal;
 }
 
 .case-footer-note {
     margin-top: auto;
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(105, 85, 65);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
     white-space: normal;
     padding-top: 6px;
 }
 
 .blueprint-map-title {
-    font-size: 17px;
+    font-size: 10px;
     margin-bottom: 4px;
     padding-bottom: 5px;
 }
 
 .blueprint-subtitle {
-    font-size: 12px;
+    font-size: 9px;
     margin-bottom: 8px;
 }
 
@@ -375,7 +403,7 @@
     background-color: rgb(28, 22, 18);
     border-width: 2px;
     border-color: rgb(150, 115, 65);
-    border-radius: 5px;
+    border-radius: 0px;
     padding: 6px;
 }
 
@@ -390,9 +418,9 @@
 }
 
 .blueprint-unavailable {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(210, 185, 145);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
     white-space: normal;
     -unity-text-align: middle-center;
     padding: 16px;
@@ -405,7 +433,7 @@
     background-color: rgba(235, 225, 210, 0.6);
     border-width: 1px;
     border-color: rgb(200, 185, 160);
-    border-radius: 6px;
+    border-radius: 0px;
     padding: 10px;
     margin-bottom: 12px;
 }
@@ -416,7 +444,7 @@
     margin-right: 12px;
     border-width: 1px;
     border-color: rgb(160, 140, 115);
-    border-radius: 4px;
+    border-radius: 0px;
     background-color: rgba(255, 255, 255, 0.4);
     -unity-background-scale-mode: scale-to-fit;
 }
@@ -436,26 +464,185 @@
 }
 
 .equip-name {
-    font-size: 15px;
+    font-size: 10px;
     color: rgb(40, 30, 20);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     letter-spacing: 0.5px;
 }
 
 .equip-role {
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(130, 50, 40);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     margin-bottom: 3px;
 }
 
 .equip-desc {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(70, 60, 50);
     white-space: normal;
 }
 
-/* ================= SPREADS 5, 6, 7: GHOST DOSSIERS ================= */
+/* ================= SPREAD 5: ENTITY COMPENDIUM (20 GHOSTS) ================= */
+.dossier-tight-instruction {
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.dossier-selector-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+.dossier-selector-grid {
+    flex-direction: column;
+    width: 100%;
+    padding-right: 4px;
+}
+
+.dossier-selector-row {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+}
+
+.dossier-select-btn {
+    white-space: normal;
+    width: 48.5%;
+    flex-shrink: 0;
+    background-color: rgba(220, 208, 185, 0.75);
+    color: rgb(48, 36, 26);
+    font-size: 9px;
+    -unity-font-style: normal;
+    padding: 6px 8px;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-radius: 0px;
+    border-width: 1px;
+    border-color: rgb(165, 145, 115);
+    -unity-text-align: middle-left;
+    transition-duration: 0.1s;
+}
+
+.dossier-select-btn:hover {
+    background-color: rgb(235, 220, 190);
+    border-color: rgb(130, 90, 50);
+}
+
+.dossier-select-btn-active {
+    background-color: rgb(135, 42, 34);
+    color: rgb(255, 240, 210);
+    border-color: rgb(95, 22, 18);
+}
+
+.dossier-select-btn-active:hover {
+    background-color: rgb(155, 50, 40);
+}
+
+.dossier-nav-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top-width: 1px;
+    border-top-color: rgb(205, 190, 165);
+}
+
+.dossier-nav-btn {
+    background-color: rgb(90, 65, 42);
+    color: rgb(245, 235, 215);
+    font-size: 8px;
+    -unity-font-style: normal;
+    padding: 5px 12px;
+    margin: 0;
+    border-radius: 0px;
+    border-width: 1px;
+    border-color: rgb(60, 42, 26);
+}
+
+.dossier-nav-btn:hover {
+    background-color: rgb(120, 88, 56);
+}
+
+.dossier-counter-label {
+    font-size: 9px;
+    color: rgb(70, 50, 35);
+    -unity-font-style: normal;
+}
+
+.dossier-right-header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+}
+
+.dossier-right-title-col {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-right: 12px;
+}
+
+.dossier-right-art-frame {
+    width: 150px;
+    height: 150px;
+    border-width: 3px;
+    border-color: rgb(90, 65, 45);
+    border-radius: 0px;
+    overflow: hidden;
+    background-color: rgb(20, 15, 10);
+    flex-shrink: 0;
+}
+
+.dossier-detail-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    width: 100%;
+    padding-right: 4px;
+}
+
+.dossier-sigil-box {
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(32, 24, 20);
+}
+
+.dossier-sigil-index {
+    font-size: 9px;
+    color: rgb(195, 155, 95);
+    -unity-font-style: normal;
+    letter-spacing: 1px;
+}
+
+.dossier-sigil-mono {
+    font-size: 24px;
+    color: rgb(235, 210, 165);
+    -unity-font-style: normal;
+    letter-spacing: 2px;
+    margin-top: 4px;
+}
+
+.dossier-caption-text {
+    font-size: 8px;
+    color: rgb(85, 70, 55);
+    -unity-font-style: normal;
+    white-space: normal;
+    margin-bottom: 8px;
+}
+
 .ghost-art-page {
     align-items: center;
     justify-content: center;
@@ -467,7 +654,7 @@
     height: 380px;
     border-width: 3px;
     border-color: rgb(90, 65, 45);
-    border-radius: 4px;
+    border-radius: 0px;
     overflow: hidden;
     background-color: rgb(20, 15, 10);
 }
@@ -481,38 +668,55 @@
 .ghost-art-tikbalang { background-image: url('project://database/Assets/UI/Journal/tikbalang_art.jpg'); }
 .ghost-art-kapre { background-image: url('project://database/Assets/UI/Journal/kapre_art.jpg'); }
 .ghost-art-manananggal { background-image: url('project://database/Assets/UI/Journal/manananggal_art.jpg'); }
+.ghost-art-multo { background-image: url('project://database/Assets/UI/Journal/multo_art.jpg'); }
+.ghost-art-kaperosa { background-image: url('project://database/Assets/UI/Journal/kaperosa_art.jpg'); }
+.ghost-art-pasatsat { background-image: url('project://database/Assets/UI/Journal/pasatsat_art.jpg'); }
+.ghost-art-kalag { background-image: url('project://database/Assets/UI/Journal/kalag_art.jpg'); }
+.ghost-art-kumakatok { background-image: url('project://database/Assets/UI/Journal/kumakatok_art.jpg'); }
+.ghost-art-akop { background-image: url('project://database/Assets/UI/Journal/akop_art.jpg'); }
+.ghost-art-ibwa { background-image: url('project://database/Assets/UI/Journal/ibwa_art.jpg'); }
+.ghost-art-paring-pugot { background-image: url('project://database/Assets/UI/Journal/paring_pugot_art.jpg'); }
+.ghost-art-amalanhig { background-image: url('project://database/Assets/UI/Journal/amalanhig_art.jpg'); }
+.ghost-art-santelmo { background-image: url('project://database/Assets/UI/Journal/santelmo_art.jpg'); }
+.ghost-art-bagat { background-image: url('project://database/Assets/UI/Journal/bagat_art.jpg'); }
+.ghost-art-mantiw { background-image: url('project://database/Assets/UI/Journal/mantiw_art.jpg'); }
+.ghost-art-tiyanak { background-image: url('project://database/Assets/UI/Journal/tiyanak_art.jpg'); }
+.ghost-art-tamawo { background-image: url('project://database/Assets/UI/Journal/tamawo_art.jpg'); }
+.ghost-art-mangkukutod { background-image: url('project://database/Assets/UI/Journal/mangkukutod_art.jpg'); }
 
 .ghost-caption-text {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(100, 85, 70);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
     margin-top: 10px;
     -unity-text-align: middle-center;
 }
 
 .ghost-header-name {
-    font-size: 26px;
+    font-size: 13px;
     color: rgb(40, 30, 20);
-    -unity-font-style: bold;
-    letter-spacing: 2px;
+    -unity-font-style: normal;
+    letter-spacing: 1.5px;
     border-bottom-width: 2px;
     border-bottom-color: rgb(140, 45, 35);
-    padding-bottom: 4px;
+    padding-bottom: 3px;
     margin-bottom: 4px;
+    white-space: normal;
 }
 
 .ghost-sub-title {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(130, 50, 40);
-    -unity-font-style: italic;
-    margin-bottom: 12px;
+    -unity-font-style: normal;
+    margin-bottom: 4px;
+    white-space: normal;
 }
 
 .ghost-lore-paragraph {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(55, 45, 35);
     white-space: normal;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 }
 
 .ghost-traits-section {
@@ -520,62 +724,64 @@
     border-left-width: 3px;
     border-left-color: rgb(120, 80, 50);
     padding: 8px 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .ghost-section-label {
-    font-size: 12px;
+    font-size: 8px;
     color: rgb(90, 60, 40);
-    -unity-font-style: bold;
-    margin-bottom: 4px;
+    -unity-font-style: normal;
+    margin-bottom: 3px;
 }
 
 .ghost-trait-bullet {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(60, 50, 40);
     white-space: normal;
     margin-bottom: 3px;
 }
 
 .ghost-evidence-tag-box {
-    margin-bottom: 12px;
+    margin-bottom: 0;
 }
 
 .ghost-evidence-chips {
     flex-direction: row;
-    margin-top: 4px;
+    flex-wrap: wrap;
+    margin-top: 2px;
 }
 
 .evidence-chip {
     background-color: rgb(140, 45, 35);
     color: white;
-    font-size: 12px;
-    -unity-font-style: bold;
-    padding: 4px 10px;
-    border-radius: 3px;
-    margin-right: 6px;
+    font-size: 8px;
+    -unity-font-style: normal;
+    padding: 3px 8px;
+    border-radius: 0px;
+    margin-right: 5px;
+    margin-bottom: 4px;
 }
 
 .ghost-tip-text {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(100, 75, 55);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
     background-color: rgba(240, 230, 205, 0.8);
     border-width: 1px;
     border-color: rgb(200, 180, 140);
-    border-radius: 4px;
+    border-radius: 0px;
     padding: 6px 10px;
     white-space: normal;
 }
 
-/* ================= SPREAD 8: EVIDENCE & DEDUCTION ================= */
+/* ================= SPREAD 6: EVIDENCE & DEDUCTION ================= */
 .evidence-list {
     flex-grow: 1;
 }
 
 .evidence-toggle {
     margin-bottom: 14px;
-    font-size: 17px;
+    font-size: 10px;
     color: rgb(50, 40, 30);
 }
 
@@ -583,41 +789,76 @@
     min-width: 200px;
 }
 
+.deduction-tight-instruction {
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.deduction-status-text {
+    margin-top: 8px;
+    margin-bottom: 0;
+    color: rgb(120, 45, 35);
+    -unity-font-style: normal;
+}
+
 .button-container {
     align-items: center;
     margin-top: auto;
+    flex-shrink: 0;
 }
 
 .close-button {
     background-color: rgb(100, 90, 80);
     color: white;
-    font-size: 15px;
+    font-size: 10px;
     padding: 8px 24px;
-    border-radius: 5px;
-    margin-top: 10px;
+    border-radius: 0px;
+    margin-top: 8px;
 }
 
 .close-button:hover {
     background-color: rgb(130, 120, 110);
 }
 
+.deduction-ghosts-scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
 .ghost-buttons-container {
+    flex-direction: column;
+    width: 100%;
+    padding-right: 4px;
+}
+
+.deduction-ghosts-row {
     flex-direction: row;
-    justify-content: space-around;
-    margin-bottom: 20px;
+    justify-content: space-between;
+    width: 100%;
+    margin-bottom: 6px;
+    flex-shrink: 0;
 }
 
 .ghost-button {
+    white-space: normal;
+    width: 48.5%;
+    flex-shrink: 0;
     background-color: rgb(210, 200, 180);
     color: rgb(50, 40, 30);
-    font-size: 15px;
-    -unity-font-style: bold;
-    padding: 8px 10px;
-    border-radius: 5px;
+    font-size: 9px;
+    -unity-font-style: normal;
+    padding: 6px 8px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(100, 80, 50);
-    flex-grow: 1;
-    margin: 0 4px;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    -unity-text-align: middle-center;
     transition-duration: 0.1s;
 }
 
@@ -668,8 +909,8 @@
     border-width: 2px;
     border-top-width: 0;
     border-color: rgb(70, 50, 30);
-    border-bottom-left-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
     padding: 8px 18px;
     width: 960px;
 }
@@ -677,10 +918,10 @@
 .nav-button {
     background-color: rgb(90, 65, 45);
     color: rgb(235, 220, 190);
-    font-size: 13px;
-    -unity-font-style: bold;
+    font-size: 9px;
+    -unity-font-style: normal;
     padding: 6px 14px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(130, 95, 65);
     transition-duration: 0.15s;
@@ -692,9 +933,9 @@
 }
 
 .page-indicator-label {
-    font-size: 14px;
+    font-size: 10px;
     color: rgb(220, 195, 150);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 /* ================= SPREAD 9: LOBBY, MULTIPLAYER & EQUIPMENT LOADOUT ================= */
@@ -713,15 +954,15 @@
     background-color: rgba(215, 200, 175, 0.55);
     border-width: 1px;
     border-color: rgb(175, 155, 125);
-    border-radius: 5px;
+    border-radius: 0px;
     padding: 8px 10px;
     margin-bottom: 8px;
 }
 
 .lobby-section-heading {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(85, 45, 25);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     margin-bottom: 4px;
 }
 
@@ -734,10 +975,10 @@
 .lobby-small-btn {
     background-color: rgb(95, 70, 45);
     color: rgb(245, 235, 210);
-    font-size: 12px;
-    -unity-font-style: bold;
+    font-size: 9px;
+    -unity-font-style: normal;
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(65, 45, 30);
 }
@@ -747,9 +988,9 @@
 }
 
 .lobby-map-label {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(40, 30, 20);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
     flex-grow: 1;
 }
@@ -761,14 +1002,15 @@
 }
 
 .lobby-diff-btn {
+    white-space: normal;
     flex-grow: 1;
     background-color: rgb(210, 198, 175);
     color: rgb(55, 40, 25);
-    font-size: 11px;
-    -unity-font-style: bold;
+    font-size: 8px;
+    -unity-font-style: normal;
     padding: 5px 4px;
     margin: 0 2px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(140, 115, 85);
 }
@@ -784,19 +1026,20 @@
 }
 
 .lobby-sub-note {
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(90, 70, 50);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
 }
 
 .lobby-action-btn {
+    white-space: normal;
     background-color: rgb(70, 50, 35);
     color: rgb(245, 225, 185);
-    font-size: 12px;
-    -unity-font-style: bold;
+    font-size: 9px;
+    -unity-font-style: normal;
     padding: 6px 10px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(120, 90, 60);
     margin-bottom: 4px;
@@ -810,11 +1053,11 @@
 .lobby-party-code-badge {
     background-color: rgb(38, 30, 24);
     color: rgb(255, 215, 110);
-    font-size: 14px;
-    -unity-font-style: bold;
+    font-size: 10px;
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
     padding: 5px 8px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(150, 115, 65);
     margin-bottom: 6px;
@@ -830,7 +1073,7 @@
 
 .lobby-code-input {
     flex-grow: 1;
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(35, 25, 15);
     margin-right: 6px;
 }
@@ -838,16 +1081,16 @@
 .lobby-code-input > .unity-base-field__label {
     min-width: 68px;
     color: rgb(65, 45, 30);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .lobby-join-btn {
     background-color: rgb(50, 90, 55);
     color: white;
-    font-size: 12px;
-    -unity-font-style: bold;
+    font-size: 9px;
+    -unity-font-style: normal;
     padding: 5px 12px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(35, 65, 40);
 }
@@ -857,25 +1100,25 @@
 }
 
 .lobby-players-label {
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(45, 35, 25);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     margin-top: 2px;
 }
 
 .lobby-status-label {
-    font-size: 11px;
+    font-size: 8px;
     color: rgb(110, 55, 30);
-    -unity-font-style: italic;
+    -unity-font-style: normal;
 }
 
 .lobby-start-contract-btn {
     background-color: rgb(140, 35, 30);
     color: rgb(255, 240, 210);
-    font-size: 15px;
-    -unity-font-style: bold;
+    font-size: 10px;
+    -unity-font-style: normal;
     padding: 10px 16px;
-    border-radius: 6px;
+    border-radius: 0px;
     border-width: 2px;
     border-color: rgb(90, 20, 15);
     margin-top: auto;
@@ -894,21 +1137,21 @@
     background-color: rgb(42, 32, 24);
     border-width: 1px;
     border-color: rgb(150, 115, 65);
-    border-radius: 5px;
+    border-radius: 0px;
     padding: 7px 12px;
     margin-bottom: 6px;
 }
 
 .lobby-currency-label {
-    font-size: 15px;
+    font-size: 10px;
     color: rgb(135, 225, 125);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .lobby-loadout-value-label {
-    font-size: 12px;
+    font-size: 9px;
     color: rgb(225, 205, 165);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .lobby-tight-instruction {
@@ -927,7 +1170,7 @@
     align-items: center;
     background-color: rgba(42, 32, 24, 0.9);
     border-width: 1px;
-    border-radius: 10px;
+    border-radius: 0px;
     padding: 2px 7px;
     margin-right: 5px;
     margin-bottom: 2px;
@@ -936,14 +1179,14 @@
 .lobby-legend-dot {
     width: 8px;
     height: 8px;
-    border-radius: 4px;
+    border-radius: 0px;
     margin-right: 4px;
 }
 
 .lobby-legend-text {
-    font-size: 10px;
+    font-size: 8px;
     color: rgb(245, 232, 205);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     padding: 0;
     margin: 0;
 }
@@ -960,7 +1203,7 @@
     background-color: rgba(215, 200, 175, 0.65);
     border-width: 1px;
     border-color: rgb(180, 160, 130);
-    border-radius: 4px;
+    border-radius: 0px;
     padding: 5px 8px;
     margin-bottom: 4px;
 }
@@ -970,13 +1213,13 @@
 }
 
 .loadout-item-title {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(45, 32, 20);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .loadout-item-sub {
-    font-size: 10px;
+    font-size: 8px;
     color: rgb(100, 80, 60);
 }
 
@@ -996,7 +1239,7 @@
     align-items: center;
     background-color: rgba(36, 28, 22, 0.92);
     border-width: 1px;
-    border-radius: 8px;
+    border-radius: 0px;
     padding: 1px 5px;
     margin-right: 3px;
 }
@@ -1004,22 +1247,22 @@
 .loadout-contrib-dot {
     width: 7px;
     height: 7px;
-    border-radius: 4px;
+    border-radius: 0px;
     margin-right: 3px;
 }
 
 .loadout-contrib-count {
-    font-size: 10px;
+    font-size: 8px;
     color: rgb(250, 240, 220);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     padding: 0;
     margin: 0;
 }
 
 .loadout-qty-label {
-    font-size: 13px;
+    font-size: 9px;
     color: rgb(45, 32, 20);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
     min-width: 44px;
     -unity-text-align: middle-center;
 }
@@ -1027,11 +1270,11 @@
 .loadout-qty-btn {
     background-color: rgb(95, 70, 45);
     color: white;
-    font-size: 13px;
-    -unity-font-style: bold;
+    font-size: 9px;
+    -unity-font-style: normal;
     width: 26px;
     height: 24px;
-    border-radius: 4px;
+    border-radius: 0px;
     border-width: 1px;
     border-color: rgb(65, 45, 30);
     margin: 0 2px;

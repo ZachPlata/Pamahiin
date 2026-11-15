@@ -746,11 +746,9 @@ public class HunterGhostBehavior : NetworkBehaviour
         return true;
     }
 
-    private bool IsPlayerEquipmentActive(PlayerController player)
+    public bool IsPlayerEquipmentActive(PlayerController player)
     {
-        if (player == null || !player.IsAlive) return false;
-        var inventory = player.GetComponent<PlayerInventory>();
-        return inventory != null && inventory.CurrentItem != null && inventory.CurrentItem.IsPoweredOn;
+        return PlayerInventory.HasActiveHeldEquipment(player);
     }
 
     /// <summary>

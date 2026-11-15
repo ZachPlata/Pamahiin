@@ -25,7 +25,7 @@ public class EventGhostBehavior : NetworkBehaviour
     [Header("Evidence Mechanics")]
     public float interactionScanRadius = 5f;
     public LayerMask interactionLayer;
-    [Tooltip("Movement speed during DOTS dash (eerie, visible glide matching player pace).")]
+    [HideInInspector]
     public float dotsDashSpeed = 1.5f;
     
     private float nextEventTime = 0f;
@@ -38,11 +38,7 @@ public class EventGhostBehavior : NetworkBehaviour
     [SerializeField] private float propDisruptCooldownMax = 48f;
     private float nextPropDisruptTime = 0f;
 
-    // DOTS Dash state
-    private bool isDashing = false;
-    private Vector2 dashTarget;
     private DotsProjectorItem activeDotsProjector;
-    private float currentDashTime = 0f;
 
     // Low Sanity Manifestation State
     private bool isManifesting = false;
@@ -117,7 +113,6 @@ public class EventGhostBehavior : NetworkBehaviour
         }
 
         ghostSprite = GetComponentInChildren<SpriteRenderer>();
-        if (dotsDashSpeed > 3f) dotsDashSpeed = 1.5f; // Automatically correct legacy 10f value from scene/prefab
     }
 
     public override void OnNetworkSpawn()
@@ -132,19 +127,9 @@ public class EventGhostBehavior : NetworkBehaviour
         if (ghostSprite != null)
         {
             ghostSprite.enabled = visible;
-            if (visible)
-            {
-                Color c = ghostSprite.color;
-                // If it's a DOTS dash, we use 50% opacity. If it's a regular manifestation, we use 100% opacity.
-                c.a = isDashing ? 0.5f : 1f;
-                ghostSprite.color = c;
-            }
-            else
-            {
-                Color c = ghostSprite.color;
-                c.a = 1f; 
-                ghostSprite.color = c;
-            }
+            Color c = ghostSprite.color;
+            c.a = 1f;
+            ghostSprite.color = c;
         }
     }
 
@@ -160,28 +145,11 @@ public class EventGhostBehavior : NetworkBehaviour
 
     private void Update()
     {
-        // Client-side visual dash interpolation so all players see the DOTS dash smoothly
-        if (!IsServer && isDashing)
-        {
-            transform.position = Vector2.MoveTowards(transform.position, dashTarget, dotsDashSpeed * Time.deltaTime);
-            Vector2 dir = (dashTarget - (Vector2)transform.position).normalized;
-            if (dir.sqrMagnitude > 0.01f)
-            {
-                float targetAngle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f;
-                transform.rotation = Quaternion.Euler(0f, 0f, targetAngle);
-            }
-            if (Vector2.Distance(transform.position, dashTarget) < 0.2f)
-            {
-                isDashing = false;
-                UpdateVisuals(false);
-            }
-        }
-
         if (!IsServer || !isInitialized) return;
 
         if (ghostHandler != null && ghostHandler.CurrentState == GhostHandlerState.Dormant)
         {
-            if (!isDashing && !isManifesting && Time.time >= nextEventTime)
+            if (!isManifesting && Time.time >= nextEventTime)
             {
                 float interval = Random.Range(eventIntervalMin, eventIntervalMax) * WeatherManager.GetEventIntervalMultiplier();
                 nextEventTime = Time.time + interval;
@@ -223,29 +191,6 @@ public class EventGhostBehavior : NetworkBehaviour
                 UpdateVisuals(false);
             }
             return; // Stand still while manifesting
-        }
-
-        if (isDashing)
-        {
-            currentDashTime += Time.fixedDeltaTime;
-            
-            bool cancelDash = (activeDotsProjector != null && !activeDotsProjector.IsPoweredOn);
-            bool reachedTarget = Vector2.Distance(rb.position, dashTarget) < 0.2f;
-            bool stuck = currentDashTime > 6.0f;
-            bool leftGhostRoom = ghostHandler != null && ghostHandler.ghostroomMarker != null && !ghostHandler.ghostroomMarker.OverlapPoint(rb.position);
-
-            if (cancelDash || reachedTarget || stuck || leftGhostRoom)
-            {
-                isDashing = false;
-                activeDotsProjector = null;
-                isVisiblyManifested.Value = false;
-                UpdateVisuals(false);
-                EndDotsDashClientRpc();
-                return;
-            }
-
-            MoveTowards(dashTarget, dotsDashSpeed);
-            return;
         }
 
         MoveTowards(currentDestination, wanderSpeed);
@@ -304,7 +249,11 @@ public class EventGhostBehavior : NetworkBehaviour
     public void ForceEvent(GhostEventType type)
     {
         if (!IsServer) return;
-        
+        ExecuteForcedEvent(type);
+    }
+
+    public void ExecuteForcedEvent(GhostEventType type)
+    {
         DotsProjectorItem targetDots = null;
         SpiritBoxItem targetBox = null;
         VideoCameraItem targetCamera = null;
@@ -312,16 +261,15 @@ public class EventGhostBehavior : NetworkBehaviour
 
         if (type == GhostEventType.DotsManifestation)
         {
-            var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsInactive.Exclude);
-            var roomProjectors = new List<DotsProjectorItem>();
-            foreach (var p in projectors)
+            if (ghostHandler != null && (ghostHandler.IsExorcised || ghostHandler.CurrentState != GhostHandlerState.Dormant))
+                return;
+
+            targetDots = SelectDotsProjectorForEvent(true, null, 0f, out bool ignoreRoomBounds);
+            if (targetDots != null)
             {
-                if (ghostHandler != null && ghostHandler.ghostroomMarker != null && ghostHandler.ghostroomMarker.OverlapPoint(p.transform.position))
-                    roomProjectors.Add(p);
-                else if (GhostRoomMarker.IsInsideGhostRoom(p.transform.position))
-                    roomProjectors.Add(p);
+                ExecuteDotsManifestation(targetDots, ignoreRoomBounds);
             }
-            if (roomProjectors.Count > 0) targetDots = roomProjectors[Random.Range(0, roomProjectors.Count)];
+            return;
         }
         else if (type == GhostEventType.SpiritBoxTalk)
         {
@@ -400,28 +348,17 @@ public class EventGhostBehavior : NetworkBehaviour
             }
         }
 
-        var dotsProjectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsInactive.Exclude);
         bool hasActiveDots = false;
         DotsProjectorItem targetDots = null;
-        foreach (var dots in dotsProjectors)
+        if (ghostHandler != null
+            && !ghostHandler.IsExorcised
+            && ghostHandler.CurrentState == GhostHandlerState.Dormant
+            && ghostHandler.HasEvidence(EvidenceType.DOTS)
+            && ghostHandler.IsEvidenceAllowed(EvidenceType.DOTS))
         {
-            // Only consider DOTS projectors located inside the active ghost room
-            if (ghostHandler != null && ghostHandler.ghostroomMarker != null)
-            {
-                if (!ghostHandler.ghostroomMarker.OverlapPoint(dots.transform.position))
-                    continue;
-            }
-            else if (!GhostRoomMarker.IsInsideGhostRoom(dots.transform.position))
-            {
-                continue;
-            }
-
-            if (dots.IsPoweredOn && Vector2.Distance(rb.position, dots.transform.position) <= dots.projectionRadius * 1.5f)
-            {
-                hasActiveDots = true;
-                targetDots = dots;
-                break;
-            }
+            Vector2 ghostPos = rb != null ? rb.position : (Vector2)transform.position;
+            targetDots = SelectDotsProjectorForEvent(false, ghostPos, interactionScanRadius, out _);
+            hasActiveDots = targetDots != null;
         }
 
         var cameras = Object.FindObjectsByType<VideoCameraItem>(FindObjectsInactive.Exclude);
@@ -511,41 +448,7 @@ public class EventGhostBehavior : NetworkBehaviour
                 break;
                 
             case GhostEventType.DotsManifestation:
-                if (dots != null)
-                {
-                    Collider2D roomCol = ghostHandler != null ? ghostHandler.ghostroomMarker : null;
-
-                    // Ensure DOTS projection starts and stays strictly inside the active ghost room
-                    Vector2 randomStartDir = Random.insideUnitCircle.normalized;
-                    float maxOffset = dots.projectionRadius;
-                    if (roomCol != null)
-                    {
-                        maxOffset = Mathf.Min(dots.projectionRadius, Mathf.Max(roomCol.bounds.extents.x, roomCol.bounds.extents.y));
-                    }
-
-                    Vector2 candidateStart = (Vector2)dots.transform.position + randomStartDir * maxOffset;
-                    Vector2 startPos = GetConstrainedGhostRoomPoint(candidateStart, roomCol);
-
-                    // Dash across/through the projector inside the room
-                    Vector2 dirAcross = ((Vector2)dots.transform.position - startPos).normalized;
-                    if (dirAcross.sqrMagnitude < 0.001f) dirAcross = -randomStartDir;
-
-                    Vector2 candidateEnd = (Vector2)dots.transform.position + dirAcross * maxOffset;
-                    Vector2 targetPos = GetConstrainedGhostRoomPoint(candidateEnd, roomCol);
-
-                    rb.position = startPos;
-                    transform.position = startPos;
-                    isDashing = true;
-                    currentDashTime = 0f;
-                    activeDotsProjector = dots;
-                    dashTarget = targetPos;
-                    isVisiblyManifested.Value = true; // Show at 50% opacity
-                    UpdateVisuals(true);
-                    
-                    TriggerDotsDashClientRpc(startPos, targetPos, dotsDashSpeed);
-
-                    if (ParanormalManager.Instance != null) ParanormalManager.Instance.RegisterEvent(rb.position, 2, 5f);
-                }
+                ExecuteDotsManifestation(dots, false);
                 break;
                 
             case GhostEventType.SpiritBoxTalk:
@@ -665,39 +568,85 @@ public class EventGhostBehavior : NetworkBehaviour
         }
     }
 
-    [Rpc(SendTo.ClientsAndHost)]
-    private void TriggerDotsDashClientRpc(Vector2 startPos, Vector2 targetPos, float speed)
+    public DotsProjectorItem SelectDotsProjectorForEvent(
+        bool allowSandboxFallback,
+        Vector2? ghostWorldPos,
+        float minScanRadius,
+        out bool usedSandboxFallback)
     {
-        transform.position = startPos;
-        if (rb != null) rb.position = startPos;
-        dashTarget = targetPos;
-        dotsDashSpeed = speed;
-        isDashing = true;
-        currentDashTime = 0f;
-        UpdateVisuals(true);
+        usedSandboxFallback = false;
+        var projectors = Object.FindObjectsByType<DotsProjectorItem>(FindObjectsInactive.Exclude);
+        Collider2D roomMarker = ghostHandler != null ? ghostHandler.ghostroomMarker : null;
+
+        var roomMatches = new List<DotsProjectorItem>();
+        foreach (var dots in projectors)
+        {
+            if (dots == null) continue;
+            float maxDist = ghostWorldPos.HasValue
+                ? Mathf.Max(minScanRadius, dots.GetEffectiveBeamRadius() * 2.5f)
+                : 0f;
+
+            if (dots.IsEligibleForProjection(true, roomMarker, ghostWorldPos, maxDist))
+            {
+                roomMatches.Add(dots);
+            }
+        }
+
+        if (roomMatches.Count > 0)
+        {
+            return roomMatches[Random.Range(0, roomMatches.Count)];
+        }
+
+        if (!allowSandboxFallback)
+        {
+            return null;
+        }
+
+        var sandboxMatches = new List<DotsProjectorItem>();
+        foreach (var dots in projectors)
+        {
+            if (dots == null) continue;
+            if (dots.IsEligibleForProjection(false, null))
+            {
+                sandboxMatches.Add(dots);
+            }
+        }
+
+        if (sandboxMatches.Count > 0)
+        {
+            usedSandboxFallback = true;
+            return sandboxMatches[Random.Range(0, sandboxMatches.Count)];
+        }
+
+        return null;
     }
 
-    [Rpc(SendTo.ClientsAndHost)]
-    private void EndDotsDashClientRpc()
+    public bool ExecuteDotsManifestation(DotsProjectorItem dots, bool ignoreRoomBounds = false)
     {
-        isDashing = false;
-        activeDotsProjector = null;
-        UpdateVisuals(false);
+        if (dots == null) return false;
+        if (ghostHandler != null && (ghostHandler.IsExorcised || ghostHandler.CurrentState != GhostHandlerState.Dormant))
+            return false;
+
+        Collider2D roomCol = ghostHandler != null ? ghostHandler.ghostroomMarker : null;
+        if (!dots.TriggerDotsProjectionOnServer(roomCol, ignoreRoomBounds, out Vector2 projectionCenter))
+        {
+            return false;
+        }
+
+        activeDotsProjector = dots;
+        if (ParanormalManager.Instance != null)
+        {
+            ParanormalManager.Instance.RegisterEvent(projectionCenter, 2, 5f);
+        }
+        return true;
     }
 
-    private Vector2 GetConstrainedGhostRoomPoint(Vector2 preferredPos, Collider2D roomCol)
+    public void CancelActiveDotsProjectionOnServer()
     {
-        if (roomCol == null) return preferredPos;
-        if (roomCol.OverlapPoint(preferredPos)) return preferredPos;
-
-        Bounds b = roomCol.bounds;
-        float marginX = Mathf.Min(0.12f, b.extents.x * 0.35f);
-        float marginY = Mathf.Min(0.12f, b.extents.y * 0.35f);
-        float clampedX = Mathf.Clamp(preferredPos.x, b.min.x + marginX, b.max.x - marginX);
-        float clampedY = Mathf.Clamp(preferredPos.y, b.min.y + marginY, b.max.y - marginY);
-        Vector2 clamped = new Vector2(clampedX, clampedY);
-
-        if (roomCol.OverlapPoint(clamped)) return clamped;
-        return roomCol.ClosestPoint(preferredPos);
+        if (activeDotsProjector != null)
+        {
+            activeDotsProjector.CancelDotsProjectionOnServer();
+            activeDotsProjector = null;
+        }
     }
 }

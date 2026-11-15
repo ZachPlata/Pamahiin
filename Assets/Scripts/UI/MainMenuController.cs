@@ -19,8 +19,8 @@ public class MainMenuController : MonoBehaviour
     private ScrollView playerListContainer;
 
     // Settings controls
-    private Slider sliderMaster, sliderMusic, sliderSFX, sliderVoice;
-    private Label  lblMaster, lblMusic, lblSFX, lblVoice;
+    private Slider sliderMaster, sliderMusic, sliderSFX;
+    private Label  lblMaster, lblMusic, lblSFX;
     private Toggle toggleFullscreen, toggleFPS;
     private Toggle toggleTutorialHints;
 
@@ -77,12 +77,10 @@ public class MainMenuController : MonoBehaviour
         sliderMaster = root.Q<Slider>("slider-master");
         sliderMusic  = root.Q<Slider>("slider-music");
         sliderSFX    = root.Q<Slider>("slider-sfx");
-        sliderVoice  = root.Q<Slider>("slider-voice");
 
         lblMaster = root.Q<Label>("lbl-master");
         lblMusic  = root.Q<Label>("lbl-music");
         lblSFX    = root.Q<Label>("lbl-sfx");
-        lblVoice  = root.Q<Label>("lbl-voice");
 
         toggleFullscreen = root.Q<Toggle>("toggle-fullscreen");
         toggleFPS        = root.Q<Toggle>("toggle-fps");
@@ -94,8 +92,6 @@ public class MainMenuController : MonoBehaviour
             sliderMusic.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMusicVolume(e.newValue); UpdateVolLabel(lblMusic, e.newValue); });
         if (sliderSFX != null)
             sliderSFX.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetSFXVolume(e.newValue); UpdateVolLabel(lblSFX, e.newValue); });
-        if (sliderVoice != null)
-            sliderVoice.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetVoiceVolume(e.newValue); UpdateVolLabel(lblVoice, e.newValue); });
 
         if (toggleFullscreen != null)
             toggleFullscreen.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetFullscreen(e.newValue));
@@ -224,7 +220,6 @@ public class MainMenuController : MonoBehaviour
         if (sliderMaster != null) sliderMaster.value = s.MasterVolume;
         if (sliderMusic != null)  sliderMusic.value = s.MusicVolume;
         if (sliderSFX != null)    sliderSFX.value = s.SFXVolume;
-        if (sliderVoice != null)  sliderVoice.value = s.VoiceVolume;
 
         if (toggleFullscreen != null) toggleFullscreen.value = s.IsFullscreen;
         if (toggleFPS != null)        toggleFPS.value = s.ShowFPS;
@@ -233,7 +228,6 @@ public class MainMenuController : MonoBehaviour
         UpdateVolLabel(lblMaster, s.MasterVolume);
         UpdateVolLabel(lblMusic,  s.MusicVolume);
         UpdateVolLabel(lblSFX,    s.SFXVolume);
-        UpdateVolLabel(lblVoice,  s.VoiceVolume);
     }
 
     private static void UpdateVolLabel(Label label, float linear)

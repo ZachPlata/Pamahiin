@@ -120,7 +120,12 @@ public class ItemHoverIndicator : MonoBehaviour
         textObj.transform.SetParent(transform, false);
 
         nameText = textObj.AddComponent<TextMeshPro>();
-        nameText.fontSize = 0.35f;
+        var pixelTmpFont = PamahiinUIThemeUtility.ResolvePixelTmpFont();
+        if (pixelTmpFont != null)
+        {
+            nameText.font = pixelTmpFont;
+        }
+        nameText.fontSize = 0.32f;
         nameText.alignment = TextAlignmentOptions.Center;
         nameText.color = new Color(0.92f, 1f, 0.94f, 1f);
         nameText.outlineColor = Color.black;
@@ -398,14 +403,25 @@ public class ItemHoverIndicator : MonoBehaviour
 
         if (labelTextStyle == null)
         {
+            Font pixelFont = PamahiinUIThemeUtility.ResolvePixelFont();
             labelTextStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontStyle = FontStyle.Bold,
-                fontSize = 14,
+                font = pixelFont,
+                fontStyle = FontStyle.Normal,
+                fontSize = 11,
                 wordWrap = false
             };
-            labelTextStyle.normal.textColor = new Color(0.88f, 1f, 0.90f, 1f);
+            labelTextStyle.normal.textColor = new Color(0.95f, 0.91f, 0.84f, 1f);
+        }
+        else if (labelTextStyle.font == null)
+        {
+            Font resolved = PamahiinUIThemeUtility.ResolvePixelFont();
+            if (resolved != null)
+            {
+                labelTextStyle.font = resolved;
+                cachedGuiContentText = null;
+            }
         }
 
         if (cachedGuiContent == null || cachedGuiContentText != currentDisplayName)
@@ -415,8 +431,8 @@ public class ItemHoverIndicator : MonoBehaviour
             cachedLabelSize = labelTextStyle.CalcSize(cachedGuiContent);
         }
 
-        float boxWidth = Mathf.Max(76f, cachedLabelSize.x + 18f);
-        float boxHeight = Mathf.Max(24f, cachedLabelSize.y + 8f);
+        float boxWidth = Mathf.Max(84f, cachedLabelSize.x + 20f);
+        float boxHeight = Mathf.Max(24f, cachedLabelSize.y + 10f);
 
         float guiX = screenPos.x - boxWidth * 0.5f;
         float guiY = (Screen.height - screenPos.y) - boxHeight - 6f;
@@ -424,16 +440,18 @@ public class ItemHoverIndicator : MonoBehaviour
         guiX = Mathf.Clamp(guiX, 4f, Screen.width - boxWidth - 4f);
         guiY = Mathf.Clamp(guiY, 4f, Screen.height - boxHeight - 4f);
 
-        Rect outerRect = new Rect(guiX - 1f, guiY - 1f, boxWidth + 2f, boxHeight + 2f);
+        Rect outerRect = new Rect(guiX - 2f, guiY - 2f, boxWidth + 4f, boxHeight + 4f);
         Rect innerRect = new Rect(guiX, guiY, boxWidth, boxHeight);
 
         Texture2D tex = GetGuiWhiteTex();
         Color prevColor = GUI.color;
 
-        GUI.color = borderColor;
+        // Aged brass outer pixel border (16-bit Pamahiin theme)
+        GUI.color = new Color(0.72f, 0.56f, 0.30f, 1f);
         GUI.DrawTexture(outerRect, tex);
 
-        GUI.color = new Color(0.04f, 0.09f, 0.05f, 0.92f);
+        // Dark obsidian inner fill
+        GUI.color = new Color(0.06f, 0.05f, 0.07f, 0.96f);
         GUI.DrawTexture(innerRect, tex);
 
         GUI.color = Color.black;

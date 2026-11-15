@@ -1,8 +1,14 @@
+@import url("project://database/Assets/Resources/UI/PamahiinTheme.uss");
+
+/* ==========================================================================
+   PLAYER HUD - 16-BIT PIXEL OVERLAY & TUTORIAL TOAST
+   ========================================================================== */
+
 .hud-container {
     width: 100%;
     height: 100%;
     justify-content: space-between;
-    padding: 20px;
+    padding: 18px;
 }
 
 .pause-container {
@@ -10,114 +16,128 @@
 }
 
 .pause-button {
-    width: 50px;
-    height: 50px;
-    font-size: 24px;
-    background-color: rgba(10, 10, 10, 0.7);
-    color: rgba(200, 200, 200, 0.8);
-    border-radius: 0;
-    border-width: 1px;
-    border-color: rgba(100, 0, 0, 0.5);
-    -unity-font-style: bold;
-    transition-duration: 0.3s;
+    width: 48px;
+    height: 48px;
+    font-size: 14px;
+    background-color: var(--pm-bg-deep);
+    color: var(--pm-text-muted);
+    border-radius: 0px;
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass);
+    border-left-color: var(--pm-border-brass);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+    -unity-font-style: normal;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.08s;
 }
 
 .pause-button:hover {
-    background-color: rgba(30, 0, 0, 0.8);
-    color: white;
-    border-color: rgba(200, 0, 0, 0.8);
-    scale: 1.05;
+    background-color: rgba(74, 18, 24, 0.94);
+    color: var(--pm-text-primary);
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+}
+
+.pause-button:active {
+    translate: 0px 2px;
 }
 
 .inventory-container {
     flex-direction: row;
     align-self: center;
     justify-content: center;
-    bottom: 20px;
+    bottom: 18px;
     position: absolute;
     width: auto;
 }
 
 .inventory-slot {
-    width: 80px;
-    height: 80px;
-    margin: 0 10px;
-    background-color: rgba(10, 10, 10, 0.8);
-    border-radius: 2px;
-    border-width: 1px;
-    border-color: rgba(50, 50, 50, 0.9);
+    width: 98px;
+    height: 84px;
+    margin: 0 8px;
+    padding: 4px;
+    background-color: var(--pm-bg-deep);
+    border-radius: 0px;
+    border-width: 2px;
+    border-top-color: var(--pm-border-dim);
+    border-left-color: var(--pm-border-dim);
+    border-right-color: rgba(12, 10, 14, 0.96);
+    border-bottom-color: rgba(12, 10, 14, 0.96);
     align-items: center;
     justify-content: center;
-    transition-duration: 0.3s;
+    transition-property: background-color, border-color;
+    transition-duration: 0.08s;
 }
 
 .inventory-slot-active {
-    border-color: rgba(150, 0, 0, 1);
-    background-color: rgba(30, 10, 10, 0.9);
-    border-width: 2px;
-    scale: 1.1;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-crimson);
+    border-bottom-color: var(--pm-border-crimson);
+    background-color: rgba(44, 14, 18, 0.95);
+    border-width: 3px;
 }
 
 .inventory-slot-text {
-    color: rgba(180, 180, 180, 0.8);
-    font-size: 14px;
-    -unity-font-style: bold;
+    color: var(--pm-text-muted);
+    font-size: 8px;
+    line-height: 12px;
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
     white-space: normal;
 }
 
 .inventory-slot-active .inventory-slot-text {
-    color: white;
+    color: var(--pm-text-primary);
 }
 
 .temperature-container {
     position: absolute;
-    top: -35px;
-    display: none;
+    top: -32px;
     align-self: center;
 }
 
 .temperature-text {
-    font-size: 24px;
-    color: white;
-    -unity-font-style: bold;
+    font-size: 14px;
+    color: var(--pm-text-primary);
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
-    text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.92);
 }
 
 .power-indicator {
     position: absolute;
     top: 5px;
-    width: 12px;
-    height: 12px;
-    border-radius: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 0px;
     background-color: red;
-    display: none;
     border-width: 1px;
-    border-color: rgba(0,0,0,0.5);
+    border-color: rgba(0, 0, 0, 0.85);
 }
 
 .emf-container {
     position: absolute;
     top: 5px;
     flex-direction: row;
-    display: none;
     align-self: center;
 }
 
 .emf-dot {
     width: 8px;
     height: 8px;
-    border-radius: 4px;
+    border-radius: 0px;
     margin: 0 2px;
     background-color: gray;
     border-width: 1px;
-    border-color: rgba(0,0,0,0.5);
+    border-color: rgba(0, 0, 0, 0.85);
 }
 
-/* ========================================================
-   HANDHELD CAMERA NIGHT VISION VIEW FINDER GUI
-   ======================================================== */
+/* ========================================================= */
+/* NIGHT VISION CAMERA OVERLAY HUD                           */
+/* ========================================================= */
+
 .nv-overlay {
     position: absolute;
     left: 0;
@@ -127,7 +147,7 @@
     width: 100%;
     height: 100%;
     justify-content: space-between;
-    padding: 35px 45px;
+    padding: 32px 42px;
 }
 
 .nv-overlay-hidden {
@@ -154,16 +174,17 @@
 }
 
 .nv-hud-text {
-    color: rgb(235, 235, 235);
-    font-size: 16px;
-    -unity-font-style: bold;
-    text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+    color: rgb(235, 240, 235);
+    font-size: 11px;
+    -unity-font-style: normal;
+    text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.95);
 }
 
 .nv-hud-subtext {
-    color: rgba(220, 220, 220, 0.85);
-    font-size: 13px;
+    color: rgba(220, 226, 220, 0.88);
+    font-size: 9px;
     -unity-font-style: normal;
+    text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.95);
 }
 
 .nv-rec-cluster {
@@ -172,23 +193,23 @@
 }
 
 .nv-rec-dot {
-    width: 14px;
-    height: 14px;
-    border-radius: 7px;
-    background-color: rgb(255, 30, 30);
+    width: 12px;
+    height: 12px;
+    border-radius: 0px;
+    background-color: rgb(255, 34, 34);
     margin-right: 8px;
     border-width: 1px;
-    border-color: rgb(150, 0, 0);
+    border-color: rgb(110, 0, 0);
 }
 
 .nv-rec-dot-dim {
-    opacity: 0.1;
+    opacity: 0.12;
 }
 
 .nv-rec-label {
-    color: rgb(255, 50, 50);
+    color: rgb(255, 62, 62);
     margin-right: 12px;
-    text-shadow: 0 0 6px rgba(255, 0, 0, 0.7);
+    text-shadow: 1px 1px 0px rgba(80, 0, 0, 0.95);
 }
 
 .nv-timer-label {
@@ -196,15 +217,15 @@
 }
 
 .nv-badge-cluster {
-    background-color: rgba(20, 20, 20, 0.75);
-    border-width: 1px;
+    background-color: rgba(12, 12, 16, 0.84);
+    border-width: 2px;
     border-color: rgb(200, 200, 200);
-    padding: 3px 12px;
-    border-radius: 3px;
+    padding: 4px 12px;
+    border-radius: 0px;
 }
 
 .nv-nvg-badge {
-    font-size: 14px;
+    font-size: 9px;
 }
 
 .nv-battery-cluster {
@@ -220,7 +241,7 @@
     margin-left: 6px;
     margin-right: 6px;
     padding: 1px;
-    border-radius: 2px;
+    border-radius: 0px;
 }
 
 .nv-battery-fill {
@@ -250,81 +271,94 @@
     align-items: flex-end;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   Minecraft-Style Top-Right Tutorial Toast
-   ───────────────────────────────────────────────────────────── */
+/* ========================================================= */
+/* TUTORIAL TOOLTIP TOAST CARD (TOP RIGHT)                   */
+/* ========================================================= */
 
 .tutorial-toast-container {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 18px;
+    right: 18px;
     align-items: flex-end;
     justify-content: flex-start;
 }
 
 .tutorial-toast {
-    width: 440px;
-    background-color: rgba(18, 22, 28, 0.94);
-    border-width: 1.5px;
-    border-color: rgb(75, 88, 105);
-    border-radius: 6px;
-    padding: 12px 16px 14px 16px;
+    width: 500px;
+    max-width: 92%;
+    background-color: var(--pm-bg-deep);
+    border-width: 3px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+    border-radius: 0px;
+    padding: 14px 18px;
     opacity: 1;
-    transition-duration: 0.3s;
+    transition-duration: 0.2s;
 }
 
 .tutorial-toast-hidden {
     opacity: 0;
-    display: none;
+    translate: 20px 0px;
 }
 
 .toast-header-row {
     flex-direction: row;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
 }
 
 .toast-key-badge {
-    background-color: rgb(34, 43, 56);
-    border-width: 1px;
-    border-color: rgb(130, 150, 175);
-    border-radius: 4px;
-    padding: 2px 7px;
-    color: rgb(255, 255, 255);
-    font-size: 11px;
-    -unity-font-style: bold;
-    margin-right: 8px;
+    background-color: rgb(32, 26, 22);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+    border-radius: 0px;
+    padding: 4px 8px;
+    color: rgb(250, 212, 118);
+    font-size: 9px;
+    -unity-font-style: normal;
+    margin-right: 10px;
 }
 
 .toast-title {
-    color: rgb(250, 192, 78);
-    font-size: 13px;
-    -unity-font-style: bold;
+    color: var(--pm-accent-brass);
+    font-size: 11px;
+    -unity-font-style: normal;
+    line-height: 16px;
+    white-space: normal;
 }
 
 .toast-desc {
-    color: rgb(220, 228, 236);
-    font-size: 12.5px;
+    color: var(--pm-text-primary);
+    font-size: 9px;
+    line-height: 15px;
     white-space: normal;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
     -unity-text-align: middle-left;
 }
 
 .toast-progress-track {
     width: 100%;
-    height: 3px;
-    background-color: rgba(255, 255, 255, 0.15);
-    border-radius: 1.5px;
+    height: 4px;
+    background-color: var(--pm-bg-void);
+    border-radius: 0px;
     overflow: hidden;
 }
 
 .toast-progress-bar {
     width: 100%;
     height: 100%;
-    background-color: rgb(250, 192, 78);
+    background-color: var(--pm-accent-brass);
 }
 
-/* ── Death / Game Over Screen ── */
+/* ========================================================= */
+/* DEATH OVERLAY ("YOU DIED")                                */
+/* ========================================================= */
+
 .death-overlay {
     position: absolute;
     left: 0;
@@ -333,10 +367,10 @@
     bottom: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(8, 0, 0, 0.92);
+    background-color: rgba(8, 2, 4, 0.94);
     align-items: center;
     justify-content: center;
-    transition-duration: 0.5s;
+    transition-duration: 0.4s;
     opacity: 1;
 }
 
@@ -348,47 +382,128 @@
 .death-panel {
     align-items: center;
     justify-content: center;
-    padding: 45px 65px;
-    background-color: rgba(16, 4, 4, 0.95);
-    border-width: 2px;
-    border-color: rgba(180, 20, 20, 0.85);
-    border-radius: 4px;
+    padding: 40px 56px;
+    background-color: rgba(20, 6, 8, 0.96);
+    border-width: 3px;
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+    border-radius: 0px;
 }
 
 .death-title {
-    font-size: 56px;
-    -unity-font-style: bold;
-    color: rgb(255, 34, 34);
-    margin-bottom: 12px;
+    font-size: 36px;
+    -unity-font-style: normal;
+    color: var(--pm-accent-crimson-hi);
+    margin-bottom: 16px;
     -unity-text-align: middle-center;
+    text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.98);
 }
 
 .death-subtitle {
-    font-size: 18px;
-    color: rgba(210, 210, 210, 0.85);
-    margin-bottom: 35px;
+    font-size: 11px;
+    color: var(--pm-text-muted);
+    margin-bottom: 30px;
     -unity-text-align: middle-center;
+    line-height: 18px;
+    white-space: normal;
 }
 
 .death-button {
-    width: 340px;
+    width: 360px;
     height: 52px;
-    font-size: 15px;
-    -unity-font-style: bold;
-    color: rgb(255, 255, 255);
-    background-color: rgba(85, 12, 12, 0.9);
-    border-width: 1px;
-    border-color: rgba(220, 45, 45, 0.9);
-    border-radius: 2px;
-    transition-duration: 0.25s;
+    font-size: 11px;
+    -unity-font-style: normal;
+    color: var(--pm-text-primary);
+    background-color: rgba(98, 18, 24, 0.96);
+    border-width: 3px;
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+    border-radius: 0px;
+    transition-property: background-color, border-color;
+    transition-duration: 0.08s;
 }
 
 .death-button:hover {
-    background-color: rgba(165, 25, 25, 0.95);
-    border-color: rgb(255, 51, 51);
-    color: rgb(255, 255, 255);
+    background-color: rgba(154, 28, 36, 0.98);
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    color: rgb(255, 248, 224);
 }
 
 .death-button:active {
-    background-color: rgba(100, 10, 10, 1);
+    background-color: rgba(84, 12, 16, 1);
+    translate: 0px 2px;
+}
+
+/* ========================================================= */
+/* SPECTATOR MODE BANNER                                     */
+/* ========================================================= */
+
+.spectator-banner {
+    position: absolute;
+    left: 0;
+    top: 14px;
+    right: 0;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.spectator-banner-hidden {
+    display: none;
+}
+
+.spectator-pill {
+    flex-direction: row;
+    align-items: center;
+    padding: 6px 14px;
+    background-color: rgba(12, 22, 34, 0.88);
+    border-width: 2px;
+    border-top-color: rgb(148, 202, 255);
+    border-left-color: rgb(148, 202, 255);
+    border-right-color: rgb(42, 74, 108);
+    border-bottom-color: rgb(42, 74, 108);
+    border-radius: 0px;
+}
+
+.spectator-pill-label {
+    font-size: 9px;
+    -unity-font-style: normal;
+    letter-spacing: 1px;
+    color: rgb(148, 202, 255);
+}
+
+.spectator-grace-label {
+    font-size: 9px;
+    color: rgba(212, 232, 252, 0.94);
+    margin-left: 10px;
+}
+
+.spectator-end-btn {
+    margin-left: 10px;
+    height: 26px;
+    padding: 0 10px;
+    font-size: 9px;
+    -unity-font-style: normal;
+    color: rgb(232, 246, 255);
+    background-color: rgba(34, 72, 108, 0.92);
+    border-width: 2px;
+    border-top-color: rgb(154, 208, 255);
+    border-left-color: rgb(154, 208, 255);
+    border-right-color: rgb(24, 48, 74);
+    border-bottom-color: rgb(24, 48, 74);
+    border-radius: 0px;
+    transition-duration: 0.08s;
+}
+
+.spectator-end-btn:hover {
+    background-color: rgba(54, 108, 158, 0.98);
+    color: rgb(255, 255, 255);
+}
+
+.spectator-grace-hidden {
+    display: none;
 }

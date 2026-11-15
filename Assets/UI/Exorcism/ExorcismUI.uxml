@@ -8,11 +8,9 @@
             <ui:Label text="CHALK RITUAL OF EXORCISM" class="popup-title" />
             <ui:Label text="Finalize the entity identity to bind the ritual circle:" class="popup-subtitle" />
 
-            <ui:VisualElement class="ghost-buttons-row">
-                <ui:Button name="btn-ghost-tikbalang" text="TIKBALANG" class="ghost-btn" />
-                <ui:Button name="btn-ghost-kapre" text="KAPRE" class="ghost-btn" />
-                <ui:Button name="btn-ghost-manananggal" text="MANANANGGAL" class="ghost-btn" />
-            </ui:VisualElement>
+            <ui:ScrollView name="ghost-buttons-scroll" class="ghost-buttons-scroll" vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden">
+                <ui:VisualElement name="ghost-buttons-container" class="ghost-buttons-grid" />
+            </ui:ScrollView>
 
             <ui:Label text="Warning: Selecting the wrong ghost will anger the entity upon ritual completion!" class="popup-warning" />
         </ui:VisualElement>
@@ -65,7 +63,7 @@
     <!-- 4. CRUCIFIX REPEL COUNTDOWN BANNER (POST-FAILURE SURVIVAL) -->
     <ui:VisualElement name="repel-banner" class="repel-overlay hidden" picking-mode="Ignore">
         <ui:VisualElement class="repel-box" picking-mode="Ignore">
-            <ui:Label text="⚠ CRUCIFIX REPEL ACTIVE ⚠" class="repel-title" />
+            <ui:Label text="[!] CRUCIFIX REPEL ACTIVE [!]" class="repel-title" />
             <ui:Label name="repel-timer-label" text="10s REMAINING" class="repel-countdown" />
             <ui:Label text="Hide in a cabinet or escape the house immediately!" class="repel-instruction" />
         </ui:VisualElement>

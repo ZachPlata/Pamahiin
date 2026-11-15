@@ -1,7 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// Generates pure 90-degree top-down 16-bit pixel art sprite sheets (aligned with
@@ -224,8 +228,30 @@ public static class BarangayAssetGenerator
         GenerateSummoningCircleSheet();
         GenerateGhostDeathSheet();
         GenerateAudioClips();
+        GenerateDeathAndBurialAssets();
+        BuildDotsSilhouetteAnimationAssetsAndPrefab();
         AssetDatabase.Refresh();
-        Debug.Log("[BarangayAssetGenerator] Generated all 16-bit top-down sprites, ritual/death sprite sheets, Jeepney assets, and WAV audio clips.");
+        Debug.Log("[BarangayAssetGenerator] Generated all 16-bit top-down sprites, ritual/death/burial/DOTS sprite sheets, Jeepney assets, and WAV audio clips.");
+    }
+
+    [MenuItem("Pamahiin/Generate Player Death & Burial Assets")]
+    public static void GenerateDeathAndBurialAssetsMenu()
+    {
+        GenerateDeathAndBurialAssets();
+        AssetDatabase.Refresh();
+        Debug.Log("[BarangayAssetGenerator] Generated 16-bit player death choke sheet, UI ghost hand/jumpscare sheets, Burial tiles, and death/burial WAV audio clips.");
+    }
+
+    public static void GenerateDeathAndBurialAssets()
+    {
+        if (!Directory.Exists(AUDIO_DIR)) Directory.CreateDirectory(AUDIO_DIR);
+        if (!Directory.Exists(RETRO_SFX_DIR)) Directory.CreateDirectory(RETRO_SFX_DIR);
+        GeneratePlayerDeathChokeSheet();
+        GenerateDeathGhostHandSheet();
+        GenerateBurialJumpscareSheet();
+        GenerateBurialEnvironmentSprites();
+        GenerateDeathAndBurialAudioClips();
+        BuildDeathAndCorpseAnimationsAndPrefab();
     }
 
     [MenuItem("Pamahiin/Generate Ritual & Ghost Death Assets")]
@@ -2381,6 +2407,722 @@ public static class BarangayAssetGenerator
                     canvas.Set(x, y, glowMix > 0.65f ? Color32.Lerp(hc, glowWhite, glowMix * 0.7f) : hc);
                 }
             }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. Player Death Choke, Ghost Hand Vignette, Burial Stage & Jumpscare Assets
+    // -----------------------------------------------------------------------
+    private static void CopyFrameToHorizontalSheet(PixelCanvas frame, PixelCanvas sheet, int frameIndex)
+    {
+        int ox = frameIndex * frame.Width;
+        for (int y = 0; y < frame.Height; y++)
+        {
+            for (int x = 0; x < frame.Width; x++)
+            {
+                sheet.Set(ox + x, y, frame.Get(x, y));
+            }
+        }
+    }
+
+    public static void GeneratePlayerDeathChokeSheet()
+    {
+        // High-craft 16-bit SNES pixel art PNG is authored externally and sliced via SpriteImportMode.Multiple.
+        BarangayTextureImporter.SliceHorrorSpriteSheet(BarangayTextureImporter.PLAYER_DEATH_PATH);
+    }
+
+    public static void GenerateDeathGhostHandSheet()
+    {
+        // High-craft 16-bit SNES pixel art PNG is authored externally and sliced via SpriteImportMode.Multiple.
+        BarangayTextureImporter.SliceHorrorSpriteSheet(BarangayTextureImporter.DEATH_HAND_PATH);
+    }
+
+    public static void GenerateBurialJumpscareSheet()
+    {
+        // High-craft 16-bit SNES pixel art PNG is authored externally and sliced via SpriteImportMode.Multiple.
+        BarangayTextureImporter.SliceHorrorSpriteSheet(BarangayTextureImporter.BURIAL_JUMPSCARE_PATH);
+    }
+
+    [MenuItem("Pamahiin/Build Death & Corpse Animations & Prefab")]
+    public static void BuildDeathAndCorpseAnimationsAndPrefab()
+    {
+        const string animDir = "Assets/Resources/Animations";
+        const string corpsePrefabPath = "Assets/Prefabs/PlayerCorpse.prefab";
+
+        BarangayTextureImporter.SliceAllHorrorSpriteSheets();
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+        if (!Directory.Exists(animDir))
+        {
+            Directory.CreateDirectory(animDir);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        Sprite[] chokeFrames = LoadOrderedSubSprites(BarangayTextureImporter.PLAYER_DEATH_PATH);
+        Sprite[] handFrames = LoadOrderedSubSprites(BarangayTextureImporter.DEATH_HAND_PATH);
+        Sprite[] jumpscareFrames = LoadOrderedSubSprites(BarangayTextureImporter.BURIAL_JUMPSCARE_PATH);
+
+        if (chokeFrames.Length == 0 || handFrames.Length == 0 || jumpscareFrames.Length == 0)
+        {
+            Debug.LogError($"[BarangayAssetGenerator] Missing sliced frames: choke={chokeFrames.Length}, hands={handFrames.Length}, jumpscare={jumpscareFrames.Length}");
+            return;
+        }
+
+        AnimationClip chokeClip = CreateOrUpdateSpriteClip(
+            $"{animDir}/CorpseChoke.anim",
+            chokeFrames,
+            12f,
+            typeof(SpriteRenderer),
+            loopTime: false);
+
+        AnimationClip handClip = CreateOrUpdateSpriteClip(
+            $"{animDir}/DeathGhostHands.anim",
+            handFrames,
+            14f,
+            typeof(Image),
+            loopTime: false);
+
+        AnimationClip jumpscareClip = CreateOrUpdateSpriteClip(
+            $"{animDir}/BurialJumpscare.anim",
+            jumpscareFrames,
+            15f,
+            typeof(Image),
+            loopTime: false);
+
+        AnimatorController corpseController = CreateOrUpdateController(
+            $"{animDir}/CorpseAnim.controller",
+            defaultStateName: "CorpseChoke",
+            states: new[] { ("CorpseChoke", (Motion)chokeClip) });
+
+        CreateOrUpdateController(
+            $"{animDir}/DeathOverlayAnim.controller",
+            defaultStateName: "Idle",
+            states: new[]
+            {
+                ("Idle", (Motion)null),
+                ("DeathGhostHands", (Motion)handClip),
+                ("BurialJumpscare", (Motion)jumpscareClip)
+            });
+
+        UpdatePlayerCorpsePrefabAsset(corpsePrefabPath, corpseController, chokeFrames[0]);
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        Debug.Log($"[BarangayAssetGenerator] Built death/corpse clips & updated PlayerCorpse.prefab (choke={chokeFrames.Length}, hands={handFrames.Length}, jumpscare={jumpscareFrames.Length}).");
+    }
+
+    private static Sprite[] LoadOrderedSubSprites(string assetPath)
+    {
+        return AssetDatabase.LoadAllAssetsAtPath(assetPath)
+            .OfType<Sprite>()
+            .OrderBy(s => s.name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static AnimationClip CreateOrUpdateSpriteClip(
+        string clipPath,
+        Sprite[] frames,
+        float frameRate,
+        Type targetComponentType,
+        bool loopTime)
+    {
+        AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+        if (clip == null)
+        {
+            clip = new AnimationClip();
+            AssetDatabase.CreateAsset(clip, clipPath);
+        }
+
+        clip.frameRate = frameRate;
+        AnimationClipSettings clipSettings = AnimationUtility.GetAnimationClipSettings(clip);
+        clipSettings.loopTime = loopTime;
+        AnimationUtility.SetAnimationClipSettings(clip, clipSettings);
+
+        EditorCurveBinding binding = EditorCurveBinding.PPtrCurve(string.Empty, targetComponentType, "m_Sprite");
+        ObjectReferenceKeyframe[] keys = new ObjectReferenceKeyframe[frames.Length + 1];
+        float frameDuration = 1f / Mathf.Max(1f, frameRate);
+        for (int i = 0; i < frames.Length; i++)
+        {
+            keys[i] = new ObjectReferenceKeyframe
+            {
+                time = i * frameDuration,
+                value = frames[i]
+            };
+        }
+        // Hold final frame for one full frame interval so clip.length matches frameCount / frameRate.
+        keys[frames.Length] = new ObjectReferenceKeyframe
+        {
+            time = frames.Length * frameDuration,
+            value = frames[frames.Length - 1]
+        };
+
+        AnimationUtility.SetObjectReferenceCurve(clip, binding, keys);
+        EditorUtility.SetDirty(clip);
+        return clip;
+    }
+
+    private static AnimatorController CreateOrUpdateController(
+        string controllerPath,
+        string defaultStateName,
+        (string stateName, Motion motion)[] states)
+    {
+        AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
+        if (controller == null)
+        {
+            controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
+        }
+
+        if (controller.layers == null || controller.layers.Length == 0)
+        {
+            controller.AddLayer("Base Layer");
+        }
+
+        AnimatorStateMachine sm = controller.layers[0].stateMachine;
+        ChildAnimatorState[] existing = sm.states.ToArray();
+        foreach (ChildAnimatorState child in existing)
+        {
+            sm.RemoveState(child.state);
+        }
+
+        AnimatorState defaultState = null;
+        for (int i = 0; i < states.Length; i++)
+        {
+            AnimatorState st = sm.AddState(states[i].stateName, new Vector3(260f, i * 64f, 0f));
+            st.motion = states[i].motion;
+            st.writeDefaultValues = false;
+            if (states[i].stateName == defaultStateName)
+            {
+                defaultState = st;
+            }
+        }
+
+        if (defaultState != null)
+        {
+            sm.defaultState = defaultState;
+        }
+
+        EditorUtility.SetDirty(controller);
+        return controller;
+    }
+
+    private static void UpdatePlayerCorpsePrefabAsset(
+        string prefabPath,
+        AnimatorController corpseController,
+        Sprite initialSprite)
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) == null)
+        {
+            Debug.LogWarning($"[BarangayAssetGenerator] Prefab not found at {prefabPath}");
+            return;
+        }
+
+        GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
+        try
+        {
+            root.transform.localScale = new Vector3(0.19f, 0.19f, 1f);
+
+            SpriteRenderer sr = root.GetComponent<SpriteRenderer>();
+            if (sr == null) sr = root.AddComponent<SpriteRenderer>();
+            sr.sortingLayerName = "DOTSLayer";
+            sr.sortingOrder = -1;
+            if (initialSprite != null)
+            {
+                sr.sprite = initialSprite;
+            }
+
+            Animator anim = root.GetComponent<Animator>();
+            if (anim == null) anim = root.AddComponent<Animator>();
+            anim.runtimeAnimatorController = corpseController;
+            anim.updateMode = AnimatorUpdateMode.Normal;
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            BoxCollider2D[] legacyBoxes = root.GetComponents<BoxCollider2D>();
+            for (int i = 0; i < legacyBoxes.Length; i++)
+            {
+                UnityEngine.Object.DestroyImmediate(legacyBoxes[i], true);
+            }
+
+            PolygonCollider2D poly = root.GetComponent<PolygonCollider2D>();
+            if (poly == null) poly = root.AddComponent<PolygonCollider2D>();
+            poly.isTrigger = true;
+            poly.offset = Vector2.zero;
+            poly.SetPath(0, PlayerCorpse.DefaultCorpsePolygonContour);
+
+            CorpseRagdollController ragdoll = root.GetComponent<CorpseRagdollController>();
+            if (ragdoll == null)
+            {
+                ragdoll = root.AddComponent<CorpseRagdollController>();
+            }
+            ragdoll.EnsureInitialized(poly);
+            ragdoll.ActivateRagdoll(false);
+
+            PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    public static void GenerateBurialEnvironmentSprites()
+    {
+        // 1. Dark grave pit floor (128x128 loamy soil with mud cracks and damp earth pebbles)
+        PixelCanvas floor = new PixelCanvas(128, 128);
+        Color32 soilDk = new Color32(28, 19, 13, 255);
+        Color32 soilMd = new Color32(44, 30, 20, 255);
+        Color32 pebble = new Color32(66, 52, 42, 255);
+        for (int y = 0; y < 128; y++)
+        {
+            for (int x = 0; x < 128; x++)
+            {
+                float n = Hash01(x, y, 701);
+                float coarse = Hash01(x / 4, y / 4, 702);
+                Color32 baseC = Color32.Lerp(soilDk, soilMd, coarse);
+                if (n > 0.96f) baseC = pebble;
+                else if (n < 0.08f) baseC = Shade(soilDk, 0.72f);
+                floor.Set(x, y, baseC);
+            }
+        }
+        floor.SavePng("Burial/burial_dirt_floor.png");
+
+        // 2. Raised grave pit wall texture (128x128 striated earth layers + exposed roots)
+        PixelCanvas wall = new PixelCanvas(128, 128);
+        Color32 earthRim = new Color32(56, 38, 26, 255);
+        Color32 earthDeep = new Color32(24, 15, 10, 255);
+        Color32 rootBark = new Color32(82, 58, 36, 255);
+        for (int y = 0; y < 128; y++)
+        {
+            for (int x = 0; x < 128; x++)
+            {
+                float band = Mathf.Sin((y + Hash01(x / 8, y / 4, 710) * 6f) * 0.25f) * 0.5f + 0.5f;
+                Color32 c = Color32.Lerp(earthDeep, earthRim, band);
+                if (Hash01(x / 3, y, 711) > 0.94f) c = rootBark;
+                wall.Set(x, y, c);
+            }
+        }
+        wall.StrokeRect(0, 0, 128, 128, 2, PAL_OUTLINE);
+        wall.SavePng("Burial/burial_dirt_wall.png");
+
+        // 3. Tangled roots & buried skull cluster prop (64x64)
+        PixelCanvas skullProp = new PixelCanvas(64, 64);
+        Color32 boneDk = new Color32(138, 126, 108, 255);
+        Color32 boneLt = new Color32(184, 170, 146, 255);
+        Color32 eyeHollow = new Color32(20, 14, 14, 255);
+        // Tangled grave roots
+        for (int r = 0; r < 6; r++)
+        {
+            int x0 = 6 + r * 9;
+            int y0 = 6 + ((r * 13) % 18);
+            int x1 = 56 - r * 7;
+            int y1 = 52 - ((r * 11) % 16);
+            skullProp.DrawLine(x0, y0, x1, y1, rootBark);
+            skullProp.DrawLine(x0, y0 + 1, x1, y1 + 1, earthDeep);
+        }
+        // Small partially buried skull + rib bone
+        skullProp.FillEllipse(30, 34, 8, 9, boneDk);
+        skullProp.FillEllipse(30, 36, 6, 7, boneLt);
+        skullProp.FillCircle(27, 33, 2, eyeHollow);
+        skullProp.FillCircle(33, 33, 2, eyeHollow);
+        skullProp.DrawLine(18, 20, 44, 15, boneDk);
+        skullProp.DrawLine(18, 21, 44, 16, boneLt);
+        skullProp.AddPixelOutline(PAL_OUTLINE);
+        skullProp.SavePng("Burial/burial_roots_skull.png");
+    }
+
+    public static void GenerateDeathAndBurialAudioClips()
+    {
+        const int sr = 44100;
+
+        // 1. Eerie breathy double "psst!" behind the victim (0.55s)
+        WriteWavOverwrite("ghost_psst.wav", sr, 0.55f, count =>
+        {
+            float[] psst1 = BandpassNoise(count, sr, 970, 5200f, 8200f, 4400f, 3.2f, norm =>
+            {
+                float t = norm * 0.55f;
+                if (t > 0.14f) return 0f;
+                return Mathf.Sin(Mathf.Clamp01(t / 0.14f) * Mathf.PI) * 0.72f;
+            });
+            float[] psst2 = BandpassNoise(count, sr, 971, 4600f, 7600f, 3200f, 2.8f, norm =>
+            {
+                float t = norm * 0.55f;
+                if (t < 0.20f) return 0f;
+                float u = (t - 0.20f) / 0.35f;
+                return Mathf.Pow(Mathf.Sin(u * Mathf.PI), 0.7f) * (1f - u * 0.4f);
+            });
+            float[] buf = new float[count];
+            for (int i = 0; i < count; i++) buf[i] = psst1[i] + psst2[i];
+            NormalizePeak(buf, 0.78f);
+            return buf;
+        }, RETRO_SFX_DIR);
+
+        // 2. Suffocating ghost hand grab + muffled gasp & sub drop (1.25s)
+        WriteWavOverwrite("ghost_hand_grab.wav", sr, 1.25f, count =>
+        {
+            float[] noise = BandpassNoise(count, sr, 972, 180f, 640f, 120f, 1.8f, norm =>
+            {
+                float grab = Mathf.Sin(Mathf.Clamp01(norm / 0.35f) * Mathf.PI);
+                float choke = Mathf.Exp(-norm * 2.2f) * (0.55f + 0.45f * Mathf.Sin(norm * 28f));
+                return Mathf.Clamp01(grab + choke * 0.7f);
+            });
+            float[] buf = new float[count];
+            float phase = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sr;
+                float norm = t / 1.25f;
+                float freq = Mathf.Lerp(115f, 38f, norm);
+                phase += 2f * Mathf.PI * freq / sr;
+                float thud = Mathf.Exp(-t * 14f) * 0.65f;
+                float drone = Mathf.Sin(phase) * (0.45f * (1f - norm * 0.5f) + thud);
+                buf[i] = noise[i] * 0.65f + drone * 0.60f;
+            }
+            NormalizePeak(buf, 0.85f);
+            return buf;
+        }, RETRO_SFX_DIR);
+
+        // 3. Seamless looping damp underground grave ambience (5.0s loop)
+        WriteWavOverwrite("burial_ambience.wav", sr, 5.0f, count =>
+        {
+            float[] buf = new float[count];
+            float lpLow = 0f;
+            float lpDirt = 0f;
+            float alphaLow = 2f * Mathf.PI * 190f / (sr + 2f * Mathf.PI * 190f);
+            float alphaDirt = 2f * Mathf.PI * 1800f / (sr + 2f * Mathf.PI * 1800f);
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sr;
+                float n1 = Hash01(i, 3, 973) * 2f - 1f;
+                float n2 = Hash01(i, 7, 974) * 2f - 1f;
+                lpLow += alphaLow * (n1 - lpLow);
+                lpDirt += alphaDirt * (n2 - lpDirt);
+                // Seamless periodic harmonic frequencies (integer cycles over 5.0s -> 0.2Hz multiples)
+                float rumble = Mathf.Sin(2f * Mathf.PI * 38.0f * t) * 0.22f
+                             + Mathf.Sin(2f * Mathf.PI * 57.0f * t + 1.1f) * 0.16f
+                             + Mathf.Sin(2f * Mathf.PI * 114.0f * t) * 0.06f * (0.5f + 0.5f * Mathf.Sin(2f * Mathf.PI * 0.4f * t));
+                float trickle = (lpDirt - lpLow) * (0.12f + 0.08f * Mathf.Sin(2f * Mathf.PI * 0.8f * t));
+                buf[i] = rumble + lpLow * 0.55f + trickle;
+            }
+            // Crossfade endpoints across 0.25s for clickless looping
+            int fadeSamples = Mathf.RoundToInt(0.25f * sr);
+            for (int i = 0; i < fadeSamples; i++)
+            {
+                float k = (float)i / fadeSamples;
+                int tailIdx = count - fadeSamples + i;
+                float blended = buf[i] * k + buf[tailIdx] * (1f - k);
+                buf[i] = blended;
+                buf[tailIdx] = blended;
+            }
+            NormalizePeak(buf, 0.58f);
+            return buf;
+        }, RETRO_SFX_DIR);
+
+        // 4. Sudden brutal jumpscare shriek + sub-bass impact (0.95s)
+        WriteWavOverwrite("ghost_jumpscare.wav", sr, 0.95f, count =>
+        {
+            float[] buf = new float[count];
+            float[] hiss = BandpassNoise(count, sr, 975, 1600f, 5400f, 1100f, 1.5f, norm => Mathf.Exp(-norm * 2.4f));
+            float p1 = 0f, p2 = 0f, p3 = 0f, pSub = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sr;
+                float norm = t / 0.95f;
+                float shriekEnv = Mathf.Clamp01(t / 0.015f) * Mathf.Exp(-t * 3.1f);
+                float f1 = Mathf.Lerp(980f, 520f, norm) + Mathf.Sin(2f * Mathf.PI * 34f * t) * 55f;
+                float f2 = f1 * 1.414f; // tritone dissonance
+                float f3 = f1 * 1.06f;  // minor-2nd harsh clash
+                float fSub = Mathf.Lerp(120f, 36f, Mathf.Min(1f, t * 3f));
+
+                p1 += 2f * Mathf.PI * f1 / sr;
+                p2 += 2f * Mathf.PI * f2 / sr;
+                p3 += 2f * Mathf.PI * f3 / sr;
+                pSub += 2f * Mathf.PI * fSub / sr;
+
+                float scream = (Mathf.Sin(p1) + 0.85f * Mathf.Sin(p2) + 0.75f * Mathf.Sin(p3)) * 0.45f;
+                // 16-bit gritty overdrive clip
+                scream = Mathf.Clamp(scream * 2.6f, -1f, 1f);
+                float subSlam = Mathf.Sin(pSub) * Mathf.Exp(-t * 6.5f) * 0.75f;
+                buf[i] = scream * shriekEnv + hiss[i] * 0.55f + subSlam;
+            }
+            NormalizePeak(buf, 0.94f);
+            return buf;
+        }, RETRO_SFX_DIR);
+    }
+
+    // -----------------------------------------------------------------------
+    // 9. D.O.T.S. Walking Green-Dots Silhouette Sheet, Anim & Prefab
+    // -----------------------------------------------------------------------
+    private const string ZOMBIE_LABCOAT_SOURCE_PATH = "Assets/Sprites/CHARACTERS/ZombieLabcoat1.png";
+
+    public static void GenerateDotsSilhouetteWalkSheet()
+    {
+        const int frameSize = 64;
+        const int frameCount = 8;
+
+        Color32[] sourcePixels = LoadReadableSourcePixels(ZOMBIE_LABCOAT_SOURCE_PATH, out int srcW, out int srcH);
+        if (sourcePixels == null || srcW != frameSize || srcH != frameSize)
+        {
+            Debug.LogError($"[BarangayAssetGenerator] Failed to load 64x64 source silhouette at {ZOMBIE_LABCOAT_SOURCE_PATH}.");
+            return;
+        }
+
+        // Stride curve (+ = left arm/shoulder forward +Y, - = right arm/shoulder forward +Y)
+        float[] strideCurve = { 0.85f, 1.00f, 0.25f, -0.25f, -0.85f, -1.00f, -0.25f, 0.25f };
+        float[] bobCurve = { 0.45f, 0.00f, -0.55f, -0.15f, 0.45f, 0.00f, -0.55f, -0.15f };
+
+        Color32 dotCoreBright = new Color32(155, 255, 158, 245); // #9BFF9E
+        Color32 dotCoreNeon   = new Color32(76, 255, 100, 232);  // #4CFF64
+        Color32 dotBodyMid    = new Color32(31, 224, 59, 205);   // #1FE03B
+        Color32 dotEdgeDim    = new Color32(14, 155, 36, 138);   // #0E9B24
+
+        PixelCanvas sheet = new PixelCanvas(frameSize * frameCount, frameSize);
+
+        for (int f = 0; f < frameCount; f++)
+        {
+            float stride = strideCurve[f];
+            float bob = bobCurve[f];
+            float yawRad = -stride * 3.8f * Mathf.Deg2Rad;
+            float cosA = Mathf.Cos(yawRad);
+            float sinA = Mathf.Sin(yawRad);
+
+            bool[,] mask = new bool[frameSize, frameSize];
+            bool[,] headMask = new bool[frameSize, frameSize];
+            bool[,] tipMask = new bool[frameSize, frameSize];
+
+            for (int dy = 0; dy < frameSize; dy++)
+            {
+                for (int dx = 0; dx < frameSize; dx++)
+                {
+                    float rx = dx - 31.5f;
+                    float ry = (dy - bob) - 31.5f;
+
+                    // Inverse subtle torso yaw around character center
+                    float rotX = rx * cosA + ry * sinA + 31.5f;
+                    float rotY = -rx * sinA + ry * cosA + 31.5f;
+
+                    // Anatomical top-down arm stride (+Y forward reach alternating left/right)
+                    float armRegionY = Mathf.InverseLerp(34f, 44f, rotY);
+                    float leftArmW = Mathf.InverseLerp(28f, 22f, rotX) * armRegionY;
+                    float rightArmW = Mathf.InverseLerp(35f, 41f, rotX) * armRegionY;
+                    float rearHemW = Mathf.InverseLerp(30f, 19f, rotY);
+                    float hemSide = Mathf.Clamp((31.5f - rotX) / 10f, -1f, 1f);
+
+                    float srcYf = rotY
+                        - stride * 2.15f * leftArmW
+                        + stride * 2.15f * rightArmW
+                        + stride * 0.85f * rearHemW * hemSide;
+                    float srcXf = rotX;
+
+                    int sx = Mathf.RoundToInt(srcXf);
+                    int sy = Mathf.RoundToInt(srcYf);
+                    if (sx < 0 || sy < 0 || sx >= srcW || sy >= srcH) continue;
+
+                    Color32 srcCol = sourcePixels[sy * srcW + sx];
+                    if (srcCol.a <= 20) continue;
+
+                    mask[dx, dy] = true;
+
+                    float hdx = (sx - 31.5f) / 6.4f;
+                    float hdy = (sy - 31.5f) / 7.0f;
+                    if (hdx * hdx + hdy * hdy <= 1.0f)
+                    {
+                        headMask[dx, dy] = true;
+                    }
+                    if (sy >= 46)
+                    {
+                        tipMask[dx, dy] = true;
+                    }
+                }
+            }
+
+            PixelCanvas frame = new PixelCanvas(frameSize, frameSize);
+            for (int dy = 0; dy < frameSize; dy++)
+            {
+                for (int dx = 0; dx < frameSize; dx++)
+                {
+                    if (!mask[dx, dy]) continue;
+
+                    bool isPerimeter =
+                        dx == 0 || dy == 0 || dx == frameSize - 1 || dy == frameSize - 1 ||
+                        !mask[dx - 1, dy] || !mask[dx + 1, dy] || !mask[dx, dy - 1] || !mask[dx, dy + 1];
+
+                    // Staggered laser-dot lattice with 1px transparent gaps & alternating 1px scan shimmer (~38-44% fill)
+                    bool checker = ((dx + dy + (f & 1)) & 1) == 0;
+                    if (!checker) continue;
+
+                    float n = Hash01(dx, dy, 910 + (f >> 1) * 17);
+                    bool keepDot = (isPerimeter || headMask[dx, dy] || tipMask[dx, dy])
+                        ? (n > 0.14f)
+                        : (n > 0.24f);
+                    if (!keepDot) continue;
+
+                    bool scanBand = ((dy + f) % 7 == 0);
+                    Color32 dotCol;
+                    if (headMask[dx, dy] || tipMask[dx, dy])
+                    {
+                        dotCol = (n > 0.62f || scanBand) ? dotCoreBright : dotCoreNeon;
+                    }
+                    else if (isPerimeter)
+                    {
+                        dotCol = n > 0.58f ? dotBodyMid : dotEdgeDim;
+                    }
+                    else
+                    {
+                        dotCol = (scanBand && n > 0.50f) ? dotCoreNeon : dotBodyMid;
+                    }
+
+                    frame.Set(dx, dy, dotCol);
+                }
+            }
+
+            CopyFrameToHorizontalSheet(frame, sheet, f);
+        }
+
+        sheet.SavePngAtAssetPath(BarangayTextureImporter.DOTS_SILHOUETTE_WALK_PATH);
+    }
+
+    private static Color32[] LoadReadableSourcePixels(string assetPath, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (!File.Exists(assetPath)) return null;
+
+        byte[] bytes = File.ReadAllBytes(assetPath);
+        Texture2D tempTex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+        try
+        {
+            if (!tempTex.LoadImage(bytes)) return null;
+            width = tempTex.width;
+            height = tempTex.height;
+            return tempTex.GetPixels32();
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(tempTex);
+        }
+    }
+
+    [MenuItem("Pamahiin/Build D.O.T.S. Silhouette Sheet, Animation & Prefab")]
+    public static void BuildDotsSilhouetteAnimationAssetsAndPrefab()
+    {
+        const string animDir = "Assets/Resources/Animations";
+        const string dotsPrefabPath = "Assets/Prefabs/DotsProjector.prefab";
+
+        GenerateDotsSilhouetteWalkSheet();
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        BarangayTextureImporter.SliceHorrorSpriteSheet(BarangayTextureImporter.DOTS_SILHOUETTE_WALK_PATH);
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+
+        if (!Directory.Exists(animDir))
+        {
+            Directory.CreateDirectory(animDir);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        }
+
+        Sprite[] walkFrames = LoadOrderedSubSprites(BarangayTextureImporter.DOTS_SILHOUETTE_WALK_PATH);
+        if (walkFrames.Length != 8)
+        {
+            Debug.LogError($"[BarangayAssetGenerator] Expected 8 sliced frames in {BarangayTextureImporter.DOTS_SILHOUETTE_WALK_PATH}, found {walkFrames.Length}.");
+            return;
+        }
+
+        AnimationClip walkClip = CreateOrUpdateSpriteClip(
+            $"{animDir}/DotsSilhouetteWalk.anim",
+            walkFrames,
+            10f,
+            typeof(SpriteRenderer),
+            loopTime: true);
+
+        AnimatorController dotsController = CreateOrUpdateController(
+            $"{animDir}/DotsSilhouetteAnim.controller",
+            defaultStateName: "DotsWalk",
+            states: new[] { ("DotsWalk", (Motion)walkClip) });
+
+        UpdateDotsProjectorPrefabAsset(dotsPrefabPath, dotsController, walkFrames[0]);
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+        Debug.Log($"[BarangayAssetGenerator] Built D.O.T.S. silhouette sprite sheet ({walkFrames.Length} frames), DotsSilhouetteWalk.anim, DotsSilhouetteAnim.controller, and updated {dotsPrefabPath}.");
+    }
+
+    private static void UpdateDotsProjectorPrefabAsset(
+        string prefabPath,
+        AnimatorController dotsController,
+        Sprite initialSprite)
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) == null)
+        {
+            Debug.LogWarning($"[BarangayAssetGenerator] Prefab not found at {prefabPath}");
+            return;
+        }
+
+        Material unlitMat = AssetDatabase.GetBuiltinExtraResource<Material>("Sprites-Default.mat");
+        string urpUnlitPath = AssetDatabase.GUIDToAssetPath("9dfc825aed78fcd4ba02077103263b40");
+        if (!string.IsNullOrEmpty(urpUnlitPath))
+        {
+            Material urpUnlit = AssetDatabase.LoadAssetAtPath<Material>(urpUnlitPath);
+            if (urpUnlit != null) unlitMat = urpUnlit;
+        }
+
+        GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
+        try
+        {
+            Transform lightTr = root.transform.Find("Spot Light 2D");
+            if (lightTr != null)
+            {
+                lightTr.localScale = Vector3.one;
+                var light2d = lightTr.GetComponent<UnityEngine.Rendering.Universal.Light2D>();
+                if (light2d != null)
+                {
+                    light2d.pointLightOuterRadius = 0.75f;
+                    light2d.pointLightInnerRadius = 0.05f;
+                    light2d.pointLightInnerAngle = 45f;
+                    light2d.pointLightOuterAngle = 68f;
+                }
+            }
+
+            Transform visualTr = root.transform.Find("DotsSilhouetteVisual");
+            GameObject visualGo = visualTr != null ? visualTr.gameObject : new GameObject("DotsSilhouetteVisual");
+            if (visualTr == null)
+            {
+                visualGo.transform.SetParent(root.transform, false);
+            }
+            visualGo.transform.localPosition = Vector3.zero;
+            visualGo.transform.localRotation = Quaternion.identity;
+            visualGo.transform.localScale = Vector3.one;
+            visualGo.SetActive(false);
+
+            SpriteRenderer sr = visualGo.GetComponent<SpriteRenderer>();
+            if (sr == null) sr = visualGo.AddComponent<SpriteRenderer>();
+            sr.sortingLayerName = "DOTSLayer";
+            sr.sortingOrder = 5;
+            if (initialSprite != null) sr.sprite = initialSprite;
+            if (unlitMat != null) sr.sharedMaterial = unlitMat;
+            sr.color = Color.white;
+
+            Animator anim = visualGo.GetComponent<Animator>();
+            if (anim == null) anim = visualGo.AddComponent<Animator>();
+            anim.runtimeAnimatorController = dotsController;
+            anim.updateMode = AnimatorUpdateMode.Normal;
+            anim.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            DotsProjectorItem item = root.GetComponent<DotsProjectorItem>();
+            if (item != null)
+            {
+                item.projectionRadius = 0.75f;
+                item.coneAngle = 60f;
+                SerializedObject so = new SerializedObject(item);
+                SerializedProperty srProp = so.FindProperty("silhouetteRenderer");
+                if (srProp != null) srProp.objectReferenceValue = sr;
+                SerializedProperty animProp = so.FindProperty("silhouetteAnimator");
+                if (animProp != null) animProp.objectReferenceValue = anim;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
         }
     }
 

@@ -1,0 +1,381 @@
+/* ==========================================================================
+   PAMAHIIN 16-BIT FOLK-HORROR PIXEL UI THEME
+   Master design tokens, global resets, and reusable pixel-art primitives.
+   ========================================================================== */
+
+:root {
+    /* Core Abyssal / Crimson / Aged Brass Palette */
+    --pm-bg-void: rgba(8, 7, 10, 0.96);
+    --pm-bg-deep: rgba(16, 13, 18, 0.95);
+    --pm-bg-panel: rgba(24, 19, 25, 0.96);
+    --pm-bg-elevated: rgba(35, 27, 36, 0.98);
+    --pm-bg-scrim: rgba(6, 4, 8, 0.88);
+
+    --pm-border-dim: rgba(68, 56, 70, 0.9);
+    --pm-border-brass-hi: rgb(224, 191, 118);
+    --pm-border-brass: rgb(166, 132, 74);
+    --pm-border-brass-lo: rgb(88, 66, 36);
+    --pm-border-crimson-hi: rgb(220, 72, 84);
+    --pm-border-crimson: rgb(156, 34, 46);
+    --pm-border-crimson-lo: rgb(72, 16, 22);
+
+    --pm-accent-crimson: rgb(172, 32, 46);
+    --pm-accent-crimson-hi: rgb(224, 58, 72);
+    --pm-accent-brass: rgb(214, 174, 96);
+    --pm-accent-teal: rgb(72, 176, 160);
+    --pm-accent-phosphor: rgb(74, 222, 128);
+
+    --pm-text-primary: rgb(242, 232, 214);
+    --pm-text-muted: rgb(186, 172, 152);
+    --pm-text-dim: rgb(124, 112, 102);
+    --pm-text-danger: rgb(235, 76, 86);
+    --pm-text-success: rgb(96, 224, 136);
+
+    /* Domain Accents */
+    --pm-crt-bg: rgba(7, 15, 11, 0.96);
+    --pm-crt-panel: rgba(11, 24, 17, 0.96);
+    --pm-crt-border: rgb(42, 128, 76);
+    --pm-crt-border-lo: rgb(18, 58, 34);
+    --pm-crt-amber: rgb(236, 184, 72);
+
+    --pm-parchment: rgb(236, 220, 184);
+    --pm-ink: rgb(38, 25, 16);
+    --pm-mahogany: rgb(52, 29, 19);
+}
+
+/* Global Typography & Sharp 0px Corner Reset */
+* {
+    -unity-font: url("project://database/Assets/Fonts/PressStart2P-Regular.ttf");
+    -unity-font-style: normal;
+    border-radius: 0px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+
+.unity-text-element,
+.unity-label,
+.unity-button,
+.unity-base-text-field__input,
+.unity-text-field__input,
+.unity-toggle__label,
+.unity-base-popup-field__text {
+    -unity-font: url("project://database/Assets/Fonts/PressStart2P-Regular.ttf");
+    -unity-font-style: normal;
+}
+
+.unity-button,
+.unity-base-field,
+.unity-base-text-field__input,
+.unity-text-field__input,
+.unity-toggle__checkmark,
+.unity-base-slider__tracker,
+.unity-base-slider__dragger,
+.unity-scroller__slider,
+.unity-scroller__low-button,
+.unity-scroller__high-button,
+.unity-base-popup-field__input,
+.unity-progress-bar__container,
+.unity-progress-bar__background,
+.unity-progress-bar__progress {
+    border-radius: 0px;
+    border-top-left-radius: 0px;
+    border-top-right-radius: 0px;
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+
+/* Built-in Control Defaults */
+.unity-base-text-field__input,
+.unity-text-field__input,
+.pm-input {
+    background-color: var(--pm-bg-void);
+    color: var(--pm-text-primary);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-lo);
+    border-left-color: var(--pm-border-brass-lo);
+    border-right-color: var(--pm-border-brass);
+    border-bottom-color: var(--pm-border-brass);
+    padding: 6px 8px;
+    font-size: 11px;
+}
+
+.unity-base-text-field__input:focus,
+.unity-text-field__input:focus,
+.pm-input:focus {
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass);
+    border-bottom-color: var(--pm-border-brass);
+}
+
+.unity-base-slider__tracker {
+    height: 6px;
+    background-color: var(--pm-bg-void);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-lo);
+    border-left-color: var(--pm-border-brass-lo);
+    border-right-color: var(--pm-border-brass);
+    border-bottom-color: var(--pm-border-brass);
+}
+
+.unity-base-slider__dragger {
+    width: 14px;
+    height: 20px;
+    margin-top: -9px;
+    background-color: var(--pm-accent-crimson);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+}
+
+.unity-base-slider__dragger:hover {
+    background-color: var(--pm-accent-crimson-hi);
+}
+
+.unity-toggle__checkmark {
+    width: 16px;
+    height: 16px;
+    background-color: var(--pm-bg-void);
+    border-width: 2px;
+    border-color: var(--pm-border-brass);
+}
+
+.unity-scroller--vertical {
+    width: 14px;
+    background-color: var(--pm-bg-void);
+}
+
+.unity-scroller__low-button,
+.unity-scroller__high-button {
+    background-color: var(--pm-bg-panel);
+    border-width: 2px;
+    border-color: var(--pm-border-dim);
+}
+
+.unity-scroller__slider .unity-base-slider__dragger {
+    width: 12px;
+    height: auto;
+    margin-top: 0px;
+    background-color: var(--pm-border-brass);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+}
+
+/* ==========================================================================
+   Reusable 16-Bit Pixel Primitives
+   ========================================================================== */
+
+/* Stepped Bevel Panels */
+.pm-panel {
+    background-color: var(--pm-bg-panel);
+    border-width: 3px;
+    border-top-color: var(--pm-border-dim);
+    border-left-color: var(--pm-border-dim);
+    border-right-color: rgba(18, 14, 22, 0.98);
+    border-bottom-color: rgba(12, 9, 16, 0.98);
+}
+
+.pm-panel--bevel {
+    background-color: var(--pm-bg-panel);
+    border-width: 3px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+}
+
+.pm-panel--brass {
+    background-color: var(--pm-bg-deep);
+    border-width: 3px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass);
+    border-bottom-color: var(--pm-border-brass-lo);
+}
+
+.pm-panel--crimson {
+    background-color: rgba(24, 10, 14, 0.96);
+    border-width: 3px;
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+}
+
+.pm-panel--crt {
+    background-color: var(--pm-crt-panel);
+    border-width: 3px;
+    border-top-color: var(--pm-crt-border);
+    border-left-color: var(--pm-crt-border);
+    border-right-color: var(--pm-crt-border-lo);
+    border-bottom-color: var(--pm-crt-border-lo);
+}
+
+/* Tactile 16-Bit Buttons (Zero Scale Blur) */
+.pm-btn {
+    background-color: var(--pm-bg-elevated);
+    color: var(--pm-text-primary);
+    font-size: 11px;
+    padding: 10px 14px;
+    border-width: 3px;
+    border-top-color: var(--pm-border-brass);
+    border-left-color: var(--pm-border-brass);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+    -unity-text-align: middle-center;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.08s;
+}
+
+.pm-btn:hover {
+    background-color: rgb(54, 34, 42);
+    color: var(--pm-border-brass-hi);
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-crimson);
+    border-bottom-color: var(--pm-border-crimson);
+}
+
+.pm-btn:active {
+    translate: 0px 2px;
+    background-color: var(--pm-bg-deep);
+    border-top-color: var(--pm-border-brass-lo);
+    border-left-color: var(--pm-border-brass-lo);
+    border-right-color: var(--pm-border-brass);
+    border-bottom-color: var(--pm-border-brass);
+}
+
+.pm-btn--primary {
+    background-color: rgba(112, 24, 34, 0.96);
+    color: rgb(252, 240, 224);
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+}
+
+.pm-btn--primary:hover {
+    background-color: rgba(154, 34, 48, 0.98);
+    color: rgb(255, 248, 220);
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-crimson);
+    border-bottom-color: var(--pm-border-crimson);
+}
+
+.pm-btn--danger {
+    background-color: rgba(96, 18, 24, 0.95);
+    color: rgb(255, 212, 212);
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+}
+
+.pm-btn--danger:hover {
+    background-color: rgba(168, 32, 42, 0.98);
+    color: rgb(255, 244, 244);
+}
+
+.pm-btn--ghost {
+    background-color: rgba(14, 12, 16, 0.72);
+    color: var(--pm-text-muted);
+    border-width: 2px;
+    border-top-color: var(--pm-border-dim);
+    border-left-color: var(--pm-border-dim);
+    border-right-color: rgba(12, 10, 14, 0.95);
+    border-bottom-color: rgba(12, 10, 14, 0.95);
+}
+
+.pm-btn--ghost:hover {
+    background-color: rgba(34, 28, 36, 0.94);
+    color: var(--pm-text-primary);
+    border-top-color: var(--pm-border-brass);
+    border-left-color: var(--pm-border-brass);
+}
+
+.pm-btn--sm {
+    font-size: 9px;
+    padding: 6px 10px;
+    border-width: 2px;
+}
+
+/* Badges, Keycaps & Square Pixel LEDs */
+.pm-badge {
+    font-size: 9px;
+    padding: 4px 8px;
+    background-color: var(--pm-bg-void);
+    color: var(--pm-accent-brass);
+    border-width: 2px;
+    border-color: var(--pm-border-brass);
+}
+
+.pm-keycap {
+    font-size: 9px;
+    padding: 4px 8px;
+    background-color: rgb(32, 26, 22);
+    color: rgb(250, 212, 118);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+    -unity-text-align: middle-center;
+}
+
+.pm-led {
+    width: 8px;
+    height: 8px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.85);
+}
+
+/* Progress Track & Fill */
+.pm-progress-track {
+    width: 100%;
+    height: 16px;
+    background-color: var(--pm-bg-void);
+    border-width: 2px;
+    border-top-color: var(--pm-border-brass-lo);
+    border-left-color: var(--pm-border-brass-lo);
+    border-right-color: var(--pm-border-brass);
+    border-bottom-color: var(--pm-border-brass);
+    padding: 2px;
+}
+
+.pm-progress-fill {
+    height: 100%;
+    background-color: var(--pm-accent-crimson);
+    border-right-width: 2px;
+    border-right-color: var(--pm-accent-brass);
+}
+
+/* Typographic Utility Classes */
+.pm-title {
+    color: var(--pm-text-primary);
+    font-size: 16px;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.95);
+}
+
+.pm-subtitle {
+    color: var(--pm-accent-brass);
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+.pm-divider {
+    height: 2px;
+    background-color: var(--pm-border-brass-lo);
+    border-top-width: 1px;
+    border-top-color: var(--pm-border-brass);
+    margin-top: 8px;
+    margin-bottom: 8px;
+}

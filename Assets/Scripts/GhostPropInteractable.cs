@@ -267,6 +267,7 @@ public class GhostPropInteractable : NetworkBehaviour, IInteractable
     // --- IInteractable (Players can upright non-breakable knocked props) ---
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (!netBusy.Value && netDisrupted.Value && !isBreakable)
         {
             UprightPropServerRpc();
@@ -274,8 +275,12 @@ public class GhostPropInteractable : NetworkBehaviour, IInteractable
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void UprightPropServerRpc()
+    private void UprightPropServerRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         if (netBusy.Value || isBreakable) return;
         netFrameIndex.Value = 0;
         netDisrupted.Value = false;

@@ -8,7 +8,7 @@ using UnityEngine.Audio;
 /// Survives scene loads (DontDestroyOnLoad).
 /// 
 /// AudioMixer groups expected:
-///   "Master"  "Music"  "SFX"  "Voice"
+///   "Master"  "Music"  "SFX"
 /// If you have no mixer, the fallback adjusts AudioListener.volume for master.
 /// </summary>
 public class GameSettingsManager : MonoBehaviour
@@ -36,7 +36,6 @@ public class GameSettingsManager : MonoBehaviour
     private const string KEY_MASTER  = "vol_master";
     private const string KEY_MUSIC   = "vol_music";
     private const string KEY_SFX     = "vol_sfx";
-    private const string KEY_VOICE   = "vol_voice";
     private const string KEY_FULLSCR = "fullscreen";
     private const string KEY_QUALITY = "quality";
     private const string KEY_FPS     = "show_fps";
@@ -54,7 +53,6 @@ public class GameSettingsManager : MonoBehaviour
     public float MasterVolume  { get; private set; }
     public float MusicVolume   { get; private set; }
     public float SFXVolume     { get; private set; }
-    public float VoiceVolume   { get; private set; }
     public bool  IsFullscreen  { get; private set; }
     public int   QualityLevel  { get; private set; }
     public bool  ShowFPS       { get; private set; }
@@ -91,7 +89,6 @@ public class GameSettingsManager : MonoBehaviour
         SetMasterVolume (PlayerPrefs.GetFloat(KEY_MASTER,  1f));
         SetMusicVolume  (PlayerPrefs.GetFloat(KEY_MUSIC,   0.8f));
         SetSFXVolume    (PlayerPrefs.GetFloat(KEY_SFX,     1f));
-        SetVoiceVolume  (PlayerPrefs.GetFloat(KEY_VOICE,   1f));
         SetFullscreen   (PlayerPrefs.GetInt  (KEY_FULLSCR, Screen.fullScreen ? 1 : 0) == 1);
         SetQuality      (PlayerPrefs.GetInt  (KEY_QUALITY, QualitySettings.GetQualityLevel()));
         SetShowFPS      (PlayerPrefs.GetInt  (KEY_FPS,     0) == 1);
@@ -121,13 +118,6 @@ public class GameSettingsManager : MonoBehaviour
         SFXVolume = Mathf.Clamp01(value);
         PlayerPrefs.SetFloat(KEY_SFX, SFXVolume);
         ApplyMixerVolume("SFX", SFXVolume);
-    }
-
-    public void SetVoiceVolume(float value)
-    {
-        VoiceVolume = Mathf.Clamp01(value);
-        PlayerPrefs.SetFloat(KEY_VOICE, VoiceVolume);
-        ApplyMixerVolume("Voice", VoiceVolume);
     }
 
     public void SetFullscreen(bool value)
@@ -192,7 +182,7 @@ public class GameSettingsManager : MonoBehaviour
 
     /// <summary>
     /// Converts a linear 0-1 value to decibels and sets the exposed mixer parameter.
-    /// Expects exposed parameters named exactly "MasterVol", "MusicVol", "SFXVol", "VoiceVol".
+    /// Expects exposed parameters named exactly "MasterVol", "MusicVol", "SFXVol".
     /// </summary>
     private void ApplyMixerVolume(string groupName, float linear)
     {

@@ -32,27 +32,27 @@
                 <ui:Button name="Option0" class="sb-option-btn">
                     <ui:Label text="1" class="sb-option-badge" />
                     <ui:Label name="OptionText0" text="Where are you?" class="sb-option-text" />
-                    <ui:Label text="►" class="sb-option-arrow" />
+                    <ui:Label text="▶" class="sb-option-arrow" />
                 </ui:Button>
                 <ui:Button name="Option1" class="sb-option-btn">
                     <ui:Label text="2" class="sb-option-badge" />
                     <ui:Label name="OptionText1" text="How old are you?" class="sb-option-text" />
-                    <ui:Label text="►" class="sb-option-arrow" />
+                    <ui:Label text="▶" class="sb-option-arrow" />
                 </ui:Button>
                 <ui:Button name="Option2" class="sb-option-btn">
                     <ui:Label text="3" class="sb-option-badge" />
                     <ui:Label name="OptionText2" text="Are you close?" class="sb-option-text" />
-                    <ui:Label text="►" class="sb-option-arrow" />
+                    <ui:Label text="▶" class="sb-option-arrow" />
                 </ui:Button>
                 <ui:Button name="Option3" class="sb-option-btn">
                     <ui:Label text="4" class="sb-option-badge" />
                     <ui:Label name="OptionText3" text="What do you want?" class="sb-option-text" />
-                    <ui:Label text="►" class="sb-option-arrow" />
+                    <ui:Label text="▶" class="sb-option-arrow" />
                 </ui:Button>
                 <ui:Button name="Option4" class="sb-option-btn">
                     <ui:Label text="5" class="sb-option-badge" />
                     <ui:Label name="OptionText4" text="Give us a sign." class="sb-option-text" />
-                    <ui:Label text="►" class="sb-option-arrow" />
+                    <ui:Label text="▶" class="sb-option-arrow" />
                 </ui:Button>
             </ui:VisualElement>
 

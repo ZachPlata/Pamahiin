@@ -10,10 +10,12 @@ public class JournalController : MonoBehaviour
     private UIDocument uiDocument;
     private VisualElement journalOverlay;
 
-    // Spreads (0..8 = Standard Field Journal, 9 = Lobby / Multiplayer / Equipment Shop)
-    private const int TotalSpreads = 10;
+    // Spreads (0..6 = Standard Field Journal, 7 = Lobby / Multiplayer / Equipment Shop)
+    private const int TotalSpreads = 8;
     private const int BlueprintSpreadIndex = 2;
-    private const int LobbySpreadIndex = 9;
+    private const int DossierSpreadIndex = 5;
+    private const int EvidenceSpreadIndex = 6;
+    private const int LobbySpreadIndex = 7;
     private VisualElement[] spreads = new VisualElement[TotalSpreads];
     private int currentSpread = 0;
 
@@ -32,10 +34,28 @@ public class JournalController : MonoBehaviour
     private Button btnTocBlueprint;
     private Button btnTocEquip1;
     private Button btnTocEquip2;
-    private Button btnTocTikbalang;
-    private Button btnTocKapre;
-    private Button btnTocManananggal;
+    private Button btnTocGhosts;
     private Button btnTocEvidence;
+
+    // Entity Compendium Controls (Spread 5)
+    private VisualElement dossierSelectorGrid;
+    private VisualElement dossierArtImage;
+    private VisualElement dossierSigilBox;
+    private Label lblDossierSigilIndex;
+    private Label lblDossierSigilMono;
+    private Label lblDossierCaption;
+    private Button btnDossierPrev;
+    private Button btnDossierNext;
+    private Label lblDossierCounter;
+    private Label lblDossierName;
+    private Label lblDossierSubtitle;
+    private Label lblDossierLore;
+    private VisualElement dossierTraitsContainer;
+    private VisualElement dossierEvidenceChips;
+    private Label lblDossierTip;
+    private ScrollView dossierDetailScroll;
+    private readonly List<Button> dossierSelectorButtons = new List<Button>();
+    private int currentDossierIndex = 0;
 
     // Case Briefing & Blueprint Controls (Spread 2)
     private Label lblCaseId;
@@ -63,9 +83,8 @@ public class JournalController : MonoBehaviour
     private Toggle tglSpiritBox;
     private Toggle tglOrbs;
 
-    private Button btnTikbalang;
-    private Button btnKapre;
-    private Button btnManananggal;
+    private VisualElement ghostButtonsContainer;
+    private Label lblDeductionStatus;
 
     private string selectedGhost = "None";
     private Button btnClose;
@@ -96,12 +115,7 @@ public class JournalController : MonoBehaviour
     private readonly Dictionary<string, Button> ghostButtons = new Dictionary<string, Button>();
 
     private static readonly Dictionary<string, HashSet<string>> ghostEvidenceMap =
-        new Dictionary<string, HashSet<string>>
-    {
-        { "Tikbalang", new HashSet<string> { "EMF", "SpiritBox", "GhostOrbs" } },
-        { "Kapre", new HashSet<string> { "EMF", "Freezing", "DOTS" } },
-        { "Manananggal", new HashSet<string> { "Freezing", "GhostWriting", "GhostOrbs" } }
-    };
+        GhostCatalog.BuildJournalEvidenceMap();
 
     private bool isUpdatingFilters = false;
 
@@ -234,8 +248,8 @@ public class JournalController : MonoBehaviour
         if (tabToc != null) tabToc.clicked += () => ShowSpread(1);
         if (tabBlueprint != null) tabBlueprint.clicked += () => ShowSpread(BlueprintSpreadIndex);
         if (tabEquip != null) tabEquip.clicked += () => ShowSpread(3);
-        if (tabGhosts != null) tabGhosts.clicked += () => ShowSpread(5);
-        if (tabEvidence != null) tabEvidence.clicked += () => ShowSpread(8);
+        if (tabGhosts != null) tabGhosts.clicked += () => ShowSpread(DossierSpreadIndex);
+        if (tabEvidence != null) tabEvidence.clicked += () => ShowSpread(EvidenceSpreadIndex);
         if (btnCloseTop != null) btnCloseTop.clicked += ToggleJournal;
 
         // 3. Cover Open Button
@@ -246,18 +260,14 @@ public class JournalController : MonoBehaviour
         btnTocBlueprint = root.Q<Button>("btn-toc-blueprint");
         btnTocEquip1 = root.Q<Button>("btn-toc-equip1");
         btnTocEquip2 = root.Q<Button>("btn-toc-equip2");
-        btnTocTikbalang = root.Q<Button>("btn-toc-tikbalang");
-        btnTocKapre = root.Q<Button>("btn-toc-kapre");
-        btnTocManananggal = root.Q<Button>("btn-toc-manananggal");
+        btnTocGhosts = root.Q<Button>("btn-toc-ghosts");
         btnTocEvidence = root.Q<Button>("btn-toc-evidence");
 
         if (btnTocBlueprint != null) btnTocBlueprint.clicked += () => ShowSpread(BlueprintSpreadIndex);
         if (btnTocEquip1 != null) btnTocEquip1.clicked += () => ShowSpread(3);
         if (btnTocEquip2 != null) btnTocEquip2.clicked += () => ShowSpread(4);
-        if (btnTocTikbalang != null) btnTocTikbalang.clicked += () => ShowSpread(5);
-        if (btnTocKapre != null) btnTocKapre.clicked += () => ShowSpread(6);
-        if (btnTocManananggal != null) btnTocManananggal.clicked += () => ShowSpread(7);
-        if (btnTocEvidence != null) btnTocEvidence.clicked += () => ShowSpread(8);
+        if (btnTocGhosts != null) btnTocGhosts.clicked += () => ShowSpread(DossierSpreadIndex);
+        if (btnTocEvidence != null) btnTocEvidence.clicked += () => ShowSpread(EvidenceSpreadIndex);
 
         // 5. Bottom Navigation Bar
         btnPrevPage = root.Q<Button>("btn-prev-page");
@@ -295,26 +305,46 @@ public class JournalController : MonoBehaviour
             }
         }
 
-        // 7. Ghost Deduction Buttons
+        // 7. Ghost Deduction Buttons (20 entities from GhostCatalog)
         ghostButtons.Clear();
-        btnTikbalang = root.Q<Button>("btn-ghost-tikbalang");
-        btnKapre = root.Q<Button>("btn-ghost-kapre");
-        btnManananggal = root.Q<Button>("btn-ghost-manananggal");
+        ghostButtonsContainer = root.Q<VisualElement>("ghost-buttons-container");
+        lblDeductionStatus = root.Q<Label>("lbl-deduction-status");
 
-        if (btnTikbalang != null) ghostButtons["Tikbalang"] = btnTikbalang;
-        if (btnKapre != null) ghostButtons["Kapre"] = btnKapre;
-        if (btnManananggal != null) ghostButtons["Manananggal"] = btnManananggal;
+        if (ghostButtonsContainer != null)
+        {
+            ghostButtonsContainer.Clear();
+            var allGhosts = GhostCatalog.AllGhosts;
+            for (int i = 0; i < allGhosts.Count; i += 2)
+            {
+                var row = new VisualElement();
+                row.AddToClassList("deduction-ghosts-row");
 
-        if (btnTikbalang != null) btnTikbalang.clicked += () => SelectGhost("Tikbalang");
-        if (btnKapre != null) btnKapre.clicked += () => SelectGhost("Kapre");
-        if (btnManananggal != null) btnManananggal.clicked += () => SelectGhost("Manananggal");
+                for (int col = 0; col < 2 && (i + col) < allGhosts.Count; col++)
+                {
+                    string ghostId = allGhosts[i + col].Id;
+                    var btn = new Button
+                    {
+                        name = $"btn-ghost-{ghostId.ToLowerInvariant().Replace(" ", "-")}",
+                        text = ghostId
+                    };
+                    btn.AddToClassList("ghost-button");
+                    btn.clicked += () => SelectGhost(ghostId);
+                    row.Add(btn);
+                    ghostButtons[ghostId] = btn;
+                }
+
+                ghostButtonsContainer.Add(row);
+            }
+        }
 
         btnClose = root.Q<Button>("btn-close");
         if (btnClose != null) btnClose.clicked += ToggleJournal;
 
-        // 8. Bind Case Briefing & Map Blueprint Spread (Spread 2) and Lobby Spread (Spread 9)
+        // 8. Bind Entity Compendium (Spread 5), Case Briefing & Map Blueprint (Spread 2) and Lobby Spread (Spread 7)
+        BindEntityCompendiumControls(root);
         BindCaseBriefingAndBlueprintControls(root);
         BindLobbySpreadControls(root);
+        UpdateCrossFilters();
 
         var loadoutMgr = ProgressionAndLoadoutManager.EnsureInstance();
         if (loadoutMgr != null)
@@ -387,6 +417,160 @@ public class JournalController : MonoBehaviour
             subscribedMatchManager.OnGhostContractInfoChanged -= RefreshCaseBriefingAndBlueprintUI;
             subscribedMatchManager.OnGhostContractInfoChanged += RefreshCaseBriefingAndBlueprintUI;
         }
+    }
+
+    private void BindEntityCompendiumControls(VisualElement root)
+    {
+        dossierSelectorGrid = root.Q<VisualElement>("dossier-selector-grid");
+        dossierDetailScroll = root.Q<ScrollView>("dossier-detail-scroll");
+        dossierArtImage = root.Q<VisualElement>("dossier-art-image");
+        dossierSigilBox = root.Q<VisualElement>("dossier-sigil-box");
+        lblDossierSigilIndex = root.Q<Label>("lbl-dossier-sigil-index");
+        lblDossierSigilMono = root.Q<Label>("lbl-dossier-sigil-mono");
+        lblDossierCaption = root.Q<Label>("lbl-dossier-caption");
+        btnDossierPrev = root.Q<Button>("btn-dossier-prev");
+        btnDossierNext = root.Q<Button>("btn-dossier-next");
+        lblDossierCounter = root.Q<Label>("lbl-dossier-counter");
+        lblDossierName = root.Q<Label>("lbl-dossier-name");
+        lblDossierSubtitle = root.Q<Label>("lbl-dossier-subtitle");
+        lblDossierLore = root.Q<Label>("lbl-dossier-lore");
+        dossierTraitsContainer = root.Q<VisualElement>("dossier-traits-container");
+        dossierEvidenceChips = root.Q<VisualElement>("dossier-evidence-chips");
+        lblDossierTip = root.Q<Label>("lbl-dossier-tip");
+
+        dossierSelectorButtons.Clear();
+        if (dossierSelectorGrid != null)
+        {
+            dossierSelectorGrid.Clear();
+            var allGhosts = GhostCatalog.AllGhosts;
+            for (int i = 0; i < allGhosts.Count; i += 2)
+            {
+                var row = new VisualElement();
+                row.AddToClassList("dossier-selector-row");
+
+                for (int col = 0; col < 2 && (i + col) < allGhosts.Count; col++)
+                {
+                    int idx = i + col;
+                    var ghost = allGhosts[idx];
+                    var btn = new Button
+                    {
+                        name = $"btn-dossier-{ghost.Id.ToLowerInvariant().Replace(" ", "-")}",
+                        text = $"{idx + 1:D2}. {ghost.Id}"
+                    };
+                    btn.AddToClassList("dossier-select-btn");
+                    btn.clicked += () => ShowDossierEntity(idx);
+                    row.Add(btn);
+                    dossierSelectorButtons.Add(btn);
+                }
+
+                dossierSelectorGrid.Add(row);
+            }
+        }
+
+        if (btnDossierPrev != null)
+        {
+            btnDossierPrev.clicked += () =>
+            {
+                int total = GhostCatalog.AllGhosts.Count;
+                if (total > 0) ShowDossierEntity((currentDossierIndex - 1 + total) % total);
+            };
+        }
+
+        if (btnDossierNext != null)
+        {
+            btnDossierNext.clicked += () =>
+            {
+                int total = GhostCatalog.AllGhosts.Count;
+                if (total > 0) ShowDossierEntity((currentDossierIndex + 1) % total);
+            };
+        }
+
+        ShowDossierEntity(0);
+    }
+
+    private void ShowDossierEntity(int index)
+    {
+        var allGhosts = GhostCatalog.AllGhosts;
+        if (allGhosts.Count == 0) return;
+
+        currentDossierIndex = Mathf.Clamp(index, 0, allGhosts.Count - 1);
+        var ghost = allGhosts[currentDossierIndex];
+
+        for (int i = 0; i < dossierSelectorButtons.Count; i++)
+        {
+            var btn = dossierSelectorButtons[i];
+            if (btn == null) continue;
+            if (i == currentDossierIndex) btn.AddToClassList("dossier-select-btn-active");
+            else btn.RemoveFromClassList("dossier-select-btn-active");
+        }
+
+        if (lblDossierCounter != null) lblDossierCounter.text = $"{currentDossierIndex + 1:D2} / {allGhosts.Count:D2}";
+        if (lblDossierCaption != null) lblDossierCaption.text = ghost.ScientificTag;
+        if (lblDossierName != null) lblDossierName.text = ghost.Id.ToUpperInvariant();
+        if (lblDossierSubtitle != null) lblDossierSubtitle.text = ghost.Subtitle;
+        if (lblDossierLore != null) lblDossierLore.text = ghost.Lore;
+        if (lblDossierTip != null) lblDossierTip.text = ghost.Tip;
+
+        if (dossierArtImage != null)
+        {
+            for (int i = 0; i < allGhosts.Count; i++)
+            {
+                string cssClass = allGhosts[i].ArtCssClass;
+                if (!string.IsNullOrEmpty(cssClass))
+                {
+                    dossierArtImage.RemoveFromClassList(cssClass);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(ghost.ArtCssClass))
+            {
+                dossierArtImage.RemoveFromClassList("hidden");
+                dossierArtImage.AddToClassList(ghost.ArtCssClass);
+                if (dossierSigilBox != null) dossierSigilBox.AddToClassList("hidden");
+            }
+            else
+            {
+                dossierArtImage.AddToClassList("hidden");
+                if (dossierSigilBox != null) dossierSigilBox.RemoveFromClassList("hidden");
+                if (lblDossierSigilIndex != null) lblDossierSigilIndex.text = $"ENTITY #{currentDossierIndex + 1:D2}";
+                if (lblDossierSigilMono != null) lblDossierSigilMono.text = BuildMonogram(ghost.Id);
+            }
+        }
+
+        if (dossierDetailScroll != null)
+        {
+            dossierDetailScroll.scrollOffset = Vector2.zero;
+        }
+
+        if (dossierTraitsContainer != null)
+        {
+            dossierTraitsContainer.Clear();
+            for (int i = 0; i < ghost.Traits.Length; i++)
+            {
+                var traitLbl = new Label($"• {ghost.Traits[i]}");
+                traitLbl.AddToClassList("ghost-trait-bullet");
+                dossierTraitsContainer.Add(traitLbl);
+            }
+        }
+
+        if (dossierEvidenceChips != null)
+        {
+            dossierEvidenceChips.Clear();
+            for (int i = 0; i < ghost.Evidences.Length; i++)
+            {
+                var chip = new Label(GhostCatalog.EvidenceTypeToDisplayLabel(ghost.Evidences[i]));
+                chip.AddToClassList("evidence-chip");
+                dossierEvidenceChips.Add(chip);
+            }
+        }
+    }
+
+    private static string BuildMonogram(string ghostId)
+    {
+        if (string.IsNullOrEmpty(ghostId)) return "???";
+        string cleaned = ghostId.Replace(" ", "");
+        if (cleaned.Length <= 3) return cleaned.ToUpperInvariant();
+        return $"{char.ToUpperInvariant(cleaned[0])}{char.ToUpperInvariant(cleaned[1])}{char.ToUpperInvariant(cleaned[cleaned.Length - 1])}";
     }
 
     private void BindCaseBriefingAndBlueprintControls(VisualElement root)
@@ -974,28 +1158,22 @@ public class JournalController : MonoBehaviour
                     lblPageIndicator.text = "Cover Page";
                     break;
                 case 1:
-                    lblPageIndicator.text = "Table of Contents  (Page 1 of 8)";
+                    lblPageIndicator.text = "Table of Contents  (Page 1 of 6)";
                     break;
                 case 2:
-                    lblPageIndicator.text = "Case Briefing & Blueprint  (Page 2 of 8)";
+                    lblPageIndicator.text = "Case Briefing & Blueprint  (Page 2 of 6)";
                     break;
                 case 3:
-                    lblPageIndicator.text = "Equipment Manual 1  (Page 3 of 8)";
+                    lblPageIndicator.text = "Equipment Manual 1  (Page 3 of 6)";
                     break;
                 case 4:
-                    lblPageIndicator.text = "Equipment Manual 2  (Page 4 of 8)";
+                    lblPageIndicator.text = "Equipment Manual 2  (Page 4 of 6)";
                     break;
-                case 5:
-                    lblPageIndicator.text = "Entity: Tikbalang  (Page 5 of 8)";
+                case DossierSpreadIndex:
+                    lblPageIndicator.text = "Entity Compendium  (Page 5 of 6)";
                     break;
-                case 6:
-                    lblPageIndicator.text = "Entity: Kapre  (Page 6 of 8)";
-                    break;
-                case 7:
-                    lblPageIndicator.text = "Entity: Manananggal  (Page 7 of 8)";
-                    break;
-                case 8:
-                    lblPageIndicator.text = "Deduction Checklist  (Page 8 of 8)";
+                case EvidenceSpreadIndex:
+                    lblPageIndicator.text = "Deduction Checklist  (Page 6 of 6)";
                     break;
                 case LobbySpreadIndex:
                     lblPageIndicator.text = "Safe House Contract, Multiplayer & Equipment Loadout";
@@ -1019,8 +1197,8 @@ public class JournalController : MonoBehaviour
         else if (currentSpread == 1 && tabToc != null) tabToc.AddToClassList("active-tab");
         else if (currentSpread == BlueprintSpreadIndex && tabBlueprint != null) tabBlueprint.AddToClassList("active-tab");
         else if ((currentSpread == 3 || currentSpread == 4) && tabEquip != null) tabEquip.AddToClassList("active-tab");
-        else if ((currentSpread >= 5 && currentSpread <= 7) && tabGhosts != null) tabGhosts.AddToClassList("active-tab");
-        else if (currentSpread == 8 && tabEvidence != null) tabEvidence.AddToClassList("active-tab");
+        else if (currentSpread == DossierSpreadIndex && tabGhosts != null) tabGhosts.AddToClassList("active-tab");
+        else if (currentSpread == EvidenceSpreadIndex && tabEvidence != null) tabEvidence.AddToClassList("active-tab");
     }
 
     private void Update()
@@ -1202,6 +1380,10 @@ public class JournalController : MonoBehaviour
                 }
 
                 LastLockedInGuess = selectedGhost;
+                if (lblDeductionStatus != null)
+                {
+                    lblDeductionStatus.text = $"Locked Deduction: {selectedGhost}";
+                }
                 if (GameMatchManager.Instance != null)
                 {
                     GameMatchManager.Instance.RecordDeduction(selectedGhost);
@@ -1292,6 +1474,10 @@ public class JournalController : MonoBehaviour
                 if (candidateGhosts.Count == 1)
                 {
                     LastLockedInGuess = candidateGhosts[0];
+                    if (lblDeductionStatus != null)
+                    {
+                        lblDeductionStatus.text = $"Confirmed Match: {candidateGhosts[0]}";
+                    }
                     if (GameMatchManager.Instance != null)
                     {
                         GameMatchManager.Instance.RecordDeduction(candidateGhosts[0]);
@@ -1300,6 +1486,12 @@ public class JournalController : MonoBehaviour
                 else
                 {
                     LastLockedInGuess = "None";
+                    if (lblDeductionStatus != null)
+                    {
+                        lblDeductionStatus.text = tickedEvidences.Count == 0
+                            ? $"Select up to 3 evidences to narrow down all {ghostEvidenceMap.Count} entities."
+                            : $"{candidateGhosts.Count} matching entities remaining.";
+                    }
                 }
             }
         }

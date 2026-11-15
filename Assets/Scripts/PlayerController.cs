@@ -3,12 +3,22 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
+public enum PlayerLifeState : byte
+{
+    Alive = 0,
+    DyingSequence = 1,
+    GhostSpectator = 2
+}
+
 [RequireComponent(typeof(Rigidbody2D))]
 [DisallowMultipleComponent]
 public class PlayerController : NetworkBehaviour
 {
     public static readonly List<PlayerController> AllPlayers = new List<PlayerController>();
     public static PlayerController LocalInstance { get; private set; }
+    public static event System.Action OnAnyPlayerSanityStateChanged;
+
+    public static void NotifySanityStateChanged() => OnAnyPlayerSanityStateChanged?.Invoke();
 
     [Header("Movement Settings")]
     [SerializeField] private float walkSpeed = 3f;
@@ -35,8 +45,11 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private float rotationDeadzone = 0.03f;
 
     // Network states
-    private NetworkVariable<bool> isAlive = new NetworkVariable<bool>(
-        true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<PlayerLifeState> lifeState = new NetworkVariable<PlayerLifeState>(
+        PlayerLifeState.Alive, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<Vector2> deathWorldPosition = new NetworkVariable<Vector2>(
+        Vector2.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private NetworkVariable<bool> isCrouching = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
@@ -46,6 +59,9 @@ public class PlayerController : NetworkBehaviour
 
     private NetworkVariable<bool> netIsHolding = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+    [Header("Corpse Prefab (Auto-Resolved From NetworkPrefabs If Unset)")]
+    [SerializeField] private GameObject playerCorpsePrefab;
 
     [Header("Sanity Settings")]
     [Tooltip("Rate at which sanity drains per second while in the dark and outside safe zones (sped up by 0.5x to 0.75/s).")]
@@ -57,7 +73,12 @@ public class PlayerController : NetworkBehaviour
     public NetworkVariable<bool> isGodMode = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public bool IsAlive => isAlive.Value;
+    public PlayerLifeState LifeState => lifeState.Value;
+    public bool IsAlive => lifeState.Value == PlayerLifeState.Alive;
+    public bool IsDyingSequence => lifeState.Value == PlayerLifeState.DyingSequence;
+    public bool IsGhostSpectator => lifeState.Value == PlayerLifeState.GhostSpectator;
+    public Vector2 DeathWorldPosition => deathWorldPosition.Value;
+    public GameObject CorpsePrefab => playerCorpsePrefab;
     public bool IsCrouching => isCrouching.Value;
     public float Sanity => sanity.Value;
     public float MaxReachRadius => maxReachRadius;
@@ -69,26 +90,36 @@ public class PlayerController : NetworkBehaviour
     {
         get
         {
-            // 1. Clean up any inactive, disabled, or destroyed safe zones (e.g. lights turned off)
-            activeSafeZones.RemoveWhere(sz => sz == null || !sz.gameObject.activeInHierarchy || !sz.enabled);
-            if (activeSafeZones.Count > 0) return true;
+            // 1. Evict null, inactive, disabled, or non-overlapping zones from the trigger cache
+            activeSafeZones.RemoveWhere(sz =>
+                sz == null ||
+                !sz.gameObject.activeInHierarchy ||
+                !sz.enabled ||
+                (sz.HasEnabledCollider && !sz.OverlapsPosition(transform.position)));
 
-            // 2. Physics overlap fallback (handles spawning inside trigger or standing in room when light turns on)
-            Collider2D[] overlapping = Physics2D.OverlapCircleAll(transform.position, 0.25f);
-            foreach (var col in overlapping)
+            // 2. Stateless exact point-in-collider check against active SafeZones (no 0.25f wall/exterior bleed)
+            Vector2 worldPos = transform.position;
+            bool hasNullZone = false;
+            foreach (var sz in SafeZone.AllActiveZones)
             {
-                if (col != null && col.isTrigger)
+                if (sz == null)
                 {
-                    var sz = col.GetComponent<SafeZone>();
-                    if (sz != null && sz.isActiveAndEnabled)
-                    {
-                        activeSafeZones.Add(sz);
-                        return true;
-                    }
+                    hasNullZone = true;
+                    continue;
+                }
+                if (sz.OverlapsPosition(worldPos))
+                {
+                    if (hasNullZone) SafeZone.AllActiveZones.RemoveWhere(s => s == null);
+                    return true;
                 }
             }
 
-            return false;
+            if (hasNullZone)
+            {
+                SafeZone.AllActiveZones.RemoveWhere(s => s == null);
+            }
+
+            return activeSafeZones.Count > 0;
         }
     }
 
@@ -99,8 +130,10 @@ public class PlayerController : NetworkBehaviour
 
     private Rigidbody2D rb;
     private SpriteRenderer spriteRenderer;
+    private Collider2D playerCollider;
     private PlayerInventory inventory;
     private Animator animator;
+    private Coroutine deathSequenceTimeoutCoroutine;
     private Vector2 moveInput;
     private Vector2 mousePosition;
     private Camera localCamera;
@@ -127,6 +160,27 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private Color playerAmbientColor = new Color(0.84f, 0.89f, 0.96f, 1f);
 
     public Light2D PlayerAmbientLight => playerPovLight;
+    public Collider2D PlayerCollider => playerCollider;
+
+    public static bool TryGetByClientId(ulong clientId, out PlayerController player)
+    {
+        for (int i = 0; i < AllPlayers.Count; i++)
+        {
+            var p = AllPlayers[i];
+            if (p != null && p.IsSpawned && p.OwnerClientId == clientId)
+            {
+                player = p;
+                return true;
+            }
+        }
+        player = null;
+        return false;
+    }
+
+    public static bool IsEquipmentAllowedForGhostSpectator(EquipmentItem eq)
+    {
+        return eq != null && eq.IsOnGround && !(eq is SanityPillsItem) && !(eq is RitualChalkItem);
+    }
 
     private void Awake()
     {
@@ -138,6 +192,7 @@ public class PlayerController : NetworkBehaviour
             rb.constraints = RigidbodyConstraints2D.FreezeRotation;
         }
         spriteRenderer = GetComponent<SpriteRenderer>();
+        playerCollider = GetComponent<Collider2D>();
         inventory = GetComponent<PlayerInventory>();
         animator = GetComponent<Animator>();
         originalScale = transform.localScale;
@@ -172,19 +227,48 @@ public class PlayerController : NetworkBehaviour
             playerPovLight.enabled = false;
         }
 
-        isAlive.OnValueChanged += (oldVal, newVal) =>
+        sanity.OnValueChanged += OnSanityValueChanged;
+        lifeState.OnValueChanged += (oldState, newState) =>
         {
-            OnAliveStateChanged(newVal);
+            OnLifeStateChanged(oldState, newState);
             if (!IsOwner) UpdateRemoteAnimator();
         };
         isCrouching.OnValueChanged += (oldVal, newVal) => OnCrouchStateChanged(newVal);
         netIsWalking.OnValueChanged += (oldVal, newVal) => { if (!IsOwner) UpdateRemoteAnimator(); };
         netIsHolding.OnValueChanged += (oldVal, newVal) => { if (!IsOwner) UpdateRemoteAnimator(); };
 
+        if (lifeState.Value != PlayerLifeState.Alive)
+        {
+            ApplyLifeStateLocally(lifeState.Value);
+        }
+        RefreshAllPlayerVisibilityAndCollisions();
+
         if (!IsOwner)
         {
             UpdateRemoteAnimator();
         }
+
+        NotifySanityStateChanged();
+    }
+
+    private void OnSanityValueChanged(float previousValue, float newValue)
+    {
+        NotifySanityStateChanged();
+    }
+
+    private float GetEffectiveDarkSanityDrainRate()
+    {
+        float multiplier = 1f;
+        if (ProgressionAndLoadoutManager.Instance != null)
+        {
+            switch (ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
+            {
+                case ContractDifficulty.Intermediate: multiplier = 1.25f; break;
+                case ContractDifficulty.Professional: multiplier = 1.5f; break;
+                case ContractDifficulty.Nightmare: multiplier = 2.0f; break;
+            }
+        }
+        return darkSanityDrainRate * multiplier;
     }
 
     private void EnsurePlayerPOVLight()
@@ -214,7 +298,7 @@ public class PlayerController : NetworkBehaviour
 
         UpdatePOVLightScale();
         ApplyPlayerAmbientLightSettings();
-        playerPovLight.enabled = IsOwner && isAlive.Value;
+        playerPovLight.enabled = IsOwner && IsAlive;
     }
 
     private void ApplyPlayerAmbientLightSettings()
@@ -231,6 +315,24 @@ public class PlayerController : NetworkBehaviour
         playerPovLight.pointLightOuterRadius = playerAmbientRadius;
         playerPovLight.shadowsEnabled = true;
         playerPovLight.shadowIntensity = 1.0f;
+        playerPovLight.shadowVolumeIntensity = 0f;
+        playerPovLight.targetSortingLayers = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
+    }
+
+    private void ApplySpectatorAmbientLightSettings()
+    {
+        if (playerPovLight == null) return;
+
+        playerPovLight.lightType = Light2D.LightType.Point;
+        playerPovLight.color = new Color(0.55f, 0.76f, 1.0f, 1f);
+        playerPovLight.intensity = 0.85f;
+        playerPovLight.falloffIntensity = 0.55f;
+        playerPovLight.pointLightInnerAngle = 360f;
+        playerPovLight.pointLightOuterAngle = 360f;
+        playerPovLight.pointLightInnerRadius = 0.45f;
+        playerPovLight.pointLightOuterRadius = 1.65f;
+        playerPovLight.shadowsEnabled = false;
+        playerPovLight.shadowIntensity = 0f;
         playerPovLight.shadowVolumeIntensity = 0f;
         playerPovLight.targetSortingLayers = System.Array.ConvertAll(SortingLayer.layers, layer => layer.id);
     }
@@ -262,13 +364,19 @@ public class PlayerController : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        sanity.OnValueChanged -= OnSanityValueChanged;
         EndCurrentDrag();
         AllPlayers.Remove(this);
         if (LocalInstance == this)
         {
             LocalInstance = null;
             ItemHoverIndicator.Instance?.Hide();
+            DeathSequenceController.Instance?.CancelAndReset();
+            GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
+            NetworkDoor.SetLocalSpectatorDoorBypass(false, playerCollider);
         }
+        RefreshAllPlayerVisibilityAndCollisions();
+        NotifySanityStateChanged();
     }
 
     private void EndCurrentDrag()
@@ -295,7 +403,8 @@ public class PlayerController : NetworkBehaviour
         SpiritBoxItem.IsLocalDialogueActive ||
         JournalController.IsTextInputFocused ||
         LoadingScreenManager.IsLoadingVisible ||
-        EndGameRevealController.IsOpen;
+        EndGameRevealController.IsOpen ||
+        (LocalInstance != null && LocalInstance.IsDyingSequence);
 
     /// <summary>
     /// Checks whether world interactions (clicks, item usage, dragging, E interact, drop, place, slot switching)
@@ -307,18 +416,18 @@ public class PlayerController : NetworkBehaviour
 
     private void Update()
     {
-        if (IsServer && isAlive.Value)
+        if (IsServer && IsAlive)
         {
-            bool inDark = true;
-            if (inventory != null && inventory.CurrentItem is FlashlightItem flashlight)
-            {
-                if (flashlight.IsLightOn) inDark = false;
-            }
+            bool inDark = !PlayerInventory.HasActiveHeldFlashlight(this);
 
             if (inDark && !IsInSafeZone)
             {
                 // Light-based sanity drain (only drain in the dark and outside safe zones)
-                sanity.Value = Mathf.Max(0f, sanity.Value - Time.deltaTime * darkSanityDrainRate);
+                float nextSanity = Mathf.Max(0f, sanity.Value - Time.deltaTime * GetEffectiveDarkSanityDrainRate());
+                if (!Mathf.Approximately(nextSanity, sanity.Value))
+                {
+                    sanity.Value = nextSanity;
+                }
             }
         }
 
@@ -328,9 +437,10 @@ public class PlayerController : NetworkBehaviour
             return;
         }
 
-        if (!isAlive.Value)
+        if (IsDyingSequence)
         {
             EndCurrentDrag();
+            ItemHoverIndicator.Instance?.Hide();
             SetLocalAnimationState(false, false);
             return;
         }
@@ -342,17 +452,17 @@ public class PlayerController : NetworkBehaviour
             EndCurrentDrag();
             currentlyHoveredInteractable = null;
             ItemHoverIndicator.Instance?.Hide();
-            SetLocalAnimationState(false, inventory != null && inventory.CurrentItem != null);
+            SetLocalAnimationState(false, IsAlive && inventory != null && inventory.CurrentItem != null);
             return;
         }
 
-        // 1. Gather WASD input (functional during normal gameplay and while Journal is open)
+        // 1. Gather WASD input (functional during normal gameplay, GhostSpectator, and while Journal is open)
         float moveX = Input.GetAxisRaw("Horizontal");
         float moveY = Input.GetAxisRaw("Vertical");
         moveInput = new Vector2(moveX, moveY).normalized;
 
-        // 2. Crouch input (C)
-        bool crouchHeld = Input.GetKey(KeyCode.C);
+        // 2. Crouch input (C) — Living players only
+        bool crouchHeld = IsAlive && Input.GetKey(KeyCode.C);
         if (crouchHeld != isCrouching.Value)
         {
             isCrouching.Value = crouchHeld;
@@ -366,7 +476,7 @@ public class PlayerController : NetworkBehaviour
             ItemHoverIndicator.Instance?.Hide();
 
             // Maintain walking animation state for WASD movement in Journal
-            SetLocalAnimationState(moveInput.sqrMagnitude > 0.01f, inventory != null && inventory.CurrentItem != null);
+            SetLocalAnimationState(IsAlive && moveInput.sqrMagnitude > 0.01f, IsAlive && inventory != null && inventory.CurrentItem != null);
             return;
         }
 
@@ -398,18 +508,19 @@ public class PlayerController : NetworkBehaviour
             var hovered = GetHoveredInteractable();
             if (hovered != null)
             {
-                if (hovered.CanDrag())
+                bool allowedHover = IsAlive || (IsGhostSpectator && hovered is EquipmentItem eqHover && IsEquipmentAllowedForGhostSpectator(eqHover));
+                if (allowedHover && hovered.CanDrag())
                 {
                     ulong localClientId = NetworkManager.Singleton != null ? NetworkManager.Singleton.LocalClientId : 0UL;
                     currentDraggedInteractable = hovered;
                     currentDraggedInteractable.OnDragBegin(localClientId);
                 }
-                else
+                else if (IsAlive)
                 {
                     hovered.Interact();
                 }
             }
-            else
+            else if (IsAlive)
             {
                 if (inventory != null) inventory.UsePrimary();
             }
@@ -422,7 +533,8 @@ public class PlayerController : NetworkBehaviour
 
         if (currentDraggedInteractable != null)
         {
-            if ((currentDraggedInteractable as Object) == null || !currentDraggedInteractable.CanDrag())
+            bool stillAllowed = IsAlive || (IsGhostSpectator && currentDraggedInteractable is EquipmentItem eqDrag && IsEquipmentAllowedForGhostSpectator(eqDrag));
+            if ((currentDraggedInteractable as Object) == null || !stillAllowed || !currentDraggedInteractable.CanDrag())
             {
                 EndCurrentDrag();
             }
@@ -440,8 +552,8 @@ public class PlayerController : NetworkBehaviour
             }
         }
 
-        // 6. Place Item (Right Click)
-        if (Input.GetMouseButtonDown(1))
+        // 6. Place Item (Right Click) — Living players only
+        if (IsAlive && Input.GetMouseButtonDown(1))
         {
             if (Vector2.Distance(transform.position, mousePosition) <= maxReachRadius)
             {
@@ -449,19 +561,24 @@ public class PlayerController : NetworkBehaviour
             }
         }
 
-        // 7. Drop Item (G)
+        // 7. Drop Item (G) — Allowed for Alive and GhostSpectator (ground equipment)
         if (Input.GetKeyDown(KeyCode.G))
         {
             if (inventory != null) inventory.DropCurrentItem(transform.position);
         }
 
-        // 8. Hooks for UI / Audio
+        // 8. Hooks for UI
         if (Input.GetKeyDown(KeyCode.J)) OpenJournal();
-        if (Input.GetKeyDown(KeyCode.V)) ToggleLocalVoice();
-        if (Input.GetKeyDown(KeyCode.B)) ToggleRadioVoice();
 
-        // 9. Update Animator and replicate animation state
-        SetLocalAnimationState(moveInput.sqrMagnitude > 0.01f, inventory != null && inventory.CurrentItem != null);
+        // 9. Update Animator and replicate animation state (dead spectators stay silent & still to living players)
+        if (IsAlive)
+        {
+            SetLocalAnimationState(moveInput.sqrMagnitude > 0.01f, inventory != null && inventory.CurrentItem != null);
+        }
+        else
+        {
+            SetLocalAnimationState(false, false);
+        }
     }
 
     private void SetLocalAnimationState(bool walking, bool holding)
@@ -483,7 +600,7 @@ public class PlayerController : NetworkBehaviour
     {
         if (animator == null) return;
 
-        if (!isAlive.Value)
+        if (!IsAlive)
         {
             animator.SetBool("isWalking", false);
             animator.SetBool("isHolding", false);
@@ -511,17 +628,20 @@ public class PlayerController : NetworkBehaviour
     }
 
     private void OpenJournal() { /* Stub for Journal UI */ }
-    private void ToggleLocalVoice() { /* Stub for Proximity Chat */ }
-    private void ToggleRadioVoice() { /* Stub for Radio Chat */ }
 
     private void FixedUpdate()
     {
-        if (!IsOwner || !isAlive.Value) return;
+        if (!IsOwner || IsDyingSequence) return;
         if (IsMovementBlocked) return;
 
         // 1. Determine current speed
         float currentSpeed = walkSpeed;
-        if (isCrouching.Value)
+        if (IsGhostSpectator)
+        {
+            // Dead spectators float smoothly without exhausting stamina
+            currentSpeed = Input.GetKey(KeyCode.LeftShift) ? sprintSpeed : walkSpeed;
+        }
+        else if (isCrouching.Value)
         {
             currentSpeed = crouchSpeed;
         }
@@ -610,58 +730,131 @@ public class PlayerController : NetworkBehaviour
         UpdatePOVLightScale();
     }
 
-    private void OnAliveStateChanged(bool alive)
+    private void OnLifeStateChanged(PlayerLifeState oldState, PlayerLifeState newState)
     {
-        if (!alive)
+        if (newState == PlayerLifeState.DyingSequence && oldState == PlayerLifeState.Alive)
         {
-            if (playerPovLight != null)
+            GameAudioManager.PlayGhostKill(transform.position);
+        }
+
+        ApplyLifeStateLocally(newState);
+
+        // If transitioning from Alive -> DyingSequence cleanly, make sure owner's inventory state is cleared locally too
+        if (newState != PlayerLifeState.Alive && IsOwner)
+        {
+            EndCurrentDrag();
+            ItemHoverIndicator.Instance?.Hide();
+            if (isCrouching.Value) isCrouching.Value = false;
+            if (newState == PlayerLifeState.DyingSequence && inventory != null)
+            {
+                inventory.ClearAllSlots();
+            }
+        }
+
+        NotifySanityStateChanged();
+    }
+
+    private void ApplyLifeStateLocally(PlayerLifeState state)
+    {
+        int spectatorLayer = LayerMask.NameToLayer("GhostSpectator");
+        if (spectatorLayer < 0) spectatorLayer = LayerMask.NameToLayer("Ignore Raycast");
+        if (spectatorLayer < 0) spectatorLayer = 2;
+
+        if (state == PlayerLifeState.Alive)
+        {
+            gameObject.layer = 0; // Default
+            if (playerCollider != null) playerCollider.enabled = true;
+            transform.localScale = originalScale;
+            UpdatePOVLightScale();
+
+            if (IsOwner)
+            {
+                DeathSequenceController.Instance?.CancelAndReset();
+                GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
+                NetworkDoor.SetLocalSpectatorDoorBypass(false, playerCollider);
+                ApplyPlayerAmbientLightSettings();
+                if (playerPovLight != null) playerPovLight.enabled = true;
+            }
+            else if (playerPovLight != null)
             {
                 playerPovLight.enabled = false;
             }
-            GameAudioManager.PlayGhostKill(transform.position);
+        }
+        else if (state == PlayerLifeState.DyingSequence)
+        {
+            gameObject.layer = spectatorLayer;
+            if (playerCollider != null) playerCollider.enabled = false;
+            if (rb != null) rb.linearVelocity = Vector2.zero;
+
+            if (playerPovLight != null) playerPovLight.enabled = false;
+
             if (IsOwner)
             {
-                EndCurrentDrag();
-                ItemHoverIndicator.Instance?.Hide();
-                if (inventory != null)
-                {
-                    inventory.DropAllItems(transform.position);
-                }
+                GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
+                NetworkDoor.SetLocalSpectatorDoorBypass(false, playerCollider);
+                DeathSequenceController.EnsureInstance().BeginDeathSequence(this);
             }
-
-            // Death state visuals and collision
-            if (spriteRenderer != null)
-            {
-                spriteRenderer.color = new Color(0.4f, 0.4f, 0.4f, 0.5f);
-            }
-
-            // Change layer to Ignore Raycast so ghosts and raycasts ignore dead spectators
-            int ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
-            if (ignoreRaycastLayer >= 0)
-            {
-                gameObject.layer = ignoreRaycastLayer;
-            }
-
-            // Disable physics interaction
-            var col = GetComponent<Collider2D>();
-            if (col != null) col.enabled = false;
-            rb.linearVelocity = Vector2.zero;
         }
-        else
+        else // PlayerLifeState.GhostSpectator
         {
-            if (playerPovLight != null)
+            gameObject.layer = spectatorLayer;
+            if (playerCollider != null) playerCollider.enabled = true;
+
+            if (IsOwner)
             {
-                playerPovLight.enabled = IsOwner;
+                // Snap camera/player softly to death location if not already there
+                ApplySpectatorAmbientLightSettings();
+                if (playerPovLight != null) playerPovLight.enabled = true;
+                GhostSpectatorVisuals.EnsureInstance().SetSpectatorVisualsActive(true);
+                NetworkDoor.SetLocalSpectatorDoorBypass(true, playerCollider);
             }
-            if (spriteRenderer != null)
+            else if (playerPovLight != null)
             {
-                spriteRenderer.color = Color.white;
+                playerPovLight.enabled = false;
+            }
+        }
+
+        RefreshAllPlayerVisibilityAndCollisions();
+
+        // Update visuals on any equipment held by this player (hidden invisibly from living observers)
+        for (int i = 0; i < EquipmentItem.AllEquipment.Count; i++)
+        {
+            var eq = EquipmentItem.AllEquipment[i];
+            if (eq != null)
+            {
+                eq.RefreshVisualsForHolderState();
+            }
+        }
+    }
+
+    public static void RefreshAllPlayerVisibilityAndCollisions()
+    {
+        bool viewerIsGhostSpectator = LocalInstance != null && LocalInstance.IsGhostSpectator;
+        Color cyanGhostTint = new Color(0.55f, 0.77f, 1.0f, 0.35f);
+
+        for (int i = 0; i < AllPlayers.Count; i++)
+        {
+            var p = AllPlayers[i];
+            if (p == null) continue;
+
+            if (p.spriteRenderer != null)
+            {
+                bool show = p.IsAlive || (viewerIsGhostSpectator && p.IsGhostSpectator);
+                p.spriteRenderer.enabled = show;
+                p.spriteRenderer.color = p.IsGhostSpectator ? cyanGhostTint : Color.white;
             }
 
-            gameObject.layer = 0; // Default layer
+            if (p.playerCollider == null) continue;
 
-            var col = GetComponent<Collider2D>();
-            if (col != null) col.enabled = true;
+            for (int j = i + 1; j < AllPlayers.Count; j++)
+            {
+                var other = AllPlayers[j];
+                if (other == null || other.playerCollider == null) continue;
+
+                // Living players never collide physically with dead spectators; dead never bump dead
+                bool ignore = !p.IsAlive || !other.IsAlive;
+                Physics2D.IgnoreCollision(p.playerCollider, other.playerCollider, ignore);
+            }
         }
     }
 
@@ -671,8 +864,16 @@ public class PlayerController : NetworkBehaviour
     public bool RevivePlayer()
     {
         if (!IsServer) return false;
-        if (isAlive.Value) return false;
-        isAlive.Value = true;
+        if (IsAlive) return false;
+
+        if (deathSequenceTimeoutCoroutine != null)
+        {
+            StopCoroutine(deathSequenceTimeoutCoroutine);
+            deathSequenceTimeoutCoroutine = null;
+        }
+
+        PlayerCorpse.DespawnForVictimServer(OwnerClientId);
+        lifeState.Value = PlayerLifeState.Alive;
         sanity.Value = 100f;
         return true;
     }
@@ -684,9 +885,54 @@ public class PlayerController : NetworkBehaviour
     {
         if (!IsServer) return false;
         if (isGodMode.Value) return false; // God mode prevents death
-        if (!isAlive.Value) return false; // Already dead
-        isAlive.Value = false;
+        if (!IsAlive) return false; // Already dying or dead
+
+        if (inventory == null) inventory = GetComponent<PlayerInventory>();
+
+        Vector3 deathPos3D = rb != null
+            ? new Vector3(rb.position.x, rb.position.y, 0f)
+            : new Vector3(transform.position.x, transform.position.y, 0f);
+        deathWorldPosition.Value = new Vector2(deathPos3D.x, deathPos3D.y);
+
+        // Server-authoritative item drop within 0.06..0.10 units before transitioning life state
+        inventory?.ServerDropAllItemsOnDeath(deathPos3D);
+
+        lifeState.Value = PlayerLifeState.DyingSequence;
+
+        PlayerCorpse.SpawnForVictimServer(OwnerClientId, deathPos3D, transform.eulerAngles.z, playerCorpsePrefab);
+
+        if (deathSequenceTimeoutCoroutine != null)
+        {
+            StopCoroutine(deathSequenceTimeoutCoroutine);
+        }
+        deathSequenceTimeoutCoroutine = StartCoroutine(ServerDeathSequenceTimeoutRoutine());
         return true;
+    }
+
+    [Rpc(SendTo.Server)]
+    public void FinishDeathSequenceServerRpc()
+    {
+        if (lifeState.Value != PlayerLifeState.DyingSequence) return;
+
+        if (deathSequenceTimeoutCoroutine != null)
+        {
+            StopCoroutine(deathSequenceTimeoutCoroutine);
+            deathSequenceTimeoutCoroutine = null;
+        }
+
+        lifeState.Value = PlayerLifeState.GhostSpectator;
+        GameMatchManager.Instance?.CheckAllPlayersDead();
+    }
+
+    private System.Collections.IEnumerator ServerDeathSequenceTimeoutRoutine()
+    {
+        yield return new WaitForSeconds(8.5f);
+        deathSequenceTimeoutCoroutine = null;
+        if (lifeState.Value == PlayerLifeState.DyingSequence)
+        {
+            lifeState.Value = PlayerLifeState.GhostSpectator;
+            GameMatchManager.Instance?.CheckAllPlayersDead();
+        }
     }
 
     private IInteractable GetHoveredInteractable()
@@ -696,6 +942,7 @@ public class PlayerController : NetworkBehaviour
 
     private IInteractable CalculateHoveredInteractable()
     {
+        if (IsDyingSequence) return null;
         if (Vector2.Distance(transform.position, mousePosition) > maxReachRadius) return null;
 
         // Check both interactLayer and all colliders at cursor without per-frame array allocation
@@ -705,6 +952,7 @@ public class PlayerController : NetworkBehaviour
         IInteractable bestInteractable = null;
         float bestDistance = float.MaxValue;
         bool bestIsEquipmentOrKey = false;
+        bool spectating = IsGhostSpectator;
 
         for (int i = 0; i < hitCount; i++)
         {
@@ -714,20 +962,35 @@ public class PlayerController : NetworkBehaviour
             var equipment = hit.GetComponent<EquipmentItem>();
             if (equipment != null)
             {
-                if (!equipment.IsOnGround && !equipment.IsPlaced)
+                if (spectating)
+                {
+                    if (!IsEquipmentAllowedForGhostSpectator(equipment)) continue;
+                }
+                else if (!equipment.IsOnGround && !equipment.IsPlaced)
                 {
                     continue; // Ignore items currently held in a player's hand/inventory
                 }
+
                 if (equipment.InteractCollider != null && equipment.InteractCollider != hit)
                 {
                     continue; // Ignore any extra colliders on the item (like huge AoE triggers)
                 }
+            }
+            else if (spectating)
+            {
+                // Dead spectators cannot hover/interact with doors, switches, props, keys, corpses, or truck UI
+                continue;
             }
 
             var interactable = hit.GetComponent<IInteractable>();
             if (interactable == null)
             {
                 interactable = hit.GetComponentInParent<IInteractable>();
+            }
+
+            if (spectating && !(interactable is EquipmentItem))
+            {
+                continue;
             }
 
             if (interactable != null)
@@ -760,10 +1023,13 @@ public class PlayerController : NetworkBehaviour
     private void TryInteract()
     {
         var hovered = GetHoveredInteractable();
-        if (hovered != null)
+        if (hovered == null) return;
+
+        if (IsGhostSpectator && !(hovered is EquipmentItem eq && IsEquipmentAllowedForGhostSpectator(eq)))
         {
-            hovered.Interact();
+            return;
         }
+        hovered.Interact();
     }
 
     public void RestoreSanity(float amount)
@@ -779,7 +1045,7 @@ public class PlayerController : NetworkBehaviour
             new GameObject("ItemHoverIndicator").AddComponent<ItemHoverIndicator>();
         }
 
-        if (IsInteractionBlocked || !isAlive.Value)
+        if (IsInteractionBlocked || IsDyingSequence)
         {
             ItemHoverIndicator.Instance.Hide();
             return;
@@ -789,7 +1055,11 @@ public class PlayerController : NetworkBehaviour
         {
             if (currentlyHoveredInteractable is EquipmentItem equipment)
             {
-                if (!(equipment is RitualChalkItem && equipment.IsPlaced) && (equipment.IsOnGround || equipment.IsPlaced))
+                bool allowed = IsGhostSpectator
+                    ? IsEquipmentAllowedForGhostSpectator(equipment)
+                    : !(equipment is RitualChalkItem && equipment.IsPlaced) && (equipment.IsOnGround || equipment.IsPlaced);
+
+                if (allowed)
                 {
                     float distToMouse = Vector2.Distance(transform.position, mousePosition);
                     float distToItem = Vector2.Distance(transform.position, equipment.transform.position);
@@ -808,7 +1078,11 @@ public class PlayerController : NetworkBehaviour
                     }
                 }
             }
-            else if (currentlyHoveredInteractable is SummoningCircle summoningCircle)
+            else if (IsAlive && currentlyHoveredInteractable is PlayerCorpse corpse)
+            {
+                if (TryShowWorldInteractableHover(corpse, corpse.GetInteractText())) return;
+            }
+            else if (IsAlive && currentlyHoveredInteractable is SummoningCircle summoningCircle)
             {
                 if (TryShowWorldInteractableHover(summoningCircle, summoningCircle.GetInteractText())) return;
             }
@@ -914,10 +1188,18 @@ public class PlayerController : NetworkBehaviour
 
     private void OnSceneLoadedLocal(UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
     {
-        if (IsOwner && IsSpawned)
+        if (IsOwner)
         {
-            StartCoroutine(DelayedTeleportToSpawn());
+            WeatherManager.SetLocalInBurialMap(false);
+            DeathSequenceController.Instance?.CancelAndReset();
+            GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
+            CameraFollow.Instance?.SetTargetOverride(null);
+            if (IsSpawned)
+            {
+                StartCoroutine(DelayedTeleportToSpawn());
+            }
         }
+        RefreshAllPlayerVisibilityAndCollisions();
     }
 
     public void TeleportToSpawnPoint()

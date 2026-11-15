@@ -66,12 +66,14 @@ public class EMFReaderItem : EquipmentItem
 
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         TogglePowerRpc();
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void TogglePowerRpc()
+    public void TogglePowerRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         isPoweredOn.Value = !isPoweredOn.Value;
     }
 
@@ -79,7 +81,7 @@ public class EMFReaderItem : EquipmentItem
     {
         base.Update();
 
-        if (!isPoweredOn.Value)
+        if (!isPoweredOn.Value || IsHeldByDeadPlayer())
         {
             if (CurrentEmfLevel != 0 || lastAppliedLedLevel != 0)
             {

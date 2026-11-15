@@ -1,50 +1,70 @@
+@import url("project://database/Assets/Resources/UI/PamahiinTheme.uss");
+
+/* ==========================================================================
+   TRUCK DASHBOARD - 16-BIT CRT PHOSPHOR MONITORING STATION
+   ========================================================================== */
+
 .dashboard-container {
     flex-grow: 1;
-    background-color: rgb(20, 20, 25);
+    background-color: rgb(11, 16, 13);
     border-width: 4px;
-    border-color: rgb(50, 50, 60);
-    padding: 10px;
-    color: rgb(200, 255, 200); /* CRT green tint */
+    border-top-color: rgb(48, 86, 62);
+    border-left-color: rgb(48, 86, 62);
+    border-right-color: rgb(18, 36, 26);
+    border-bottom-color: rgb(18, 36, 26);
+    border-radius: 0px;
+    padding: 12px;
+    color: rgb(200, 255, 200);
 }
 
 .tabs-container {
     flex-direction: row;
-    height: 40px;
+    height: 44px;
     margin-bottom: 10px;
     border-bottom-width: 2px;
-    border-color: rgb(100, 150, 100);
+    border-color: var(--pm-crt-border);
 }
 
 .tab-button {
     flex-grow: 1;
-    background-color: rgb(30, 40, 30);
-    color: rgb(150, 200, 150);
-    font-size: 16px;
-    border-width: 1px;
-    border-color: rgb(100, 150, 100);
-    margin-right: 5px;
+    background-color: rgb(20, 32, 24);
+    color: rgb(156, 208, 168);
+    font-size: 10px;
+    border-width: 2px;
+    border-top-color: rgb(56, 114, 76);
+    border-left-color: rgb(56, 114, 76);
+    border-right-color: rgb(18, 46, 28);
+    border-bottom-color: rgb(18, 46, 28);
+    border-radius: 0px;
+    margin-right: 6px;
+    padding: 6px 10px;
+    -unity-font-style: normal;
 }
 
 .tab-button:hover {
-    background-color: rgb(50, 70, 50);
+    background-color: rgb(34, 56, 40);
+    color: rgb(225, 255, 230);
 }
 
 .active-tab {
-    background-color: rgb(80, 120, 80);
+    background-color: rgb(46, 84, 56);
     color: rgb(255, 255, 255);
-    -unity-font-style: bold;
+    border-top-color: var(--pm-accent-phosphor);
+    border-left-color: var(--pm-accent-phosphor);
+    -unity-font-style: normal;
 }
 
 .content-container {
     flex-grow: 1;
-    background-color: rgb(10, 10, 10);
-    padding: 15px;
+    background-color: rgb(6, 10, 8);
+    border-width: 2px;
+    border-color: var(--pm-crt-border-lo);
+    padding: 14px;
 }
 
 .view {
     width: 100%;
     height: 100%;
-    display: none;
 }
 
 .active-view {
@@ -56,18 +76,24 @@
 }
 
 .screen-title {
-    font-size: 20px;
-    color: rgb(200, 255, 200);
+    font-size: 13px;
+    color: rgb(195, 255, 205);
     margin-bottom: 10px;
     -unity-text-align: middle-center;
+    letter-spacing: 2px;
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.95);
 }
 
-/* CCTV */
+/* CCTV Feed */
 .cctv-screen {
     flex-grow: 1;
-    background-color: rgb(20, 20, 20);
-    border-width: 2px;
-    border-color: rgb(100, 100, 100);
+    background-color: rgb(10, 12, 11);
+    border-width: 3px;
+    border-top-color: rgb(48, 86, 62);
+    border-left-color: rgb(48, 86, 62);
+    border-right-color: rgb(20, 40, 28);
+    border-bottom-color: rgb(20, 40, 28);
+    border-radius: 0px;
     align-items: center;
     justify-content: center;
     position: relative;
@@ -75,15 +101,20 @@
 }
 
 .cctv-screen-nv {
-    border-color: rgb(220, 220, 220);
+    border-top-color: rgb(220, 232, 220);
+    border-left-color: rgb(220, 232, 220);
+    border-right-color: rgb(120, 140, 120);
+    border-bottom-color: rgb(120, 140, 120);
 }
 
 .no-signal-text {
-    font-size: 24px;
-    color: rgb(255, 50, 50);
-    -unity-font-style: bold;
+    font-size: 15px;
+    color: var(--pm-accent-crimson-hi);
+    -unity-font-style: normal;
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.95);
 }
 
+/* CCTV Camcorder Overlay */
 .cctv-hud {
     position: absolute;
     left: 0;
@@ -93,7 +124,7 @@
     width: 100%;
     height: 100%;
     justify-content: space-between;
-    padding: 12px 18px;
+    padding: 12px 16px;
 }
 
 .cctv-hud-top {
@@ -112,15 +143,15 @@
 
 .cctv-hud-text {
     color: rgb(140, 255, 160);
-    font-size: 13px;
-    -unity-font-style: bold;
+    font-size: 10px;
+    -unity-font-style: normal;
     letter-spacing: 1px;
-    text-shadow: 0 0 4px rgba(40, 200, 80, 0.6);
+    text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.95);
 }
 
 .cctv-hud-sub {
-    color: rgba(140, 220, 150, 0.7);
-    font-size: 11px;
+    color: rgba(140, 220, 150, 0.8);
+    font-size: 9px;
 }
 
 .cctv-rec-cluster {
@@ -129,46 +160,71 @@
 }
 
 .cctv-rec-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 6px;
-    background-color: rgb(255, 30, 30);
+    width: 10px;
+    height: 10px;
+    border-radius: 0px;
+    background-color: rgb(255, 36, 36);
+    border-width: 1px;
+    border-color: rgb(110, 0, 0);
     margin-right: 6px;
 }
 
 .cctv-rec-dot-dim {
-    opacity: 0.1;
+    opacity: 0.15;
 }
 
 .cctv-rec-label {
-    color: rgb(255, 60, 60);
+    color: rgb(255, 64, 64);
     margin-right: 10px;
 }
 
 .cctv-cam-badge {
-    background-color: rgba(0, 0, 0, 0.7);
-    padding: 3px 12px;
-    border-radius: 3px;
+    background-color: rgba(6, 12, 8, 0.86);
+    padding: 4px 10px;
+    border-radius: 0px;
+    border-width: 2px;
+    border-color: rgb(74, 178, 98);
+    font-size: 9px;
+}
+
+.cctv-nv-cluster {
+    flex-direction: row;
+    align-items: center;
+}
+
+.cctv-nv-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 0px;
     border-width: 1px;
-    border-color: rgb(80, 180, 100);
+    border-color: rgba(0, 0, 0, 0.92);
+    margin-right: 6px;
+}
+
+.cctv-nv-dot-off {
+    background-color: rgb(110, 118, 112);
+}
+
+.cctv-nv-dot-on {
+    background-color: rgb(74, 222, 128);
 }
 
 .cctv-nv-badge {
-    padding: 3px 10px;
-    border-radius: 3px;
-    border-width: 1px;
-    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 0px;
+    border-width: 2px;
+    font-size: 9px;
 }
 
 .cctv-nv-off {
-    background-color: rgba(30, 30, 30, 0.7);
-    border-color: rgb(100, 100, 100);
-    color: rgb(160, 160, 160);
+    background-color: rgba(18, 22, 19, 0.86);
+    border-color: rgb(92, 104, 96);
+    color: rgb(168, 178, 170);
 }
 
 .cctv-nv-on {
-    background-color: rgba(50, 50, 50, 0.9);
-    border-color: rgb(220, 220, 220);
+    background-color: rgba(24, 52, 34, 0.94);
+    border-color: rgb(210, 245, 220);
     color: rgb(255, 255, 255);
 }
 
@@ -199,17 +255,29 @@
 
 .control-button {
     margin-top: 10px;
-    margin-left: 5px;
-    margin-right: 5px;
-    background-color: rgb(50, 50, 50);
-    color: white;
-    padding: 6px 14px;
-    font-size: 14px;
-    border-radius: 3px;
+    margin-left: 6px;
+    margin-right: 6px;
+    background-color: rgb(26, 40, 30);
+    color: var(--pm-text-primary);
+    padding: 8px 14px;
+    font-size: 10px;
+    border-width: 2px;
+    border-top-color: rgb(74, 138, 92);
+    border-left-color: rgb(74, 138, 92);
+    border-right-color: rgb(18, 42, 26);
+    border-bottom-color: rgb(18, 42, 26);
+    border-radius: 0px;
+    -unity-font-style: normal;
 }
 
 .control-button:hover {
-    background-color: rgb(75, 75, 75);
+    background-color: rgb(44, 72, 52);
+    border-top-color: var(--pm-accent-phosphor);
+    border-left-color: var(--pm-accent-phosphor);
+}
+
+.control-button:active {
+    translate: 0px 2px;
 }
 
 .control-button:disabled {
@@ -217,13 +285,13 @@
 }
 
 .btn-nv-active {
-    background-color: rgb(75, 75, 75);
-    border-color: rgb(220, 220, 220);
+    background-color: rgb(48, 86, 60);
+    border-color: rgb(210, 248, 220);
     color: rgb(255, 255, 255);
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
-/* Sanity */
+/* Sanity List */
 .sanity-list {
     flex-grow: 1;
 }
@@ -231,53 +299,59 @@
 .sanity-row {
     flex-direction: row;
     justify-content: space-between;
-    background-color: rgba(0, 255, 0, 0.1);
-    padding: 10px;
-    margin-bottom: 5px;
+    background-color: rgba(24, 56, 32, 0.45);
+    border-width: 2px;
+    border-color: var(--pm-crt-border-lo);
+    padding: 10px 14px;
+    margin-bottom: 6px;
 }
 
 .sanity-name {
-    font-size: 18px;
-    color: white;
+    font-size: 11px;
+    color: var(--pm-text-primary);
 }
 
 .sanity-value {
-    font-size: 18px;
-    color: rgb(200, 255, 200);
-    -unity-font-style: bold;
+    font-size: 11px;
+    color: var(--pm-accent-phosphor);
+    -unity-font-style: normal;
 }
 
-/* Activity */
+/* Activity Graph */
 .graph-container {
     flex-grow: 1;
-    background-color: rgb(0, 0, 0);
-    border-width: 1px;
-    border-color: rgb(100, 255, 100);
+    background-color: rgb(4, 8, 5);
+    border-width: 2px;
+    border-color: var(--pm-crt-border);
     flex-direction: column-reverse;
 }
 
 .activity-bar-fill {
-    background-color: rgb(255, 50, 50);
+    background-color: var(--pm-accent-crimson-hi);
     width: 100%;
-    height: 0%; /* Changed dynamically */
+    height: 0%;
     transition-duration: 0.2s;
 }
 
 .activity-level-text {
     margin-top: 10px;
-    font-size: 24px;
+    font-size: 14px;
     -unity-text-align: middle-center;
-    -unity-font-style: bold;
+    -unity-font-style: normal;
 }
 
 .close-button {
     flex-grow: 0;
     flex-shrink: 0;
-    width: 40px;
-    background-color: rgb(150, 40, 40);
-    color: white;
+    width: 44px;
+    background-color: rgba(128, 28, 32, 0.95);
+    color: rgb(255, 232, 232);
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
 }
 
 .close-button:hover {
-    background-color: rgb(200, 50, 50);
+    background-color: rgba(178, 36, 44, 0.98);
 }

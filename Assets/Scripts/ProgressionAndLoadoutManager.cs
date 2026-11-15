@@ -43,6 +43,8 @@ public struct MatchPayoutBreakdown
     public int ghostDefeatedReward;
     public ContractDifficulty difficulty;
     public float difficultyMultiplier;
+    public bool isDeceased;
+    public float survivalMultiplier;
     public int totalEarned;
     public int newBalance;
 }
@@ -87,6 +89,7 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     public const int REWARD_PER_CORRECT_EVIDENCE = 35;
     public const int REWARD_CORRECT_GHOST_TYPE = 100;
     public const int REWARD_DEFEAT_GHOST = 150;
+    public const float DECEASED_PAYOUT_MULTIPLIER = 0.5f;
 
     public event Action OnCurrencyOrLoadoutChanged;
     public event Action OnContractSettingsChanged;
@@ -1076,7 +1079,8 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     public MatchPayoutBreakdown CalculateAndAwardMatchPayout(
         int correctEvidenceCount,
         bool correctGhostType,
-        bool ghostDefeated)
+        bool ghostDefeated,
+        bool isDeceased = false)
     {
         int clampedEvidences = Mathf.Clamp(correctEvidenceCount, 0, 3);
         int evidenceReward = clampedEvidences * REWARD_PER_CORRECT_EVIDENCE;
@@ -1085,7 +1089,8 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
         int baseReward = evidenceReward + ghostTypeReward + defeatReward;
         float multiplier = GetDifficultyRewardMultiplier(SelectedDifficulty);
-        int totalEarned = Mathf.RoundToInt(baseReward * multiplier);
+        float survivalMult = isDeceased ? DECEASED_PAYOUT_MULTIPLIER : 1.0f;
+        int totalEarned = Mathf.RoundToInt(baseReward * multiplier * survivalMult);
 
         // Credit the payout BEFORE consuming/resetting loadout so post-match broke relief checks the updated balance
         AddCurrency(totalEarned);
@@ -1101,6 +1106,8 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
             ghostDefeatedReward = defeatReward,
             difficulty = SelectedDifficulty,
             difficultyMultiplier = multiplier,
+            isDeceased = isDeceased,
+            survivalMultiplier = survivalMult,
             totalEarned = totalEarned,
             newBalance = Currency
         };

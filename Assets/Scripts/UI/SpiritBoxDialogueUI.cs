@@ -53,29 +53,7 @@ public class SpiritBoxDialogueUI : MonoBehaviour
             uiDocument = GetComponent<UIDocument>();
         }
 
-        // Automatic self-repair: borrow PanelSettings from existing UI documents if missing
-        if (uiDocument != null)
-        {
-            if (uiDocument.panelSettings == null)
-            {
-                var allDocs = FindObjectsByType<UIDocument>(FindObjectsInactive.Include);
-                foreach (var d in allDocs)
-                {
-                    if (d != uiDocument && d.panelSettings != null)
-                    {
-                        uiDocument.panelSettings = d.panelSettings;
-                        break;
-                    }
-                }
-            }
-
-            if (uiDocument.visualTreeAsset == null && dialogueUxml != null)
-            {
-                uiDocument.visualTreeAsset = dialogueUxml;
-            }
-
-            uiDocument.sortingOrder = 50;
-        }
+        EnsureDocumentConfigured();
     }
 
     private void OnEnable()
@@ -83,7 +61,7 @@ public class SpiritBoxDialogueUI : MonoBehaviour
         InitializeUI();
     }
 
-    private void InitializeUI()
+    private void EnsureDocumentConfigured()
     {
         if (uiDocument == null)
         {
@@ -92,26 +70,20 @@ public class SpiritBoxDialogueUI : MonoBehaviour
 
         if (uiDocument == null) return;
 
-        // Ensure high sorting order so it displays prominently above standard gameplay HUD
-        uiDocument.sortingOrder = 50;
-
-        if (uiDocument.panelSettings == null)
-        {
-            var allDocs = FindObjectsByType<UIDocument>(FindObjectsInactive.Include);
-            foreach (var d in allDocs)
-            {
-                if (d != uiDocument && d.panelSettings != null)
-                {
-                    uiDocument.panelSettings = d.panelSettings;
-                    break;
-                }
-            }
-        }
+        uiDocument.panelSettings = PamahiinUIThemeUtility.ResolveRuntimePanelSettings(uiDocument.panelSettings);
 
         if (uiDocument.visualTreeAsset == null && dialogueUxml != null)
         {
             uiDocument.visualTreeAsset = dialogueUxml;
         }
+
+        uiDocument.sortingOrder = 50;
+    }
+
+    private void InitializeUI()
+    {
+        EnsureDocumentConfigured();
+        if (uiDocument == null) return;
 
         var root = uiDocument.rootVisualElement;
         if (root == null) return;

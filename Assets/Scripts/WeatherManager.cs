@@ -21,6 +21,26 @@ public enum BarangayWeatherType
 public class WeatherManager : NetworkBehaviour
 {
     public static WeatherManager Instance { get; private set; }
+    public static bool IsLocalInBurialMap { get; private set; }
+
+    public static void SetLocalInBurialMap(bool inBurial)
+    {
+        IsLocalInBurialMap = inBurial;
+        if (Instance != null)
+        {
+            if (inBurial)
+            {
+                Instance.lightningFlashAlpha = 0f;
+                if (Instance.weatherAudioSource != null)
+                {
+                    Instance.weatherAudioSource.volume = 0f;
+                }
+            }
+            Instance.hasAppliedGlobalLight = false;
+            Instance.UpdateGlobalLighting();
+            Instance.UpdateWeatherAudioProximity(immediate: true);
+        }
+    }
 
     private const float FOG_OUTDOOR_LIGHT_MULTIPLIER = 0.65f;
     private const float FOG_INDOOR_AUDIO_CLARITY = 1.2f;
@@ -814,7 +834,12 @@ public class WeatherManager : NetworkBehaviour
         Color targetColor;
         float targetIntensity;
 
-        if (IsRedMoon)
+        if (IsLocalInBurialMap)
+        {
+            targetColor = new Color(0.28f, 0.34f, 0.44f);
+            targetIntensity = 0.006f;
+        }
+        else if (IsRedMoon)
         {
             targetColor = new Color(0.58f, 0.14f, 0.15f);
             targetIntensity = 0.014f + lightningFlashAlpha * 0.42f;
@@ -879,6 +904,13 @@ public class WeatherManager : NetworkBehaviour
     private void UpdateWeatherAudioProximity(bool immediate = false)
     {
         if (weatherAudioSource == null || weatherAudioEmitter == null) return;
+
+        if (IsLocalInBurialMap)
+        {
+            weatherAudioSource.volume = 0f;
+            if (immediate) weatherAudioSource.Stop();
+            return;
+        }
 
         bool hasPlayer = GameAudioManager.TryGetListenerWorldPosition(out Vector3 listenerPos);
         if (hasPlayer)
@@ -979,6 +1011,14 @@ public class WeatherManager : NetworkBehaviour
 
     private void Update()
     {
+        if (IsLocalInBurialMap)
+        {
+            lightningFlashAlpha = 0f;
+            UpdateWeatherAudioProximity(immediate: false);
+            UpdateGlobalLighting();
+            return;
+        }
+
         // Track whether local player is currently under a house roof
         audioBlendTimer -= Time.deltaTime;
         if (audioBlendTimer <= 0f)

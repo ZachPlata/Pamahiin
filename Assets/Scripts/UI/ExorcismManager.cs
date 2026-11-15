@@ -15,9 +15,9 @@ public class ExorcismManager : NetworkBehaviour
 
     // 1. Ghost Selection Popup Elements
     private VisualElement ghostSelectPopup;
-    private Button btnTikbalang;
-    private Button btnKapre;
-    private Button btnManananggal;
+    private VisualElement ghostButtonsContainer;
+    private readonly List<Button> ghostSelectionButtons = new List<Button>();
+    private readonly Dictionary<string, Button> ghostSelectionButtonMap = new Dictionary<string, Button>(System.StringComparer.OrdinalIgnoreCase);
 
     // 2. Circular Minigame Overlay Elements
     private VisualElement exorcismOverlay;
@@ -118,15 +118,31 @@ public class ExorcismManager : NetworkBehaviour
             {
                 // Ghost Selection Popup
                 ghostSelectPopup = root.Q<VisualElement>("ghost-select-popup");
-                btnTikbalang = root.Q<Button>("btn-ghost-tikbalang");
-                btnKapre = root.Q<Button>("btn-ghost-kapre");
-                btnManananggal = root.Q<Button>("btn-ghost-manananggal");
+                ghostButtonsContainer = root.Q<VisualElement>("ghost-buttons-container");
 
-                if (!uiButtonsBound)
+                if (ghostButtonsContainer != null && (!uiButtonsBound || ghostButtonsContainer.childCount == 0))
                 {
-                    if (btnTikbalang != null) btnTikbalang.clicked += () => OnGhostSelected("Tikbalang");
-                    if (btnKapre != null) btnKapre.clicked += () => OnGhostSelected("Kapre");
-                    if (btnManananggal != null) btnManananggal.clicked += () => OnGhostSelected("Manananggal");
+                    ghostButtonsContainer.Clear();
+                    ghostSelectionButtons.Clear();
+                    ghostSelectionButtonMap.Clear();
+
+                    var ghosts = GhostCatalog.AllGhosts;
+                    for (int i = 0; i < ghosts.Count; i++)
+                    {
+                        string ghostId = ghosts[i].Id;
+                        var btn = new Button
+                        {
+                            name = $"btn-ghost-{ghostId.ToLowerInvariant().Replace(" ", "-")}",
+                            text = ghostId.ToUpperInvariant()
+                        };
+                        btn.AddToClassList("ghost-btn");
+                        btn.clicked += () => OnGhostSelected(ghostId);
+
+                        ghostButtonsContainer.Add(btn);
+                        ghostSelectionButtons.Add(btn);
+                        ghostSelectionButtonMap[ghostId] = btn;
+                    }
+
                     uiButtonsBound = true;
                 }
 
@@ -158,9 +174,27 @@ public class ExorcismManager : NetworkBehaviour
 
     private void SetGhostButtonsInteractable(bool interactable)
     {
-        if (btnTikbalang != null) btnTikbalang.SetEnabled(interactable);
-        if (btnKapre != null) btnKapre.SetEnabled(interactable);
-        if (btnManananggal != null) btnManananggal.SetEnabled(interactable);
+        for (int i = 0; i < ghostSelectionButtons.Count; i++)
+        {
+            if (ghostSelectionButtons[i] != null)
+            {
+                ghostSelectionButtons[i].SetEnabled(interactable);
+            }
+        }
+    }
+
+    private void RefreshGuessedGhostHighlight()
+    {
+        string currentGuess = JournalController.LastLockedInGuess;
+        foreach (var pair in ghostSelectionButtonMap)
+        {
+            if (pair.Value == null) continue;
+            bool isGuessed = !string.IsNullOrEmpty(currentGuess) &&
+                             !currentGuess.Equals("None", System.StringComparison.OrdinalIgnoreCase) &&
+                             pair.Key.Equals(currentGuess, System.StringComparison.OrdinalIgnoreCase);
+            if (isGuessed) pair.Value.AddToClassList("ghost-btn-guessed");
+            else pair.Value.RemoveFromClassList("ghost-btn-guessed");
+        }
     }
 
     /// <summary>
@@ -203,6 +237,7 @@ public class ExorcismManager : NetworkBehaviour
         chalkDiagramPos = diagramPos;
         EnsureUIReferences();
         SetGhostButtonsInteractable(true);
+        RefreshGuessedGhostHighlight();
 
         if (ghostSelectPopup != null)
         {
@@ -591,7 +626,7 @@ public class ExorcismManager : NetworkBehaviour
 
         // Show failure warning dialogue banner
         ShowDialogueBanner(
-            "⚠ RITUAL FAILED: GHOST ANGERED ⚠",
+            "[!] RITUAL FAILED: GHOST ANGERED [!]",
             "The entity has broken free in an Angered State!",
             "USE A CRUCIFIX TO REPEL IT! Hide in a cabinet or escape the house!"
         );

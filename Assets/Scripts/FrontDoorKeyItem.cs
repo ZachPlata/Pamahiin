@@ -6,12 +6,17 @@ public class FrontDoorKeyItem : NetworkBehaviour, IInteractable
 {
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         PickupKeyRpc();
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void PickupKeyRpc()
+    private void PickupKeyRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         Debug.Log("Player picked up Front Door Key");
         // Unlock all front doors
         var doors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Exclude);

@@ -64,6 +64,7 @@ public class ThermometerItem : EquipmentItem
 
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (UseNetworkPower)
         {
             TogglePowerRpc();
@@ -77,8 +78,9 @@ public class ThermometerItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void TogglePowerRpc()
+    public void TogglePowerRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         isPoweredOn.Value = !isPoweredOn.Value;
     }
 
@@ -86,7 +88,7 @@ public class ThermometerItem : EquipmentItem
     {
         base.Update();
 
-        if (!IsPoweredOn)
+        if (!IsPoweredOn || IsHeldByDeadPlayer())
         {
             if (!wasOffDisplay)
             {
@@ -162,7 +164,7 @@ public class ThermometerItem : EquipmentItem
     protected override void UpdateVisuals()
     {
         base.UpdateVisuals();
-        bool isVisible = isInHand.Value || IsOnGround;
+        bool isVisible = (isInHand.Value || IsOnGround) && !IsHeldByDeadPlayer();
 
         if (digitalDisplay != null)
         {

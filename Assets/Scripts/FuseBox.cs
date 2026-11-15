@@ -56,6 +56,7 @@ public class FuseBox : NetworkBehaviour, IInteractable
 
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         ToggleFuseBoxRpc();
     }
 
@@ -72,8 +73,12 @@ public class FuseBox : NetworkBehaviour, IInteractable
     // --- Core Logic ---
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void ToggleFuseBoxRpc()
+    private void ToggleFuseBoxRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         isEnabled.Value = !isEnabled.Value;
         Debug.Log($"FuseBox toggled to: {isEnabled.Value}");
 

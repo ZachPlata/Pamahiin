@@ -57,27 +57,11 @@ public class GhostHandler : NetworkBehaviour
         // Always add Crucifix as a base interaction
         currentEvidence.Add(EvidenceType.Crucifix);
 
-        int rand = Random.Range(0, 3);
-        if (rand == 0)
+        GhostCatalog.GhostDefinition chosen = GhostCatalog.GetRandomGhost();
+        ghostName = chosen.Id;
+        for (int i = 0; i < chosen.Evidences.Length; i++)
         {
-            ghostName = "Tikbalang";
-            currentEvidence.Add(EvidenceType.EMF);
-            currentEvidence.Add(EvidenceType.SpiritBox);
-            currentEvidence.Add(EvidenceType.GhostOrbs);
-        }
-        else if (rand == 1)
-        {
-            ghostName = "Kapre";
-            currentEvidence.Add(EvidenceType.EMF);
-            currentEvidence.Add(EvidenceType.Freezing);
-            currentEvidence.Add(EvidenceType.DOTS);
-        }
-        else
-        {
-            ghostName = "Manananggal";
-            currentEvidence.Add(EvidenceType.Freezing);
-            currentEvidence.Add(EvidenceType.GhostWriting);
-            currentEvidence.Add(EvidenceType.GhostOrbs);
+            currentEvidence.Add(chosen.Evidences[i]);
         }
 
         if (GameMatchManager.Instance != null && !string.IsNullOrEmpty(ghostName) && !ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
@@ -385,11 +369,15 @@ public class GhostHandler : NetworkBehaviour
             UpdateVisibility(newState);
             if (newState != GhostHandlerState.Dormant)
             {
-                if (oldState == GhostHandlerState.Dormant)
+                bool localDead = PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive;
+                if (oldState == GhostHandlerState.Dormant && !localDead)
                 {
                     GameAudioManager.PlayGhostHuntStart(transform.position);
                 }
-                TutorialTooltipManager.TriggerHint(TutorialHintId.GhostHunt);
+                if (!localDead)
+                {
+                    TutorialTooltipManager.TriggerHint(TutorialHintId.GhostHunt);
+                }
             }
         };
         isExorcismFailedHunt.OnValueChanged += (oldVal, newVal) =>
@@ -591,6 +579,7 @@ public class GhostHandler : NetworkBehaviour
     public void OnGhostExorcised()
     {
         isExorcised = true;
+        eventGhost?.CancelActiveDotsProjectionOnServer();
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsServer && IsSpawned)
         {
             syncedExorcised.Value = true;
@@ -635,6 +624,7 @@ public class GhostHandler : NetworkBehaviour
     {
         if (IsExorcised) return;
         if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
+        eventGhost?.CancelActiveDotsProjectionOnServer();
 
         isExorcismFailedHunt.Value = isFromFailedExorcism;
 

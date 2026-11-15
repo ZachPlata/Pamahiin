@@ -116,6 +116,15 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <!-- Subtle Ghost Spectator Pill (Top-Center, Visible Only While Spectating Dead) -->
+        <ui:VisualElement name="SpectatorHudBanner" class="spectator-banner spectator-banner-hidden" picking-mode="Ignore">
+            <ui:VisualElement class="spectator-pill" picking-mode="Ignore">
+                <ui:Label text="SPECTATING (DEAD)" class="spectator-pill-label" picking-mode="Ignore" />
+                <ui:Label name="SpectatorGraceLabel" text="TEAM WIPE — ENDING IN 15s" class="spectator-grace-label spectator-grace-hidden" picking-mode="Ignore" />
+                <ui:Button name="BtnSpectatorEndMatch" text="End Match" class="spectator-end-btn spectator-grace-hidden" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <!-- Death / Game Over Screen -->
         <ui:VisualElement name="DeathOverlay" class="death-overlay death-overlay-hidden" picking-mode="Position">
             <ui:VisualElement class="death-panel" picking-mode="Position">

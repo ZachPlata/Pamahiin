@@ -282,13 +282,18 @@ public class GhostAtmosphereController : MonoBehaviour
 
     private PlayerController GetLocalPlayer()
     {
+        if (PlayerController.LocalInstance != null)
+        {
+            return PlayerController.LocalInstance;
+        }
+
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
             var obj = NetworkManager.Singleton.SpawnManager?.GetLocalPlayerObject();
             return obj != null ? obj.GetComponent<PlayerController>() : null;
         }
 
-        // Offline fallback
+        // Offline fallback (prefer alive player only if unspawned local instance missing)
         foreach (var p in PlayerController.AllPlayers)
             if (p != null && p.IsAlive) return p;
 
@@ -331,12 +336,17 @@ public class GhostAtmosphereController : MonoBehaviour
     /// </summary>
     public void OnPlayerCaught()
     {
+        eventVignetteActive = false;
+        eventVignetteTimer = 0f;
         if (heartbeatSource != null)
         {
             heartbeatSource.Stop();
             heartbeatSource.volume = 0f;
         }
         heartbeatTimer = 0f;
+        if (vignette != null) vignette.intensity.value = 0f;
+        if (chromaticAberration != null) chromaticAberration.intensity.value = 0f;
+        if (mainCamera != null && baseOrthoSize > 0.01f) mainCamera.orthographicSize = baseOrthoSize;
         SmoothlyClearEffects();
     }
 }

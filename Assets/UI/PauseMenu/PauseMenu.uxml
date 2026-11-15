@@ -15,10 +15,10 @@
         <ui:VisualElement name="panel-main" class="menu-container">
             <ui:Label text="PAUSED" class="title-label" />
             <ui:VisualElement class="button-container">
-                <ui:Button name="btn-resume"   text="▶  Resume"        class="menu-button" />
-                <ui:Button name="btn-settings" text="⚙  Settings"      class="menu-button" />
-                <ui:Button name="btn-players"  text="👥  Players"      class="menu-button" />
-                <ui:Button name="btn-quit"     text="✖  Quit to Menu"  class="menu-button btn-danger" />
+                <ui:Button name="btn-resume"   text="▶  RESUME"        class="menu-button" />
+                <ui:Button name="btn-settings" text="SETTINGS"         class="menu-button" />
+                <ui:Button name="btn-players"  text="PLAYERS"          class="menu-button" />
+                <ui:Button name="btn-quit"     text="X  QUIT TO MENU"  class="menu-button btn-danger" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -45,12 +45,6 @@
                 <ui:Label text="SFX"     class="slider-label" />
                 <ui:Slider name="slider-sfx"     low-value="0" high-value="1" class="setting-slider" />
                 <ui:Label name="lbl-sfx"     text="100%" class="slider-value" />
-            </ui:VisualElement>
-
-            <ui:VisualElement class="slider-row">
-                <ui:Label text="Voice"   class="slider-label" />
-                <ui:Slider name="slider-voice"   low-value="0" high-value="1" class="setting-slider" />
-                <ui:Label name="lbl-voice"   text="100%" class="slider-value" />
             </ui:VisualElement>
 
             <!-- GRAPHICS -->

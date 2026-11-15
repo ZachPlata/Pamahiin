@@ -315,13 +315,30 @@ public class TutorialTooltipManager : MonoBehaviour
                 if (settings.HasSeenTutorial(currentHint.uniqueId)) continue;
             }
 
-            // Ensure UI elements are bound
+            // Ensure UI elements are bound to the HUD UIDocument containing TutorialToast
             if (toastCard == null)
             {
-                var hudDoc = Object.FindAnyObjectByType<UIDocument>();
-                if (hudDoc != null && hudDoc.rootVisualElement != null)
+                var hudMgr = Object.FindAnyObjectByType<PlayerHUDManager>();
+                if (hudMgr != null)
                 {
-                    BindUI(hudDoc.rootVisualElement);
+                    var mgrDoc = hudMgr.GetComponent<UIDocument>();
+                    if (mgrDoc != null && mgrDoc.rootVisualElement != null && mgrDoc.rootVisualElement.Q("TutorialToast") != null)
+                    {
+                        BindUI(mgrDoc.rootVisualElement);
+                    }
+                }
+
+                if (toastCard == null)
+                {
+                    var allDocs = Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include);
+                    foreach (var doc in allDocs)
+                    {
+                        if (doc != null && doc.rootVisualElement != null && doc.rootVisualElement.Q("TutorialToast") != null)
+                        {
+                            BindUI(doc.rootVisualElement);
+                            break;
+                        }
+                    }
                 }
             }
 

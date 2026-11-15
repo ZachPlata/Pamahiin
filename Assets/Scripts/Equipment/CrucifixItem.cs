@@ -40,8 +40,8 @@ public class CrucifixItem : EquipmentItem
             spriteRenderer.color = new Color(1f, ember * 0.65f, ember * 0.45f, 1f);
         }
 
-        // Check if an Angered ghost is nearby to repel it (applies when placed on the ground or held)
-        if (!isBurned.Value)
+        // Check if an Angered ghost is nearby to repel it (never triggered while carried by dead spectator)
+        if (!isBurned.Value && !IsHeldByDeadPlayer())
         {
             var hunterGhost = HunterGhostBehavior.Instance;
             if (hunterGhost != null && hunterGhost.IsAngeredState && !hunterGhost.IsRepelled)
@@ -57,6 +57,7 @@ public class CrucifixItem : EquipmentItem
 
     public override void UsePrimary()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         base.UsePrimary();
 
         if (isBurned.Value)
@@ -97,8 +98,9 @@ public class CrucifixItem : EquipmentItem
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RepelGhostServerRpc()
+    private void RepelGhostServerRpc(RpcParams rpcParams = default)
     {
+        if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         if (isBurned.Value) return;
         isBurned.Value = true;
 

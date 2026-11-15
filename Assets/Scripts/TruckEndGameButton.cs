@@ -127,13 +127,18 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void OpenJeepneyRampRpc()
+    private void OpenJeepneyRampRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         OpenJeepneyRampServer();
     }
 
     public void Interact()
     {
+        if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (hasTriggered) return;
 
         // Stage 1: Open the Jeepney rear ramp door first
@@ -196,8 +201,12 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
     }
 
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RequestEndMatchServerRpc()
+    private void RequestEndMatchServerRpc(RpcParams rpcParams = default)
     {
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var sender) && !sender.IsAlive)
+        {
+            return;
+        }
         if (GameMatchManager.Instance != null)
         {
             GameMatchManager.Instance.ForceEndMatch();

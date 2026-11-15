@@ -1,20 +1,28 @@
+@import url("project://database/Assets/Resources/UI/PamahiinTheme.uss");
+
+/* ==========================================================================
+   SPIRIT BOX DIALOGUE - 16-BIT CRT PHOSPHOR RADIO TERMINAL
+   ========================================================================== */
+
 .sb-overlay {
     width: 100%;
     height: 100%;
     align-items: center;
     justify-content: flex-end;
-    padding-bottom: 120px;
-    picking-mode: ignore;
+    padding-bottom: 100px;
 }
 
 .sb-panel {
-    width: 580px;
-    background-color: rgba(12, 16, 16, 0.94);
-    border-width: 1px;
-    border-color: rgba(60, 200, 140, 0.4);
-    border-radius: 6px;
+    width: 640px;
+    max-width: 92%;
+    background-color: var(--pm-crt-bg);
+    border-width: 3px;
+    border-top-color: var(--pm-crt-border);
+    border-left-color: var(--pm-crt-border);
+    border-right-color: var(--pm-crt-border-lo);
+    border-bottom-color: var(--pm-crt-border-lo);
+    border-radius: 0px;
     padding: 14px 18px 12px 18px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85);
 }
 
 .sb-header {
@@ -22,8 +30,8 @@
     justify-content: space-between;
     align-items: center;
     padding-bottom: 8px;
-    border-bottom-width: 1px;
-    border-bottom-color: rgba(60, 200, 140, 0.25);
+    border-bottom-width: 2px;
+    border-bottom-color: var(--pm-crt-border-lo);
     margin-bottom: 10px;
 }
 
@@ -35,59 +43,64 @@
 .sb-led-dot {
     width: 10px;
     height: 10px;
-    border-radius: 5px;
-    background-color: #3bf08b;
+    border-radius: 0px;
+    background-color: rgb(74, 222, 128);
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.9);
     margin-right: 8px;
-    box-shadow: 0 0 8px #3bf08b;
 }
 
 .sb-title {
-    color: #a4ebd0;
-    font-size: 13px;
-    -unity-font-style: bold;
+    color: rgb(180, 245, 205);
+    font-size: 10px;
+    -unity-font-style: normal;
     letter-spacing: 1px;
 }
 
 .sb-frequency {
-    color: #4ef0a0;
-    font-size: 12px;
-    -unity-font-style: bold;
+    color: var(--pm-accent-phosphor);
+    font-size: 10px;
+    -unity-font-style: normal;
 }
 
 .sb-screen {
-    background-color: rgba(6, 14, 11, 0.96);
-    border-width: 1px;
-    border-color: rgba(45, 140, 95, 0.5);
-    border-radius: 4px;
+    background-color: rgba(5, 11, 8, 0.98);
+    border-width: 2px;
+    border-top-color: var(--pm-crt-border-lo);
+    border-left-color: var(--pm-crt-border-lo);
+    border-right-color: var(--pm-crt-border);
+    border-bottom-color: var(--pm-crt-border);
+    border-radius: 0px;
     padding: 10px 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .sb-screen-header {
     flex-direction: row;
     justify-content: space-between;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .sb-screen-status {
-    color: #55c48b;
-    font-size: 11px;
-    -unity-font-style: bold;
+    color: rgb(96, 206, 142);
+    font-size: 9px;
+    -unity-font-style: normal;
 }
 
 .sb-signal-meter {
-    color: #4ef0a0;
-    font-size: 10px;
-    -unity-font-style: bold;
+    color: var(--pm-accent-phosphor);
+    font-size: 9px;
+    -unity-font-style: normal;
 }
 
 .sb-screen-transcript {
-    color: #e2fbf0;
-    font-size: 14px;
-    -unity-font-style: bold;
-    min-height: 24px;
+    color: rgb(224, 250, 234);
+    font-size: 11px;
+    -unity-font-style: normal;
+    min-height: 28px;
+    line-height: 17px;
     white-space: normal;
-    text-shadow: 0 0 4px rgba(60, 240, 150, 0.4);
+    text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.95);
 }
 
 .sb-options-container {
@@ -99,78 +112,91 @@
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    height: 34px;
+    min-height: 36px;
     margin-bottom: 4px;
-    padding: 0 10px;
-    background-color: rgba(20, 26, 24, 0.75);
-    border-width: 1px;
-    border-color: rgba(60, 120, 90, 0.4);
-    border-radius: 4px;
-    transition-duration: 0.15s;
+    padding: 4px 10px;
+    background-color: rgba(14, 24, 19, 0.92);
+    border-width: 2px;
+    border-top-color: rgba(54, 128, 86, 0.75);
+    border-left-color: rgba(54, 128, 86, 0.75);
+    border-right-color: rgba(16, 44, 28, 0.9);
+    border-bottom-color: rgba(16, 44, 28, 0.9);
+    border-radius: 0px;
+    transition-property: background-color, border-color;
+    transition-duration: 0.08s;
 }
 
 .sb-option-btn:hover {
-    background-color: rgba(30, 48, 40, 0.9);
-    border-color: rgba(80, 220, 150, 0.8);
+    background-color: rgba(24, 48, 36, 0.96);
+    border-top-color: rgb(96, 224, 148);
+    border-left-color: rgb(96, 224, 148);
 }
 
 .sb-option-selected {
-    background-color: rgba(25, 60, 45, 0.95);
-    border-color: #3bf08b;
-    border-width: 1px;
-    box-shadow: 0 0 10px rgba(59, 240, 139, 0.35);
+    background-color: rgba(22, 62, 42, 0.98);
+    border-width: 2px;
+    border-top-color: rgb(96, 240, 152);
+    border-left-color: rgb(96, 240, 152);
+    border-right-color: rgb(32, 112, 68);
+    border-bottom-color: rgb(32, 112, 68);
 }
 
 .sb-option-badge {
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    background-color: rgba(35, 75, 55, 0.9);
-    color: #4ef0a0;
-    font-size: 12px;
-    -unity-font-style: bold;
+    width: 22px;
+    height: 22px;
+    border-radius: 0px;
+    background-color: rgba(24, 62, 42, 0.95);
+    border-width: 1px;
+    border-color: var(--pm-crt-border);
+    color: var(--pm-accent-phosphor);
+    font-size: 9px;
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
     margin-right: 12px;
 }
 
 .sb-option-selected .sb-option-badge {
-    background-color: #3bf08b;
-    color: #0c1a13;
+    background-color: rgb(74, 222, 128);
+    color: rgb(8, 22, 14);
+    border-color: rgb(12, 32, 20);
 }
 
 .sb-option-text {
     flex-grow: 1;
-    color: #cce9db;
-    font-size: 13px;
+    color: rgb(206, 236, 218);
+    font-size: 10px;
     -unity-font-style: normal;
     -unity-text-align: middle-left;
+    white-space: normal;
 }
 
 .sb-option-selected .sb-option-text {
-    color: #ffffff;
-    -unity-font-style: bold;
+    color: rgb(255, 255, 255);
+    -unity-font-style: normal;
 }
 
 .sb-option-arrow {
     color: transparent;
-    font-size: 12px;
+    font-size: 10px;
     -unity-text-align: middle-center;
 }
 
 .sb-option-selected .sb-option-arrow {
-    color: #3bf08b;
+    color: rgb(74, 222, 128);
 }
 
 .sb-footer {
-    padding-top: 6px;
-    border-top-width: 1px;
-    border-top-color: rgba(60, 200, 140, 0.2);
+    padding-top: 8px;
+    border-top-width: 2px;
+    border-top-color: var(--pm-crt-border-lo);
     align-items: center;
 }
 
 .sb-footer-text {
-    color: rgba(160, 210, 190, 0.8);
-    font-size: 11px;
+    color: rgba(168, 220, 188, 0.88);
+    font-size: 8px;
     -unity-font-style: normal;
     -unity-text-align: middle-center;
+    white-space: normal;
+    line-height: 14px;
 }

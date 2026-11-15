@@ -1,24 +1,32 @@
+@import url("project://database/Assets/Resources/UI/PamahiinTheme.uss");
+
+/* ==========================================================================
+   DEVELOPER CONSOLE - 16-BIT TERMINAL OVERLAY
+   ========================================================================== */
+
 .dev-console-container {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.82);
+    background-color: rgba(4, 6, 8, 0.86);
     align-items: center;
     justify-content: center;
-    display: none;
 }
 
 .dev-console-panel {
-    width: 92%;
-    max-width: 1200px;
-    height: 85%;
+    width: 94%;
+    max-width: 1180px;
+    height: 86%;
     max-height: 750px;
-    background-color: rgba(18, 22, 26, 0.96);
-    border-width: 2px;
-    border-color: rgba(60, 140, 100, 0.7);
-    border-radius: 10px;
+    background-color: var(--pm-crt-bg);
+    border-width: 3px;
+    border-top-color: var(--pm-crt-border);
+    border-left-color: var(--pm-crt-border);
+    border-right-color: var(--pm-crt-border-lo);
+    border-bottom-color: var(--pm-crt-border-lo);
+    border-radius: 0px;
     flex-direction: column;
     padding: 16px 20px;
 }
@@ -27,22 +35,23 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    border-bottom-width: 1px;
-    border-bottom-color: rgba(255, 255, 255, 0.15);
+    border-bottom-width: 2px;
+    border-bottom-color: var(--pm-crt-border-lo);
     padding-bottom: 10px;
     margin-bottom: 12px;
 }
 
 .dev-console-title {
-    color: rgb(0, 255, 136);
-    font-size: 22px;
-    -unity-font-style: bold;
+    color: var(--pm-accent-phosphor);
+    font-size: 16px;
+    -unity-font-style: normal;
     letter-spacing: 2px;
+    text-shadow: 2px 2px 0px rgba(0, 0, 0, 0.95);
 }
 
 .dev-console-subtitle {
-    color: rgb(160, 180, 170);
-    font-size: 13px;
+    color: rgb(164, 192, 174);
+    font-size: 9px;
 }
 
 .dev-console-scroll {
@@ -60,113 +69,139 @@
 .column {
     flex-direction: column;
     align-items: stretch;
-    width: 23%;
-    min-width: 220px;
+    width: 24%;
+    min-width: 250px;
     margin-bottom: 15px;
 }
 
 .column-header {
-    color: rgb(220, 235, 225);
-    font-size: 14px;
-    -unity-font-style: bold;
+    color: var(--pm-accent-brass);
+    font-size: 10px;
+    -unity-font-style: normal;
     margin-bottom: 8px;
-    padding-bottom: 4px;
-    border-bottom-width: 1px;
-    border-bottom-color: rgba(255, 255, 255, 0.1);
+    padding-bottom: 6px;
+    border-bottom-width: 2px;
+    border-bottom-color: var(--pm-crt-border-lo);
     -unity-text-align: middle-center;
 }
 
 .dev-console-button {
-    height: 42px;
-    margin-top: 5px;
-    margin-bottom: 5px;
-    font-size: 14px;
-    background-color: rgba(35, 42, 50, 0.95);
-    color: rgb(240, 245, 240);
-    border-radius: 6px;
-    border-width: 1px;
-    border-color: rgba(80, 100, 110, 0.8);
-    -unity-font-style: bold;
-    transition-duration: 0.15s;
-    transition-property: background-color, border-color, scale;
+    min-height: 38px;
+    height: auto;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    padding: 7px 10px;
+    font-size: 9px;
+    white-space: normal;
+    background-color: rgba(20, 32, 26, 0.96);
+    color: var(--pm-text-primary);
+    border-radius: 0px;
+    border-width: 2px;
+    border-top-color: rgb(62, 124, 86);
+    border-left-color: rgb(62, 124, 86);
+    border-right-color: rgb(18, 40, 28);
+    border-bottom-color: rgb(18, 40, 28);
+    -unity-font-style: normal;
+    transition-duration: 0.08s;
+    transition-property: background-color, border-color, color;
 }
 
 .dev-console-button:hover {
-    background-color: rgba(55, 70, 85, 1);
-    border-color: rgb(0, 255, 136);
-    scale: 1.02;
+    background-color: rgba(32, 58, 44, 0.98);
+    border-top-color: var(--pm-accent-phosphor);
+    border-left-color: var(--pm-accent-phosphor);
+    color: rgb(255, 255, 255);
 }
 
 .dev-console-button:active {
-    background-color: rgba(25, 30, 38, 1);
-    scale: 0.98;
+    background-color: rgba(14, 24, 18, 1);
+    translate: 0px 2px;
 }
 
 .btn-danger {
-    border-color: rgba(220, 60, 60, 0.8);
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+    background-color: rgba(62, 18, 22, 0.95);
 }
 
 .btn-danger:hover {
-    background-color: rgba(140, 30, 30, 0.9);
-    border-color: rgb(255, 80, 80);
+    background-color: rgba(128, 28, 34, 0.98);
+    border-color: var(--pm-accent-crimson-hi);
 }
 
 .btn-warning {
-    border-color: rgba(220, 160, 40, 0.8);
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+    background-color: rgba(62, 46, 18, 0.95);
 }
 
 .btn-warning:hover {
-    background-color: rgba(130, 95, 20, 0.9);
-    border-color: rgb(255, 190, 60);
+    background-color: rgba(118, 84, 24, 0.98);
+    border-color: var(--pm-crt-amber);
 }
 
 .btn-primary {
-    border-color: rgba(60, 130, 220, 0.8);
+    border-top-color: var(--pm-accent-teal);
+    border-left-color: var(--pm-accent-teal);
+    border-right-color: rgba(24, 62, 68, 0.95);
+    border-bottom-color: rgba(24, 62, 68, 0.95);
+    background-color: rgba(18, 44, 58, 0.95);
 }
 
 .btn-primary:hover {
-    background-color: rgba(30, 80, 150, 0.9);
-    border-color: rgb(80, 170, 255);
+    background-color: rgba(32, 78, 102, 0.98);
+    border-color: rgb(118, 212, 228);
 }
 
 .dev-console-footer {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    border-top-width: 1px;
-    border-top-color: rgba(255, 255, 255, 0.12);
+    border-top-width: 2px;
+    border-top-color: var(--pm-crt-border-lo);
     padding-top: 10px;
     margin-top: 8px;
 }
 
 .dev-console-status {
-    color: rgb(130, 230, 170);
-    font-size: 13px;
-    -unity-font-style: italic;
+    color: var(--pm-accent-phosphor);
+    font-size: 9px;
+    -unity-font-style: normal;
 }
 
 .dev-console-close-button {
     width: 140px;
     height: 36px;
-    font-size: 13px;
-    background-color: rgba(60, 30, 35, 0.9);
-    color: rgb(255, 200, 200);
-    border-radius: 5px;
-    border-width: 1px;
-    border-color: rgba(180, 60, 60, 0.6);
+    font-size: 9px;
+    background-color: rgba(78, 22, 26, 0.95);
+    color: rgb(255, 220, 220);
+    border-radius: 0px;
+    border-width: 2px;
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
 }
 
 .dev-console-close-button:hover {
-    background-color: rgba(120, 40, 45, 1);
-    border-color: rgb(255, 80, 80);
+    background-color: rgba(132, 34, 40, 1);
+    border-color: var(--pm-accent-crimson-hi);
+}
+
+.dev-console-close-button:active {
+    translate: 0px 2px;
 }
 
 .dev-balance-label {
-    color: rgb(140, 240, 175);
-    font-size: 13px;
-    -unity-font-style: bold;
+    color: var(--pm-accent-phosphor);
+    font-size: 9px;
+    -unity-font-style: normal;
     -unity-text-align: middle-center;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .dev-currency-row {
@@ -179,28 +214,30 @@
 
 .dev-currency-btn {
     flex-grow: 1;
+    min-height: 32px;
     height: 32px;
     margin-top: 0px;
     margin-bottom: 0px;
     margin-left: 2px;
     margin-right: 2px;
-    font-size: 12px;
+    font-size: 9px;
     padding-left: 4px;
     padding-right: 4px;
 }
 
 .dev-currency-input {
-    width: 72px;
+    width: 82px;
     height: 32px;
     margin-right: 4px;
-    font-size: 13px;
+    font-size: 10px;
 }
 
 .dev-currency-input > .unity-text-field__input {
-    background-color: rgba(24, 30, 36, 0.98);
-    color: rgb(240, 245, 240);
-    border-color: rgba(80, 100, 110, 0.85);
-    border-width: 1px;
-    border-radius: 5px;
+    background-color: var(--pm-bg-void);
+    color: var(--pm-text-primary);
+    border-color: var(--pm-crt-border);
+    border-width: 2px;
+    border-radius: 0px;
     -unity-text-align: middle-center;
+    font-size: 10px;
 }
