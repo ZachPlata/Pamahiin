@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using Unity.Collections;
 
 public enum EvidenceType
 {
@@ -86,13 +87,33 @@ public class GhostHandler : NetworkBehaviour
     }
 
     private bool isExorcised = false;
-    public bool IsExorcised => isExorcised;
+    public bool IsExorcised => isExorcised || syncedExorcised.Value;
 
     private NetworkVariable<GhostHandlerState> currentState = new NetworkVariable<GhostHandlerState>(
         GhostHandlerState.Dormant, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private NetworkVariable<bool> isExorcismFailedHunt = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<bool> syncedGhostActivated = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<bool> syncedExorcised = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<int> syncedEvidenceMask = new NetworkVariable<int>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<FixedString128Bytes> syncedGhostName = new NetworkVariable<FixedString128Bytes>(
+        new FixedString128Bytes("Unknown"), NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<FixedString128Bytes> syncedRoomMarkerName = new NetworkVariable<FixedString128Bytes>(
+        default, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<Vector2> syncedRoomCenter = new NetworkVariable<Vector2>(
+        Vector2.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private bool hasSubscribedSyncCallbacks = false;
 
     public GhostHandlerState CurrentState => currentState.Value;
     public bool IsExorcismFailedHunt => isExorcismFailedHunt.Value;
@@ -112,12 +133,14 @@ public class GhostHandler : NetworkBehaviour
 
     public override void OnNetworkDespawn()
     {
+        UnsubscribeSyncCallbacks();
         DespawnActiveOrb();
         base.OnNetworkDespawn();
     }
 
     public override void OnDestroy()
     {
+        UnsubscribeSyncCallbacks();
         DespawnActiveOrb();
         base.OnDestroy();
     }
@@ -139,12 +162,210 @@ public class GhostHandler : NetworkBehaviour
         activeGhostOrb = null;
     }
 
+    private static FixedString128Bytes ToFixedString128(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return default;
+
+        string trimmed = value;
+        while (trimmed.Length > 0 && System.Text.Encoding.UTF8.GetByteCount(trimmed) > 120)
+        {
+            trimmed = trimmed.Substring(0, trimmed.Length - 1);
+        }
+
+        return new FixedString128Bytes(trimmed);
+    }
+
+    private static int EncodeEvidenceMask(System.Collections.Generic.List<EvidenceType> evidence)
+    {
+        if (evidence == null) return 0;
+        int mask = 0;
+        for (int i = 0; i < evidence.Count; i++)
+        {
+            mask |= 1 << (int)evidence[i];
+        }
+        return mask;
+    }
+
+    private static void DecodeEvidenceMask(int mask, System.Collections.Generic.List<EvidenceType> target)
+    {
+        target.Clear();
+        foreach (EvidenceType ev in System.Enum.GetValues(typeof(EvidenceType)))
+        {
+            if ((mask & (1 << (int)ev)) != 0)
+            {
+                target.Add(ev);
+            }
+        }
+    }
+
+    private static Collider2D ResolveRoomMarkerCollider(string roomName, Vector2 center)
+    {
+        if (string.IsNullOrEmpty(roomName)) return null;
+
+        GhostRoomMarker[] markers = FindObjectsByType<GhostRoomMarker>(FindObjectsInactive.Include);
+        Collider2D bestMatch = null;
+        float bestDistSq = float.MaxValue;
+
+        for (int i = 0; i < markers.Length; i++)
+        {
+            var marker = markers[i];
+            if (marker == null || marker.RoomCollider == null) continue;
+            if (marker.gameObject.name != roomName) continue;
+
+            float distSq = ((Vector2)marker.RoomCollider.bounds.center - center).sqrMagnitude;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestMatch = marker.RoomCollider;
+            }
+        }
+
+        if (bestMatch != null) return bestMatch;
+
+        // Fallback if ghostroomMarker was assigned to a Collider2D without GhostRoomMarker
+        Collider2D[] allColliders = FindObjectsByType<Collider2D>(FindObjectsInactive.Include);
+        for (int i = 0; i < allColliders.Length; i++)
+        {
+            var col = allColliders[i];
+            if (col == null || col.gameObject.name != roomName) continue;
+
+            float distSq = ((Vector2)col.bounds.center - center).sqrMagnitude;
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestMatch = col;
+            }
+        }
+
+        return bestMatch;
+    }
+
+    private void PushGhostInfoToParanormalManager()
+    {
+        if (ParanormalManager.Instance == null || ghostroomMarker == null) return;
+
+        ParanormalManager.Instance.SetGhostInfo(
+            eventGhost != null ? eventGhost.transform : transform,
+            ghostroomMarker,
+            HasEvidence(EvidenceType.Freezing),
+            HasEvidence(EvidenceType.EMF),
+            this
+        );
+    }
+
+    private void SyncStateToNetworkVariables()
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || !IsServer || !IsSpawned)
+            return;
+
+        syncedGhostName.Value = ToFixedString128(string.IsNullOrEmpty(ghostName) ? "Unknown" : ghostName);
+        syncedEvidenceMask.Value = EncodeEvidenceMask(currentEvidence);
+        syncedRoomMarkerName.Value = ghostroomMarker != null ? ToFixedString128(ghostroomMarker.gameObject.name) : default;
+        syncedRoomCenter.Value = ghostroomMarker != null ? (Vector2)ghostroomMarker.bounds.center : Vector2.zero;
+        syncedExorcised.Value = isExorcised;
+        syncedGhostActivated.Value = hasActivated && ghostroomMarker != null;
+    }
+
+    private void OnSyncedBoolChanged(bool _, bool __) => ApplySyncedGhostState();
+    private void OnSyncedIntChanged(int _, int __) => ApplySyncedGhostState();
+    private void OnSyncedFixedStringChanged(FixedString128Bytes _, FixedString128Bytes __) => ApplySyncedGhostState();
+    private void OnSyncedVector2Changed(Vector2 _, Vector2 __) => ApplySyncedGhostState();
+
+    private void SubscribeSyncCallbacks()
+    {
+        if (hasSubscribedSyncCallbacks) return;
+        hasSubscribedSyncCallbacks = true;
+
+        syncedGhostActivated.OnValueChanged += OnSyncedBoolChanged;
+        syncedExorcised.OnValueChanged += OnSyncedBoolChanged;
+        syncedEvidenceMask.OnValueChanged += OnSyncedIntChanged;
+        syncedGhostName.OnValueChanged += OnSyncedFixedStringChanged;
+        syncedRoomMarkerName.OnValueChanged += OnSyncedFixedStringChanged;
+        syncedRoomCenter.OnValueChanged += OnSyncedVector2Changed;
+    }
+
+    private void UnsubscribeSyncCallbacks()
+    {
+        if (!hasSubscribedSyncCallbacks) return;
+        hasSubscribedSyncCallbacks = false;
+
+        syncedGhostActivated.OnValueChanged -= OnSyncedBoolChanged;
+        syncedExorcised.OnValueChanged -= OnSyncedBoolChanged;
+        syncedEvidenceMask.OnValueChanged -= OnSyncedIntChanged;
+        syncedGhostName.OnValueChanged -= OnSyncedFixedStringChanged;
+        syncedRoomMarkerName.OnValueChanged -= OnSyncedFixedStringChanged;
+        syncedRoomCenter.OnValueChanged -= OnSyncedVector2Changed;
+    }
+
+    private void ApplySyncedGhostState()
+    {
+        if (IsServer) return;
+
+        isExorcised = syncedExorcised.Value;
+        hasActivated = syncedGhostActivated.Value;
+
+        string syncedName = syncedGhostName.Value.ToString();
+        if (!string.IsNullOrEmpty(syncedName))
+        {
+            ghostName = syncedName;
+            if (GameMatchManager.Instance != null && !ghostName.Equals("Unknown", System.StringComparison.OrdinalIgnoreCase))
+            {
+                GameMatchManager.Instance.SetTrueGhostName(ghostName);
+            }
+        }
+
+        int mask = syncedEvidenceMask.Value;
+        if (mask != 0)
+        {
+            DecodeEvidenceMask(mask, currentEvidence);
+        }
+        else if (syncedGhostActivated.Value)
+        {
+            currentEvidence.Clear();
+        }
+
+        if (syncedGhostActivated.Value)
+        {
+            string targetRoomName = syncedRoomMarkerName.Value.ToString();
+            if (ghostroomMarker == null || (!string.IsNullOrEmpty(targetRoomName) && ghostroomMarker.gameObject.name != targetRoomName))
+            {
+                ghostroomMarker = ResolveRoomMarkerCollider(targetRoomName, syncedRoomCenter.Value);
+            }
+
+            if (ghostroomMarker != null)
+            {
+                PushGhostInfoToParanormalManager();
+
+                GhostOrbSystem[] orbs = FindObjectsByType<GhostOrbSystem>(FindObjectsInactive.Include);
+                for (int i = 0; i < orbs.Length; i++)
+                {
+                    if (orbs[i] != null)
+                    {
+                        orbs[i].BindRoomCollider(ghostroomMarker);
+                    }
+                }
+            }
+        }
+
+        if (IsExorcised && eventGhost != null)
+        {
+            eventGhost.CleanupTemporaryOrb();
+        }
+    }
+
     public override void OnNetworkSpawn()
     {
+        SubscribeSyncCallbacks();
+
         if (IsServer)
         {
             SetState(GhostHandlerState.Dormant);
             isExorcismFailedHunt.Value = false;
+            SyncStateToNetworkVariables();
+        }
+        else
+        {
+            ApplySyncedGhostState();
         }
         
         // Force sorting order to 10 so they NEVER render behind the floor
@@ -199,18 +420,25 @@ public class GhostHandler : NetworkBehaviour
 
         Debug.Log("GhostHandler: ActivateGhost triggered!");
 
-        InitializeGhostIdentity();
-
         // Auto-assign and randomly select a Ghost Room if one isn't manually set
         if (ghostroomMarker == null)
         {
-            GhostRoomMarker[] allRooms = FindObjectsByType<GhostRoomMarker>();
-            Debug.Log($"GhostHandler: Found {allRooms.Length} GhostRoomMarkers in the scene.");
-            if (allRooms.Length > 0)
+            GhostRoomMarker[] allRooms = FindObjectsByType<GhostRoomMarker>(FindObjectsInactive.Exclude);
+            var validRooms = new System.Collections.Generic.List<GhostRoomMarker>(allRooms.Length);
+            for (int i = 0; i < allRooms.Length; i++)
             {
-                GhostRoomMarker selectedRoom = allRooms[Random.Range(0, allRooms.Length)];
-                ghostroomMarker = selectedRoom.GetComponent<Collider2D>();
-                Debug.Log($"GhostHandler: Randomly selected room at {ghostroomMarker.bounds.center}");
+                if (allRooms[i] != null && allRooms[i].RoomCollider != null)
+                {
+                    validRooms.Add(allRooms[i]);
+                }
+            }
+
+            Debug.Log($"GhostHandler: Found {allRooms.Length} active GhostRoomMarkers ({validRooms.Count} with Collider2D) in the scene.");
+            if (validRooms.Count > 0)
+            {
+                GhostRoomMarker selectedRoom = validRooms[Random.Range(0, validRooms.Count)];
+                ghostroomMarker = selectedRoom.RoomCollider;
+                Debug.Log($"GhostHandler: Randomly selected room '{selectedRoom.gameObject.name}' at {ghostroomMarker.bounds.center}");
             }
         }
         else
@@ -218,64 +446,73 @@ public class GhostHandler : NetworkBehaviour
             Debug.Log($"GhostHandler: Room was already manually assigned to {ghostroomMarker.gameObject.name}");
         }
 
-        // Room markers are no longer disabled here, allowing ambient room temps to work.
-        
-        // Snap the parent and the ghosts to the randomly selected room so they spawn there!
-        if (ghostroomMarker != null)
+        if (ghostroomMarker == null)
         {
-            transform.position = ghostroomMarker.bounds.center;
-            if (eventGhost != null)
-                eventGhost.transform.position = ghostroomMarker.bounds.center;
-            
-            if (hunterGhost != null)
-                hunterGhost.transform.position = ghostroomMarker.bounds.center;
+            Debug.LogError("GhostHandler: ActivateGhost aborted because no valid GhostRoomMarker with a Collider2D was found!");
+            DespawnActiveOrb();
+            TruckGearSpawner.CleanupAllGhostOrbs();
+            hasActivated = false;
+            SyncStateToNetworkVariables();
+            return;
         }
+
+        InitializeGhostIdentity();
+
+        // Snap the parent and the ghosts to the selected room so they spawn there
+        transform.position = ghostroomMarker.bounds.center;
+        if (eventGhost != null)
+            eventGhost.transform.position = ghostroomMarker.bounds.center;
+
+        if (hunterGhost != null)
+            hunterGhost.transform.position = ghostroomMarker.bounds.center;
 
         if (eventGhost != null)
             eventGhost.InitializeOrigin(eventGhost.transform.position);
 
         // Tell ParanormalManager about our presence and native evidence
-        if (ParanormalManager.Instance != null && ghostroomMarker != null)
-        {
-            float roomRadius = Mathf.Max(ghostroomMarker.bounds.extents.x, ghostroomMarker.bounds.extents.y);
-            ParanormalManager.Instance.SetGhostInfo(
-                eventGhost != null ? eventGhost.transform : transform,
-                ghostroomMarker,
-                HasEvidence(EvidenceType.Freezing),
-                HasEvidence(EvidenceType.EMF),
-                this
-            );
-        }
+        PushGhostInfoToParanormalManager();
 
-        // Spawn Ghost Orbs natively if applicable
-        if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null && ghostroomMarker != null)
+        // Spawn Ghost Orbs natively if applicable, otherwise clean up any stray orb
+        if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null)
         {
             if (activeGhostOrb == null)
             {
                 // Reuse any live orb already in the scene instead of spawning a duplicate
                 activeGhostOrb = FindAnyObjectByType<GhostOrbSystem>();
             }
-        }
 
-        if (HasEvidence(EvidenceType.GhostOrbs) && ghostOrbPrefab != null && ghostroomMarker != null && activeGhostOrb == null)
+            if (activeGhostOrb != null)
+            {
+                activeGhostOrb.Initialize(ghostroomMarker);
+            }
+            else
+            {
+                Vector3 spawnPos = ghostroomMarker.bounds.center;
+                if (!ghostroomMarker.OverlapPoint(spawnPos))
+                {
+                    spawnPos = ghostroomMarker.ClosestPoint(spawnPos);
+                }
+
+                GameObject orb = Instantiate(ghostOrbPrefab, spawnPos, Quaternion.identity);
+                var orbNetwork = orb.GetComponent<NetworkObject>();
+                if (orbNetwork != null) orbNetwork.Spawn();
+
+                var orbSystem = orb.GetComponent<GhostOrbSystem>();
+                if (orbSystem != null)
+                {
+                    orbSystem.Initialize(ghostroomMarker);
+                    activeGhostOrb = orbSystem;
+                }
+            }
+        }
+        else
         {
-            Vector3 spawnPos = ghostroomMarker.bounds.center;
-            if (!ghostroomMarker.OverlapPoint(spawnPos))
-            {
-                spawnPos = ghostroomMarker.ClosestPoint(spawnPos);
-            }
-
-            GameObject orb = Instantiate(ghostOrbPrefab, spawnPos, Quaternion.identity);
-            var orbNetwork = orb.GetComponent<NetworkObject>();
-            if (orbNetwork != null) orbNetwork.Spawn();
-            
-            var orbSystem = orb.GetComponent<GhostOrbSystem>();
-            if (orbSystem != null)
-            {
-                orbSystem.Initialize(ghostroomMarker);
-                activeGhostOrb = orbSystem;
-            }
+            DespawnActiveOrb();
+            if (eventGhost != null) eventGhost.CleanupTemporaryOrb();
+            TruckGearSpawner.CleanupAllGhostOrbs();
         }
+
+        SyncStateToNetworkVariables();
     }
 
     private void UpdateVisibility(GhostHandlerState state)
@@ -354,7 +591,18 @@ public class GhostHandler : NetworkBehaviour
     public void OnGhostExorcised()
     {
         isExorcised = true;
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsServer && IsSpawned)
+        {
+            syncedExorcised.Value = true;
+        }
+
         EndHunt();
+        DespawnActiveOrb();
+        if (eventGhost != null)
+        {
+            eventGhost.CleanupTemporaryOrb();
+        }
+        TruckGearSpawner.CleanupAllGhostOrbs();
 
         if (eventGhost != null)
         {
@@ -385,7 +633,7 @@ public class GhostHandler : NetworkBehaviour
 
     public void StartHunt(bool isFromFailedExorcism = false)
     {
-        if (isExorcised) return;
+        if (IsExorcised) return;
         if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
 
         isExorcismFailedHunt.Value = isFromFailedExorcism;
@@ -510,7 +758,7 @@ public class GhostHandler : NetworkBehaviour
 
     private void Update()
     {
-        if (isExorcised) return;
+        if (IsExorcised) return;
 
         // Visual logic should run on BOTH Server and Client!
         if (currentState.Value == GhostHandlerState.Dormant)

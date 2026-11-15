@@ -1689,23 +1689,31 @@ public static class BarangayAssetGenerator
     // -----------------------------------------------------------------------
     public static void GenerateSummoningCircleSheet()
     {
-        const int frameSize = 96;
-        const int frameCount = 9;
+        const int frameSize = 128;
+        const int frameCount = 16; // 2048x128: F0=idle, F1=runes awaken, F2-11=5 candles ignite (flare+burn+surge), F12-15=loop
         PixelCanvas sheet = new PixelCanvas(frameSize * frameCount, frameSize);
 
-        Color32 chalkBright = new Color32(238, 231, 214, 248);
-        Color32 chalkMid = new Color32(208, 198, 176, 224);
-        Color32 chalkDust = new Color32(174, 165, 146, 130);
+        Color32 chalkEdge = new Color32(18, 12, 16, 175);
+        Color32 chalkBright = new Color32(246, 239, 222, 252);
+        Color32 chalkMid = new Color32(212, 200, 178, 232);
+        Color32 chalkDust = new Color32(170, 158, 138, 138);
 
-        Color32 waxBody = new Color32(154, 26, 26, 255);
-        Color32 waxHighlight = new Color32(204, 48, 42, 255);
-        Color32 waxShadow = new Color32(92, 14, 16, 255);
-        Color32 wickDark = new Color32(28, 20, 22, 255);
+        Color32 runeRedDim = new Color32(168, 24, 24, 210);
+        Color32 runeRedBright = new Color32(245, 58, 34, 245);
+        Color32 runeGoldCore = new Color32(255, 196, 86, 255);
 
-        Color32 flameOuter = new Color32(204, 17, 17, 245);
-        Color32 flameBody = new Color32(255, 34, 24, 255);
-        Color32 flameTip = new Color32(255, 102, 51, 255);
-        Color32 flameCore = new Color32(255, 218, 128, 255);
+        Color32 saucerDark = new Color32(30, 24, 28, 230);
+        Color32 waxPool = new Color32(124, 18, 20, 235);
+        Color32 waxBody = new Color32(168, 28, 28, 255);
+        Color32 waxHighlight = new Color32(218, 58, 48, 255);
+        Color32 waxShadow = new Color32(94, 14, 18, 255);
+        Color32 waxCreamTop = new Color32(236, 198, 186, 255);
+        Color32 wickDark = new Color32(24, 18, 20, 255);
+
+        Color32 flameOuter = new Color32(198, 18, 18, 235);
+        Color32 flameBody = new Color32(255, 48, 24, 255);
+        Color32 flameTip = new Color32(255, 128, 48, 255);
+        Color32 flameCore = new Color32(255, 232, 142, 255);
 
         for (int f = 0; f < frameCount; f++)
         {
@@ -1713,185 +1721,385 @@ public static class BarangayAssetGenerator
             int cx = ox + frameSize / 2;
             int cy = frameSize / 2;
 
-            // 1. Subtle dark ritual stain underneath circle center
-            for (int y = cy - 42; y <= cy + 42; y++)
+            bool runesAwake = f >= 1;
+            int litCount = f < 2 ? 0 : (f >= 10 ? 5 : ((f - 2) / 2) + 1);
+            bool isClimaxFrame = f == 11;
+            bool isLoopFrame = f >= 12;
+
+            float igniteHeat = f == 0 ? 0f
+                : (f == 1 ? 0.35f
+                : (isClimaxFrame ? 1.0f
+                : (isLoopFrame ? (0.78f + 0.18f * Mathf.Sin(((f - 12) / 4f) * Mathf.PI * 2f))
+                : Mathf.Clamp01(0.32f + litCount * 0.13f))));
+
+            // 1. Dark ritual ash / bloodstain floor smudge grounding the circle
+            for (int y = cy - 58; y <= cy + 58; y++)
             {
-                for (int x = cx - 42; x <= cx + 42; x++)
+                for (int x = cx - 58; x <= cx + 58; x++)
                 {
-                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-                    if (d < 40f && Hash01(x - ox, y, 710) > 0.72f)
+                    int lx = x - ox;
+                    float dx = lx - 64f;
+                    float dy = y - 64f;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (d < 56f)
                     {
-                        float fade = Mathf.Clamp01(1f - d / 40f);
-                        sheet.Blend(x, y, new Color32(22, 16, 18, (byte)Mathf.RoundToInt(42f * fade)));
+                        float h = Hash01(lx, y, 710);
+                        float fade = Mathf.Clamp01(1f - d / 56f);
+                        if (h > 0.62f)
+                        {
+                            byte a = (byte)Mathf.RoundToInt(fade * 58f);
+                            sheet.Blend(x, y, new Color32(18, 12, 16, a));
+                        }
+                        if (runesAwake && d < 32f)
+                        {
+                            float innerAura = Mathf.Pow(1f - d / 32f, 1.5f) * igniteHeat;
+                            if (innerAura > 0.08f)
+                            {
+                                sheet.Blend(x, y, new Color32(150, 16, 16, (byte)Mathf.RoundToInt(innerAura * 72f)));
+                            }
+                        }
                     }
                 }
             }
 
-            // 2. Outer chalk ring (r ~ 38px) & concentric inner sigil ring (r ~ 31px)
+            // 2. Crisp double outer chalk rings (r=56 & r=46.5), inner binding ring (r=21), + 20 rune glyphs
             for (int y = 2; y < frameSize - 2; y++)
             {
                 for (int x = ox + 2; x < ox + frameSize - 2; x++)
                 {
                     int lx = x - ox;
-                    float dx = lx - 48f;
-                    float dy = y - 48f;
+                    float dx = lx - 64f;
+                    float dy = y - 64f;
                     float dist = Mathf.Sqrt(dx * dx + dy * dy);
                     float ang = Mathf.Atan2(dy, dx);
                     float grain = Hash01(lx, y, 720);
 
-                    if (Mathf.Abs(dist - 38.0f) <= 1.15f)
+                    // Outer chalk circle (2px thick + subtle dark contrast outline)
+                    float dOuter = Mathf.Abs(dist - 55.5f);
+                    if (dOuter <= 1.25f && grain > 0.10f)
                     {
-                        if (grain > 0.14f)
+                        sheet.Blend(x, y, grain > 0.52f ? chalkBright : chalkMid);
+                    }
+                    else if (dOuter <= 2.35f)
+                    {
+                        if (grain > 0.72f) sheet.Blend(x, y, chalkDust);
+                        else sheet.Blend(x, y, chalkEdge);
+                    }
+
+                    // Inner ring separating rune band from pentagram (r = 46.2)
+                    float dBandInner = Mathf.Abs(dist - 46.2f);
+                    if (dBandInner <= 1.05f && grain > 0.14f)
+                    {
+                        Color32 baseC = grain > 0.56f ? chalkBright : chalkMid;
+                        sheet.Blend(x, y, baseC);
+                        if (runesAwake && grain > 0.42f)
                         {
-                            sheet.Blend(x, y, grain > 0.55f ? chalkBright : chalkMid);
+                            Color32 rc = Color32.Lerp(runeRedDim, runeRedBright, igniteHeat);
+                            rc.a = (byte)Mathf.RoundToInt(175f * igniteHeat);
+                            sheet.Blend(x, y, rc);
                         }
                     }
-                    else if (Mathf.Abs(dist - 38.0f) <= 2.2f && grain > 0.76f)
+                    else if (dBandInner <= 1.9f && grain <= 0.5f)
                     {
-                        sheet.Blend(x, y, chalkDust);
+                        sheet.Blend(x, y, chalkEdge);
                     }
-                    else if (Mathf.Abs(dist - 31.2f) <= 0.75f)
+
+                    // 20 evenly spaced occult glyphs inside the rune band (r = 48.2 .. 53.6)
+                    if (dist >= 48.0f && dist <= 53.8f)
                     {
-                        // Broken inner sigil ring
-                        float seg = Mathf.Repeat(ang * 5f / (Mathf.PI * 2f), 1f);
-                        if (seg > 0.12f && seg < 0.88f && grain > 0.18f)
+                        float runeSector = Mathf.Repeat((ang + Mathf.PI) / (Mathf.PI * 2f) * 20f, 1f);
+                        int runeIndex = Mathf.FloorToInt(Mathf.Repeat((ang + Mathf.PI) / (Mathf.PI * 2f) * 20f, 20f));
+                        float rRad = (dist - 48.0f) / 5.8f; // 0..1 radial inside band
+                        bool drawRunePx = false;
+
+                        switch (runeIndex % 4)
                         {
-                            sheet.Blend(x, y, chalkMid);
+                            case 0: // Cross + bar sigil
+                                drawRunePx = Mathf.Abs(runeSector - 0.5f) < 0.09f || Mathf.Abs(rRad - 0.5f) < 0.14f;
+                                break;
+                            case 1: // Chevron / X sigil
+                                drawRunePx = Mathf.Abs(Mathf.Abs(runeSector - 0.5f) * 1.4f - Mathf.Abs(rRad - 0.5f)) < 0.14f && Mathf.Abs(runeSector - 0.5f) < 0.30f;
+                                break;
+                            case 2: // Trident / Twin vertical prongs + base
+                                drawRunePx = (rRad < 0.22f && Mathf.Abs(runeSector - 0.5f) < 0.28f) ||
+                                             Mathf.Abs(runeSector - 0.32f) < 0.08f ||
+                                             Mathf.Abs(runeSector - 0.68f) < 0.08f;
+                                break;
+                            default: // Occult diamond / eye glyph
+                                float diamond = Mathf.Abs(runeSector - 0.5f) * 1.8f + Mathf.Abs(rRad - 0.5f);
+                                drawRunePx = Mathf.Abs(diamond - 0.36f) < 0.13f;
+                                break;
+                        }
+
+                        if (drawRunePx && grain > 0.12f)
+                        {
+                            sheet.Blend(x, y, chalkBright);
+                            if (runesAwake)
+                            {
+                                float glyphDelay = (runeIndex % 5) * 0.08f;
+                                float glowT = Mathf.Clamp01((igniteHeat - glyphDelay * 0.4f) * 1.25f);
+                                if (glowT > 0.05f)
+                                {
+                                    Color32 glow = Color32.Lerp(runeRedDim, isClimaxFrame ? runeGoldCore : runeRedBright, glowT);
+                                    sheet.Blend(x, y, glow);
+                                }
+                            }
                         }
                     }
-                    else if (dist > 32.8f && dist < 35.8f)
+
+                    // Inner sacred binding ring (r = 21.0) & central occult eye (r = 8.2)
+                    float dMidRing = Mathf.Abs(dist - 21.0f);
+                    if (dMidRing <= 0.95f && grain > 0.16f)
                     {
-                        // Small ritual glyph notches between inner and outer rings
-                        float notch = Mathf.Repeat(ang * 15f / (Mathf.PI * 2f), 1f);
-                        if (notch < 0.18f && grain > 0.25f)
+                        sheet.Blend(x, y, grain > 0.55f ? chalkBright : chalkMid);
+                        if (runesAwake)
                         {
-                            sheet.Blend(x, y, chalkDust);
+                            Color32 rc = Color32.Lerp(runeRedDim, runeRedBright, igniteHeat);
+                            rc.a = (byte)Mathf.RoundToInt(200f * igniteHeat);
+                            sheet.Blend(x, y, rc);
+                        }
+                    }
+
+                    float dCenterEye = Mathf.Abs(dist - 8.0f);
+                    if (dCenterEye <= 0.9f && grain > 0.16f)
+                    {
+                        sheet.Blend(x, y, chalkBright);
+                        if (runesAwake)
+                        {
+                            Color32 rc = Color32.Lerp(runeRedBright, runeGoldCore, isClimaxFrame ? 0.85f : igniteHeat * 0.45f);
+                            rc.a = (byte)Mathf.RoundToInt(235f * igniteHeat);
+                            sheet.Blend(x, y, rc);
                         }
                     }
                 }
             }
 
-            // 3. 5 candle vertices placed clockwise starting at 12 o'clock (90° in Texture2D Y-up coordinates)
+            // 3. 5 candle vertices placed clockwise starting at 12 o'clock (90° in Y-up Texture2D coordinates)
             Vector2Int[] candlePts = new Vector2Int[5];
+            Vector2Int[] starPts = new Vector2Int[5];
             for (int k = 0; k < 5; k++)
             {
                 float deg = 90f - k * 72f;
                 float rad = deg * Mathf.Deg2Rad;
+                starPts[k] = new Vector2Int(
+                    cx + Mathf.RoundToInt(Mathf.Cos(rad) * 44.5f),
+                    cy + Mathf.RoundToInt(Mathf.Sin(rad) * 44.5f));
                 candlePts[k] = new Vector2Int(
-                    cx + Mathf.RoundToInt(Mathf.Cos(rad) * 35f),
-                    cy + Mathf.RoundToInt(Mathf.Sin(rad) * 35f));
+                    cx + Mathf.RoundToInt(Mathf.Cos(rad) * 43.0f),
+                    cy + Mathf.RoundToInt(Mathf.Sin(rad) * 43.0f));
             }
 
-            // 5-pointed ritual star connecting k -> (k + 2) % 5
+            // Central inverted ritual sigil bars inside the r=21 circle
+            for (int k = 0; k < 3; k++)
+            {
+                float a0 = (-90f + k * 120f) * Mathf.Deg2Rad;
+                float a1 = (-90f + ((k + 1) % 3) * 120f) * Mathf.Deg2Rad;
+                Vector2Int t0 = new Vector2Int(cx + Mathf.RoundToInt(Mathf.Cos(a0) * 19f), cy + Mathf.RoundToInt(Mathf.Sin(a0) * 19f));
+                Vector2Int t1 = new Vector2Int(cx + Mathf.RoundToInt(Mathf.Cos(a1) * 19f), cy + Mathf.RoundToInt(Mathf.Sin(a1) * 19f));
+                DrawThickChalkLine(sheet, t0.x, t0.y, t1.x, t1.y, ox, chalkBright, chalkMid, chalkDust, chalkEdge, 745 + k,
+                    runesAwake ? Color32.Lerp(runeRedDim, runeRedBright, igniteHeat) : (Color32?)null, igniteHeat);
+            }
+
+            // Glowing center pupil dot when active
+            if (runesAwake)
+            {
+                Color32 pupilCol = Color32.Lerp(runeRedDim, isClimaxFrame ? runeGoldCore : runeRedBright, igniteHeat);
+                sheet.FillCircle(cx, cy, isClimaxFrame ? 3 : 2, pupilCol, true);
+            }
+
+            // 5-pointed pentagram connecting k -> (k + 2) % 5, with each edge igniting crimson as candles light!
             for (int k = 0; k < 5; k++)
             {
-                Vector2Int p0 = candlePts[k];
-                Vector2Int p1 = candlePts[(k + 2) % 5];
-                DrawChalkLine(sheet, p0.x, p0.y, p1.x, p1.y, ox, chalkBright, chalkMid, chalkDust, 730 + k);
+                Vector2Int p0 = starPts[k];
+                Vector2Int p1 = starPts[(k + 2) % 5];
+                bool edgeIgnited = litCount > k;
+                float edgeGlow = edgeIgnited ? (isClimaxFrame ? 1.0f : Mathf.Clamp01(0.62f + igniteHeat * 0.38f)) : (runesAwake ? 0.25f : 0f);
+                Color32? edgeCol = edgeGlow > 0.02f
+                    ? Color32.Lerp(runeRedDim, isClimaxFrame ? runeGoldCore : runeRedBright, edgeGlow)
+                    : (Color32?)null;
+                DrawThickChalkLine(sheet, p0.x, p0.y, p1.x, p1.y, ox, chalkBright, chalkMid, chalkDust, chalkEdge, 730 + k, edgeCol, edgeGlow);
             }
 
-            // Central miniature binding ring
-            for (int y = cy - 9; y <= cy + 9; y++)
-            {
-                for (int x = cx - 9; x <= cx + 9; x++)
-                {
-                    float dist = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
-                    if (Mathf.Abs(dist - 7.5f) <= 0.7f && Hash01(x - ox, y, 740) > 0.15f)
-                    {
-                        sheet.Blend(x, y, chalkMid);
-                    }
-                }
-            }
+            // 4. Crimson floor light halos around each lit candle
+            float loopPhase = isLoopFrame
+                ? ((f - 12) / 4f) * (Mathf.PI * 2f)
+                : (f * 1.15f);
 
-            // 4. Determine how many candles are lit in frame f
-            // Frame 0: 0 lit; Frames 1..5: 1..5 lit clockwise; Frames 5..8: all 5 lit waving in seamless loop
-            int litCount = f <= 5 ? f : 5;
-            float loopPhase = f >= 5
-                ? ((f - 5) / 4f) * (Mathf.PI * 2f)
-                : ((Mathf.Max(0, f - 1)) / 4f) * (Mathf.PI * 2f);
-
-            // Warm crimson halo around each lit candle underneath candle body
             for (int k = 0; k < litCount; k++)
             {
                 Vector2Int cp = candlePts[k];
+                bool justFlared = !isLoopFrame && ((k == 0 && f == 2) || (k == 1 && f == 4) || (k == 2 && f == 6) || (k == 3 && f == 8) || (k == 4 && f == 10));
                 float candlePhase = loopPhase + k * 1.37f;
-                float haloPulse = 0.85f + 0.15f * Mathf.Sin(candlePhase);
-                for (int dy = -11; dy <= 11; dy++)
+                float haloRadius = (justFlared || isClimaxFrame) ? 16.5f : 13.0f;
+                float haloStrength = (justFlared || isClimaxFrame) ? 135f : (92f + 16f * Mathf.Sin(candlePhase));
+
+                int rCeil = Mathf.CeilToInt(haloRadius);
+                for (int dy = -rCeil; dy <= rCeil; dy++)
                 {
-                    for (int dx = -11; dx <= 11; dx++)
+                    for (int dx = -rCeil; dx <= rCeil; dx++)
                     {
                         float d = Mathf.Sqrt(dx * dx + dy * dy);
-                        if (d <= 10.5f)
+                        if (d <= haloRadius)
                         {
-                            float falloff = Mathf.Pow(1f - d / 10.5f, 1.6f) * haloPulse;
-                            sheet.Blend(cp.x + dx, cp.y + dy, new Color32(185, 24, 18, (byte)Mathf.RoundToInt(95f * falloff)));
+                            float falloff = Mathf.Pow(1f - d / haloRadius, 1.55f);
+                            Color32 hc = (justFlared || isClimaxFrame)
+                                ? new Color32(235, 62, 24, (byte)Mathf.Clamp(Mathf.RoundToInt(haloStrength * falloff), 0, 210))
+                                : new Color32(195, 26, 20, (byte)Mathf.Clamp(Mathf.RoundToInt(haloStrength * falloff), 0, 180));
+                            sheet.Blend(cp.x + dx, cp.y + dy, hc);
                         }
                     }
                 }
             }
 
-            // 5. Draw all 5 red-wax candle pedestals + individual animated flames
+            // 5. Draw all 5 red-wax pillar candles + animated flames / ignition flares + sparks
             for (int k = 0; k < 5; k++)
             {
                 Vector2Int cp = candlePts[k];
-                // Pedestal shadow + dark outline + red wax cylinder
-                sheet.FillCircle(cp.x, cp.y - 1, 4, new Color32(12, 8, 10, 150), true);
-                sheet.FillRect(cp.x - 3, cp.y - 3, 6, 6, PAL_OUTLINE);
-                sheet.FillRect(cp.x - 2, cp.y - 2, 4, 5, waxBody);
-                sheet.FillRect(cp.x - 2, cp.y - 2, 1, 4, waxShadow);
-                sheet.FillRect(cp.x + 1, cp.y - 1, 1, 3, waxHighlight);
-                sheet.FillRect(cp.x - 2, cp.y + 2, 4, 1, waxHighlight);
+                // Stone/wax saucer shadow & coaster
+                sheet.FillCircle(cp.x, cp.y - 2, 6, new Color32(10, 6, 8, 165), true);
+                sheet.FillCircle(cp.x, cp.y - 1, 5, saucerDark, true);
+                sheet.FillEllipse(cp.x, cp.y - 1, 4, 3, waxPool, true);
+
+                // Pillar candle silhouette with dark outline + 3D shading + melted cream top
+                sheet.FillRect(cp.x - 4, cp.y - 4, 8, 9, PAL_OUTLINE);
+                sheet.FillRect(cp.x - 3, cp.y - 3, 6, 7, waxBody);
+                sheet.FillRect(cp.x - 3, cp.y - 3, 2, 6, waxShadow);
+                sheet.FillRect(cp.x + 1, cp.y - 2, 2, 5, waxHighlight);
+                sheet.FillRect(cp.x - 3, cp.y + 3, 6, 2, waxCreamTop);
+                sheet.Set(cp.x - 2, cp.y + 2, waxHighlight);
+                sheet.Set(cp.x + 2, cp.y + 1, waxHighlight);
+
                 // Wick
-                sheet.Set(cp.x, cp.y + 3, wickDark);
-                sheet.Set(cp.x, cp.y + 4, wickDark);
+                sheet.Set(cp.x, cp.y + 5, wickDark);
+                sheet.Set(cp.x, cp.y + 6, wickDark);
+
+                // Pre-ignition ember spark over Candle #1 on Frame 1 (Awakening Runes)
+                if (f == 1 && k == 0)
+                {
+                    sheet.Blend(cp.x, cp.y + 7, new Color32(255, 110, 40, 210));
+                    sheet.Blend(cp.x - 1, cp.y + 9, new Color32(180, 150, 140, 120));
+                    sheet.Blend(cp.x + 1, cp.y + 10, new Color32(255, 84, 32, 165));
+                }
 
                 if (k < litCount)
                 {
-                    // Unique per-candle waving parameters across loop frames 5..8 (and already-lit frames 1..4)
+                    bool justFlared = !isLoopFrame && ((k == 0 && f == 2) || (k == 1 && f == 4) || (k == 2 && f == 6) || (k == 3 && f == 8) || (k == 4 && f == 10));
                     float candlePhase = loopPhase + k * 1.37f;
                     float swaySign = (k % 2 == 0) ? 1f : -1f;
-                    int midDx = Mathf.RoundToInt(swaySign * Mathf.Sin(candlePhase - 0.55f) * 0.9f);
-                    int tipDx = Mathf.RoundToInt(swaySign * Mathf.Sin(candlePhase) * 1.65f + 0.5f * Mathf.Cos(candlePhase * 2f + k));
-                    int flameH = 6 + Mathf.RoundToInt(1.3f * Mathf.Sin(candlePhase + k * 0.9f) + 0.7f * Mathf.Cos(candlePhase * 2f - k));
-                    flameH = Mathf.Clamp(flameH, 5, 8);
+                    int midDx = justFlared ? 0 : Mathf.RoundToInt(swaySign * Mathf.Sin(candlePhase - 0.55f) * 1.15f);
+                    int tipDx = justFlared ? Mathf.RoundToInt(swaySign * 1f) : Mathf.RoundToInt(swaySign * Mathf.Sin(candlePhase) * 2.1f + 0.6f * Mathf.Cos(candlePhase * 2f + k));
 
-                    int fyBase = cp.y + 4;
-                    // Outer dark-crimson aura & flame base
+                    int baseH = justFlared ? 12 : (isClimaxFrame ? 11 : 8);
+                    int flameH = baseH + (justFlared ? 0 : Mathf.RoundToInt(1.5f * Mathf.Sin(candlePhase + k * 0.9f) + 0.7f * Mathf.Cos(candlePhase * 2f - k)));
+                    flameH = Mathf.Clamp(flameH, 7, 13);
+
+                    int fyBase = cp.y + 6;
                     sheet.Blend(cp.x - 1, fyBase, flameOuter);
                     sheet.Blend(cp.x + 1, fyBase, flameOuter);
-                    sheet.Blend(cp.x - 1 + midDx, fyBase + 1, flameOuter);
-                    sheet.Blend(cp.x + 1 + midDx, fyBase + 1, flameOuter);
+                    sheet.Blend(cp.x - 2, fyBase + 1, flameOuter);
+                    sheet.Blend(cp.x + 2, fyBase + 1, flameOuter);
 
                     for (int h = 0; h < flameH; h++)
                     {
                         float t = (float)h / Mathf.Max(1, flameH - 1);
                         int fx = cp.x + Mathf.RoundToInt(Mathf.Lerp(0f, tipDx, t));
-                        if (h == 1 || h == 2) fx = cp.x + midDx;
+                        if (h == 1 || h == 2 || h == 3) fx = cp.x + midDx;
 
-                        if (h == 0)
+                        if (h <= 1)
                         {
                             sheet.Set(fx, fyBase + h, flameCore);
+                            sheet.Blend(fx - 1, fyBase + h, flameBody);
+                            sheet.Blend(fx + 1, fyBase + h, flameBody);
                         }
-                        else if (h < flameH - 2)
+                        else if (h < flameH - 3)
                         {
-                            sheet.Set(fx, fyBase + h, h <= 2 ? flameCore : flameBody);
+                            sheet.Set(fx, fyBase + h, h <= 3 ? flameCore : flameBody);
                             sheet.Blend(fx - 1, fyBase + h, flameOuter);
                             sheet.Blend(fx + 1, fyBase + h, flameOuter);
+                            if (justFlared || isClimaxFrame)
+                            {
+                                sheet.Blend(fx - 2, fyBase + h, new Color32(255, 60, 20, 145));
+                                sheet.Blend(fx + 2, fyBase + h, new Color32(255, 60, 20, 145));
+                            }
                         }
-                        else if (h == flameH - 2)
+                        else if (h < flameH - 1)
                         {
                             sheet.Set(fx, fyBase + h, flameBody);
+                            sheet.Blend(fx - 1, fyBase + h, flameOuter);
+                            sheet.Blend(fx + 1, fyBase + h, flameOuter);
                         }
                         else
                         {
                             sheet.Set(fx, fyBase + h, flameTip);
                         }
                     }
+
+                    // Floating ritual embers above lit candles
+                    int sparkY = fyBase + flameH + 1 + ((f + k) % 3);
+                    int sparkX = cp.x + tipDx + ((k % 2 == 0) ? 1 : -1);
+                    sheet.Blend(sparkX, sparkY, (justFlared || isClimaxFrame) ? flameCore : flameTip);
                 }
             }
         }
 
         sheet.SavePngAtAssetPath("Assets/Resources/Sprites/Ritual/summoning_circle_sheet.png");
+    }
+
+    private static void DrawThickChalkLine(
+        PixelCanvas canvas,
+        int x0,
+        int y0,
+        int x1,
+        int y1,
+        int ox,
+        Color32 bright,
+        Color32 mid,
+        Color32 dust,
+        Color32 edgeShadow,
+        int seed,
+        Color32? emberCol,
+        float emberStrength)
+    {
+        int dx = Mathf.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        int dy = -Mathf.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        int err = dx + dy;
+        int step = 0;
+        while (true)
+        {
+            float n = Hash01(x0 - ox, y0 + step, seed);
+            canvas.Blend(x0 - 1, y0 - 1, edgeShadow);
+            canvas.Blend(x0 + 1, y0 - 1, edgeShadow);
+
+            if (n > 0.08f)
+            {
+                Color32 baseC = n > 0.52f ? bright : mid;
+                canvas.Blend(x0, y0, baseC);
+                canvas.Blend(x0 + 1, y0, baseC);
+                canvas.Blend(x0, y0 + 1, n > 0.35f ? mid : dust);
+                if (emberCol.HasValue && emberStrength > 0.05f)
+                {
+                    Color32 ec = emberCol.Value;
+                    ec.a = (byte)Mathf.Clamp(Mathf.RoundToInt(215f * emberStrength), 0, 235);
+                    canvas.Blend(x0, y0, ec);
+                    if (emberStrength > 0.55f)
+                    {
+                        canvas.Blend(x0 + 1, y0, ec);
+                        canvas.Blend(x0, y0 + 1, ec);
+                    }
+                }
+            }
+
+            if (n > 0.72f)
+            {
+                canvas.Blend(x0 - 1, y0 + 1, dust);
+            }
+
+            if (x0 == x1 && y0 == y1) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+            step++;
+        }
     }
 
     private static void DrawChalkLine(PixelCanvas canvas, int x0, int y0, int x1, int y1, int ox, Color32 bright, Color32 mid, Color32 dust, int seed)

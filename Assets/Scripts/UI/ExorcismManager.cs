@@ -271,7 +271,8 @@ public class ExorcismManager : NetworkBehaviour
             circle.PlayIgnitionSequence(() => candlesLit = true);
 
             float waitElapsed = 0f;
-            while (!candlesLit && waitElapsed < 4.5f)
+            float maxWait = Mathf.Max(12f, circle.ExpectedIgnitionDuration + 2.5f);
+            while (!candlesLit && waitElapsed < maxWait)
             {
                 waitElapsed += Time.deltaTime;
                 yield return null;

@@ -41,6 +41,10 @@ public class BarangayTextureImporter : AssetPostprocessor
         ti.textureCompression = TextureImporterCompression.Uncompressed;
         ti.mipmapEnabled = false;
         ti.npotScale = TextureImporterNPOTScale.None;
+        if (isRitualOrDeath)
+        {
+            ti.maxTextureSize = 4096;
+        }
         ti.spritePixelsPerUnit = ppu;
         ti.wrapMode = isTileable ? TextureWrapMode.Repeat : TextureWrapMode.Clamp;
 

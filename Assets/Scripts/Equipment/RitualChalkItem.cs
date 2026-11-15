@@ -11,8 +11,8 @@ public class RitualChalkItem : EquipmentItem
     [SerializeField] private Sprite diagramSprite;
 
     [Header("Scale & Sizing")]
-    [Tooltip("Desired diameter of the chalk circle on the floor in world units (camera viewport height is ~0.6, so 0.24 - 0.30 fits cleanly in rooms and van floor).")]
-    [SerializeField, Range(0.15f, 0.35f)] private float diagramWorldDiameter = 0.26f;
+    [Tooltip("Desired diameter of the chalk circle on the floor in world units (camera viewport height is ~0.6, so 0.24 - 0.32 fits cleanly in rooms and van floor).")]
+    [SerializeField, Range(0.15f, 0.35f)] private float diagramWorldDiameter = 0.30f;
 
     [Tooltip("Target length of the chalk stick in world units when held or dropped (calibrated to fit EquipmentSpawn slots).")]
     [SerializeField, Range(0.012f, 0.045f)] private float chalkItemTargetLength = 0.020f;
@@ -245,7 +245,7 @@ public class RitualChalkItem : EquipmentItem
         }
 
         float effectiveDiameter = Mathf.Clamp(diagramWorldDiameter, 0.15f, 0.35f);
-        circle.Configure(effectiveDiameter, diagramSortingLayer, diagramSortingOrder);
+        circle.Configure(effectiveDiameter, diagramSortingLayer, diagramSortingOrder, diagramSprite);
     }
 
     protected override void OnPlacedChanged(bool placed)

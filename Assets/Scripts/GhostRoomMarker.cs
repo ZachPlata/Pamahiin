@@ -44,21 +44,13 @@ public class GhostRoomMarker : MonoBehaviour
     public static bool IsInsideGhostRoom(Vector2 position)
     {
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
-        if (ghostHandler != null && ghostHandler.ghostroomMarker != null)
+        if (ghostHandler == null || ghostHandler.IsExorcised || ghostHandler.ghostroomMarker == null)
         {
-            if (ghostHandler.ghostroomMarker.OverlapPoint(position)) return true;
-            Bounds b = ghostHandler.ghostroomMarker.bounds;
-            return position.x >= b.min.x && position.x <= b.max.x && position.y >= b.min.y && position.y <= b.max.y;
+            return false;
         }
 
-        var markers = Object.FindObjectsByType<GhostRoomMarker>(FindObjectsInactive.Exclude);
-        foreach (var marker in markers)
-        {
-            if (marker != null && marker.ContainsPoint(position))
-            {
-                return true;
-            }
-        }
-        return false;
+        if (ghostHandler.ghostroomMarker.OverlapPoint(position)) return true;
+        Bounds b = ghostHandler.ghostroomMarker.bounds;
+        return position.x >= b.min.x && position.x <= b.max.x && position.y >= b.min.y && position.y <= b.max.y;
     }
 }

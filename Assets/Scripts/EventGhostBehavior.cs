@@ -60,24 +60,40 @@ public class EventGhostBehavior : NetworkBehaviour
     // Temporary orb only used if no native Ghost Orb exists yet (never duplicates the native one)
     private GhostOrbSystem temporaryEventOrb;
 
+    /// <summary>
+    /// Immediately cleans up any temporary orb spawned by a ghost event (e.g., on exorcism).
+    /// </summary>
+    public void CleanupTemporaryOrb()
+    {
+        if (temporaryEventOrb == null) return;
+        DespawnOrDestroyOrb(temporaryEventOrb);
+        temporaryEventOrb = null;
+    }
+
+    private static void DespawnOrDestroyOrb(GhostOrbSystem orb)
+    {
+        if (orb == null) return;
+
+        var netObj = orb.GetComponent<NetworkObject>();
+        if (netObj != null && netObj.IsSpawned)
+        {
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+                netObj.Despawn(true);
+        }
+        else
+        {
+            Destroy(orb.gameObject);
+        }
+    }
+
     private System.Collections.IEnumerator DespawnTemporaryOrbRoutine(GhostOrbSystem orb, float delay)
     {
         yield return new WaitForSeconds(delay);
-
-        if (orb != null)
+        DespawnOrDestroyOrb(orb);
+        if (temporaryEventOrb == orb)
         {
-            var netObj = orb.GetComponent<NetworkObject>();
-            if (netObj != null && netObj.IsSpawned)
-            {
-                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
-                    netObj.Despawn(true);
-            }
-            else
-            {
-                Destroy(orb.gameObject);
-            }
+            temporaryEventOrb = null;
         }
-        temporaryEventOrb = null;
     }
 
     // Network synced state for visibility
@@ -541,7 +557,7 @@ public class EventGhostBehavior : NetworkBehaviour
                 break;
                 
             case GhostEventType.GhostOrbsManifestation:
-                if (camera != null && ghostHandler != null && ghostHandler.ghostOrbPrefab != null && ghostHandler.ghostroomMarker != null)
+                if (camera != null && ghostHandler != null && !ghostHandler.IsExorcised && ghostHandler.ghostOrbPrefab != null && ghostHandler.ghostroomMarker != null)
                 {
                     // Temporarily spawn an extra orb inside the active ghost room in front of camera
                     Vector2 candidatePos = (Vector2)camera.transform.position + (Vector2)camera.transform.up * 0.8f;
@@ -559,6 +575,7 @@ public class EventGhostBehavior : NetworkBehaviour
 
                         if (existingOrb != null)
                         {
+                            existingOrb.BindRoomCollider(ghostHandler.ghostroomMarker);
                             existingOrb.NudgeTo(spawnPos);
                         }
                         else if (temporaryEventOrb == null)

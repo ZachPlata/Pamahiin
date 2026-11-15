@@ -17,6 +17,7 @@ public class GhostOrbSystem : NetworkBehaviour
     private bool initialized = false;
     private Vector2 targetPosition;
     private float timer = 0f;
+    private GhostHandler cachedGhostHandler;
 
     private Renderer[] allRenderers;
     private ParticleSystem[] particleSystems;
@@ -73,14 +74,47 @@ public class GhostOrbSystem : NetworkBehaviour
         isCurrentlyVisible = visible;
     }
 
+    private GhostHandler GetGhostHandler()
+    {
+        if (cachedGhostHandler == null)
+        {
+            cachedGhostHandler = FindAnyObjectByType<GhostHandler>();
+        }
+        return cachedGhostHandler;
+    }
+
+    /// <summary>
+    /// Binds this orb to the active Ghost Room collider without moving its networked transform.
+    /// </summary>
+    public void BindRoomCollider(Collider2D collider)
+    {
+        if (collider == null)
+        {
+            roomCollider = null;
+            initialized = false;
+            return;
+        }
+
+        roomCollider = collider;
+        roomBounds = collider.bounds;
+        initialized = true;
+    }
+
     public void Initialize(Collider2D collider)
     {
-        roomCollider = collider;
-        roomBounds = collider != null ? collider.bounds : new Bounds(transform.position, Vector3.one);
-        initialized = true;
+        if (collider == null)
+        {
+            roomCollider = null;
+            roomBounds = new Bounds(transform.position, Vector3.one);
+            initialized = false;
+            SetOrbVisible(false);
+            return;
+        }
+
+        BindRoomCollider(collider);
 
         Vector2 startPos = roomBounds.center;
-        if (roomCollider != null && !roomCollider.OverlapPoint(startPos))
+        if (!roomCollider.OverlapPoint(startPos))
         {
             startPos = roomCollider.ClosestPoint(startPos);
         }
@@ -129,13 +163,44 @@ public class GhostOrbSystem : NetworkBehaviour
             sr.color = Color.white;
         }
 
+        var handler = GetGhostHandler();
+        if (handler != null && handler.ghostroomMarker != null)
+        {
+            BindRoomCollider(handler.ghostroomMarker);
+        }
+
         SetOrbVisible(false);
+    }
+
+    private bool HasValidGhostRoom()
+    {
+        var handler = GetGhostHandler();
+        if (handler != null)
+        {
+            if (roomCollider != handler.ghostroomMarker)
+            {
+                BindRoomCollider(handler.ghostroomMarker);
+            }
+
+            return handler.ghostroomMarker != null
+                && !handler.IsExorcised
+                && handler.HasEvidence(EvidenceType.GhostOrbs)
+                && roomCollider != null
+                && roomCollider.enabled
+                && roomCollider.gameObject.activeInHierarchy;
+        }
+
+        return roomCollider != null
+            && roomCollider.enabled
+            && roomCollider.gameObject.activeInHierarchy;
     }
 
     private void Update()
     {
+        bool hasValidRoom = HasValidGhostRoom();
+
         // Server-side movement
-        if ((IsServer || !IsSpawned) && initialized)
+        if ((IsServer || !IsSpawned) && initialized && hasValidRoom)
         {
             timer += Time.deltaTime;
             if (timer >= changeDirectionInterval)
@@ -158,11 +223,11 @@ public class GhostOrbSystem : NetworkBehaviour
             }
         }
 
-        // Client-side visibility: NEVER show if no VideoCameraItem exists in the scene
+        // Client-side visibility: NEVER show without an active non-exorcised ghost room or without a VideoCameraItem in the scene
         bool shouldBeVisible = false;
         var allCameras = VideoCameraItem.ActiveCameras;
 
-        if (allCameras != null && allCameras.Count > 0)
+        if (hasValidRoom && allCameras != null && allCameras.Count > 0)
         {
             // 1. Check if the local player is holding a powered-on Video Camera in hand
             for (int i = 0; i < allCameras.Count; i++)

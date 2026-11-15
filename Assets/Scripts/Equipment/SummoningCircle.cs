@@ -6,7 +6,7 @@ using UnityEngine.Rendering.Universal;
 
 /// <summary>
 /// Standalone placed summoning circle entity with a circular PolygonCollider2D,
-/// "Summon Ghost" hover prompt, and 9-frame sequential 5-candle ignition + waving flame loop.
+/// "Summon Ghost" hover prompt, and multi-stage suspenseful candle ignition + waving flame loop.
 /// </summary>
 [RequireComponent(typeof(SpriteRenderer), typeof(PolygonCollider2D))]
 public class SummoningCircle : MonoBehaviour, IInteractable
@@ -25,22 +25,23 @@ public class SummoningCircle : MonoBehaviour, IInteractable
     [SerializeField] private Texture2D customSpriteSheet = null;
     [Tooltip("Optional explicit sprite array overriding customSpriteSheet / Resources sheet.")]
     [SerializeField] private Sprite[] customFrames = null;
-    [SerializeField] private int sheetFrameCount = 9;
-    [SerializeField] private int ignitionEndFrame = 5;
-    [SerializeField] private int loopStartFrame = 5;
+    [SerializeField] private int sheetFrameCount = 16;
+    [SerializeField] private int ignitionEndFrame = 11;
+    [SerializeField] private int loopStartFrame = 12;
 
     [Header("Animation Timings")]
-    [SerializeField] private float ignitionFrameRate = 3.5f;
+    [Tooltip("Total duration in seconds of the suspenseful ritual ignition sequence before the ghost manifests.")]
+    [SerializeField, Range(5f, 10f)] private float totalIgnitionDuration = 7.5f;
     [SerializeField] private float loopFrameRate = 8f;
 
     [Header("World Sizing & Sorting")]
-    [SerializeField] private float circleWorldDiameter = 0.26f;
+    [SerializeField] private float circleWorldDiameter = 0.30f;
     [SerializeField] private string sortingLayerName = "Item";
     [SerializeField] private int sortingOrder = 10;
 
     [Header("Circular Hover & Interaction Collider")]
     [SerializeField, Range(24, 32)] private int colliderVertexCount = 30;
-    [SerializeField] private float colliderLocalRadius = 0.41f;
+    [SerializeField] private float colliderLocalRadius = 0.56f;
 
     [Header("Audio")]
     [Tooltip("Optional custom SFX played as each candle ignites.")]
@@ -48,10 +49,13 @@ public class SummoningCircle : MonoBehaviour, IInteractable
 
     private static readonly List<SummoningCircle> ActiveCircles = new List<SummoningCircle>();
     private static AudioClip cachedIgniteTickClip;
+    private static AudioClip cachedAwakenDroneClip;
+    private static AudioClip cachedClimaxSurgeClip;
 
     private SpriteRenderer spriteRenderer;
     private PolygonCollider2D circleCollider;
     private Light2D candleLight;
+    private Sprite fallbackSingleSprite;
     private Sprite[] resolvedFrames = Array.Empty<Sprite>();
     private Texture2D resolvedSheetSource;
     private CircleState state = CircleState.Idle;
@@ -60,6 +64,7 @@ public class SummoningCircle : MonoBehaviour, IInteractable
 
     public CircleState CurrentState => state;
     public bool IsIgniting => state == CircleState.Igniting;
+    public float ExpectedIgnitionDuration => Mathf.Clamp(totalIgnitionDuration, 5f, 10f);
 
     private void Awake()
     {
@@ -88,11 +93,12 @@ public class SummoningCircle : MonoBehaviour, IInteractable
     /// <summary>
     /// Configures world scale, sorting layer/order, circular PolygonCollider2D, and initial unlit frame.
     /// </summary>
-    public void Configure(float worldDiameter, string targetSortingLayer, int targetSortingOrder)
+    public void Configure(float worldDiameter, string targetSortingLayer, int targetSortingOrder, Sprite emergencyFallbackSprite = null)
     {
         circleWorldDiameter = Mathf.Clamp(worldDiameter, 0.15f, 0.38f);
         if (!string.IsNullOrEmpty(targetSortingLayer)) sortingLayerName = targetSortingLayer;
         sortingOrder = targetSortingOrder;
+        if (emergencyFallbackSprite != null) fallbackSingleSprite = emergencyFallbackSprite;
         initialized = false;
         EnsureInitialized();
     }
@@ -116,19 +122,24 @@ public class SummoningCircle : MonoBehaviour, IInteractable
         {
             spriteRenderer.sprite = resolvedFrames[0];
         }
+        else if (fallbackSingleSprite != null)
+        {
+            spriteRenderer.sprite = fallbackSingleSprite;
+        }
         spriteRenderer.enabled = true;
         spriteRenderer.color = Color.white;
         spriteRenderer.sortingLayerName = sortingLayerName;
         spriteRenderer.sortingOrder = sortingOrder;
 
-        float localSpriteWidth = (resolvedFrames.Length > 0 && resolvedFrames[0] != null && resolvedFrames[0].pixelsPerUnit > 0f)
-            ? (resolvedFrames[0].rect.width / resolvedFrames[0].pixelsPerUnit)
-            : 0.96f;
-        float worldScale = (localSpriteWidth > 0.01f) ? (circleWorldDiameter / localSpriteWidth) : 0.27f;
+        Sprite activeRefSprite = (resolvedFrames.Length > 0 && resolvedFrames[0] != null) ? resolvedFrames[0] : fallbackSingleSprite;
+        float localSpriteWidth = (activeRefSprite != null && activeRefSprite.pixelsPerUnit > 0f)
+            ? (activeRefSprite.rect.width / activeRefSprite.pixelsPerUnit)
+            : 1.28f;
+        float worldScale = (localSpriteWidth > 0.01f) ? (circleWorldDiameter / localSpriteWidth) : 0.23f;
         transform.localScale = new Vector3(worldScale, worldScale, 1f);
         transform.rotation = Quaternion.identity;
 
-        ConfigureCircularPolygonCollider();
+        ConfigureCircularPolygonCollider(localSpriteWidth);
         EnsureCandleLight();
         ApplyIdleVisuals();
     }
@@ -151,9 +162,22 @@ public class SummoningCircle : MonoBehaviour, IInteractable
         }
 
         sheet.filterMode = FilterMode.Point;
-        int count = Mathf.Max(1, sheetFrameCount);
+        int fh = Mathf.Max(1, sheet.height);
+        int inferredCount = (sheet.width >= fh && sheet.width % fh == 0) ? (sheet.width / fh) : Mathf.Max(1, sheetFrameCount);
+        int count = Mathf.Max(1, inferredCount);
         int fw = Mathf.Max(1, sheet.width / count);
-        int fh = sheet.height;
+
+        // Keep frame range consistent if a custom 9-frame or 16-frame strip is supplied
+        if (count == 9)
+        {
+            ignitionEndFrame = 5;
+            loopStartFrame = 5;
+        }
+        else if (count >= 16)
+        {
+            ignitionEndFrame = 11;
+            loopStartFrame = 12;
+        }
 
         Sprite[] frames = new Sprite[count];
         for (int i = 0; i < count; i++)
@@ -171,7 +195,7 @@ public class SummoningCircle : MonoBehaviour, IInteractable
         return frames;
     }
 
-    private void ConfigureCircularPolygonCollider()
+    private void ConfigureCircularPolygonCollider(float localSpriteWidth)
     {
         circleCollider = GetComponent<PolygonCollider2D>();
         if (circleCollider == null) circleCollider = gameObject.AddComponent<PolygonCollider2D>();
@@ -187,7 +211,8 @@ public class SummoningCircle : MonoBehaviour, IInteractable
 
         int ptsCount = Mathf.Clamp(colliderVertexCount, 24, 32);
         Vector2[] circleVertices = new Vector2[ptsCount];
-        float radius = Mathf.Max(0.1f, colliderLocalRadius);
+        float derivedRadius = localSpriteWidth > 0.01f ? (localSpriteWidth * 0.44f) : colliderLocalRadius;
+        float radius = Mathf.Max(0.1f, derivedRadius);
         for (int i = 0; i < ptsCount; i++)
         {
             float angle = (i / (float)ptsCount) * Mathf.PI * 2f;
@@ -213,7 +238,10 @@ public class SummoningCircle : MonoBehaviour, IInteractable
             candleLight.lightType = Light2D.LightType.Point;
             candleLight.color = new Color(1f, 0.23f, 0.16f, 1f);
             candleLight.pointLightInnerRadius = 0.08f;
-            candleLight.pointLightOuterRadius = 1.45f;
+            candleLight.pointLightOuterRadius = 1.65f;
+            candleLight.falloffIntensity = 0.65f;
+            candleLight.shadowsEnabled = false;
+            candleLight.targetSortingLayers = Array.ConvertAll(SortingLayer.layers, layer => layer.id);
             candleLight.intensity = 0f;
             candleLight.enabled = false;
         }
@@ -265,8 +293,12 @@ public class SummoningCircle : MonoBehaviour, IInteractable
     {
         state = CircleState.Igniting;
 
+        float targetDuration = ExpectedIgnitionDuration;
+
         if (resolvedFrames.Length == 0)
         {
+            // Keep suspense beat even if emergency fallback single sprite is active
+            yield return new WaitForSeconds(targetDuration);
             onAllCandlesLit?.Invoke();
             state = CircleState.BurningLoop;
             animationCoroutine = null;
@@ -274,13 +306,16 @@ public class SummoningCircle : MonoBehaviour, IInteractable
         }
 
         int maxIgniteFrame = Mathf.Clamp(ignitionEndFrame, 0, resolvedFrames.Length - 1);
-        float stepDuration = 1f / Mathf.Max(0.5f, ignitionFrameRate);
+        float[] frameWeights = BuildIgnitionFrameWeights(maxIgniteFrame);
+        float weightSum = 0f;
+        for (int i = 0; i < frameWeights.Length; i++) weightSum += frameWeights[i];
+        float timeScale = weightSum > 0.01f ? (targetDuration / weightSum) : 1f;
 
         if (candleLight != null)
         {
             candleLight.enabled = true;
             candleLight.color = new Color(1f, 0.23f, 0.16f, 1f);
-            candleLight.pointLightOuterRadius = 1.45f;
+            candleLight.pointLightOuterRadius = 1.65f;
             candleLight.intensity = 0.15f;
         }
 
@@ -291,19 +326,28 @@ public class SummoningCircle : MonoBehaviour, IInteractable
                 spriteRenderer.sprite = resolvedFrames[f];
             }
 
-            if (f > 0)
-            {
-                PlayCandleIgniteTick(f);
-            }
+            PlayIgnitionStageAudio(f, maxIgniteFrame);
 
-            if (candleLight != null)
-            {
-                float norm = maxIgniteFrame > 0 ? (float)f / maxIgniteFrame : 1f;
-                candleLight.intensity = Mathf.Lerp(0.18f, 1.75f, norm);
-                candleLight.pointLightOuterRadius = Mathf.Lerp(0.75f, 1.55f, norm);
-            }
+            float stepDuration = frameWeights[f] * timeScale;
+            float normStart = maxIgniteFrame > 0 ? Mathf.Max(0f, (f - 1) / (float)maxIgniteFrame) : 1f;
+            float normEnd = maxIgniteFrame > 0 ? (f / (float)maxIgniteFrame) : 1f;
+            bool isFlare = (maxIgniteFrame >= 11 && (f == 2 || f == 4 || f == 6 || f == 8 || f == 10 || f == 11));
 
-            yield return new WaitForSeconds(stepDuration);
+            float elapsed = 0f;
+            while (elapsed < stepDuration)
+            {
+                elapsed += Time.deltaTime;
+                float u = stepDuration > 0.001f ? Mathf.Clamp01(elapsed / stepDuration) : 1f;
+                if (candleLight != null)
+                {
+                    float norm = Mathf.Lerp(normStart, normEnd, u);
+                    float flicker = Mathf.Sin(Time.time * 16f + f * 1.7f) * 0.10f;
+                    float flareBoost = isFlare ? Mathf.Sin(u * Mathf.PI) * 0.55f : 0f;
+                    candleLight.intensity = Mathf.Lerp(0.18f, 1.95f, norm) + flareBoost + flicker;
+                    candleLight.pointLightOuterRadius = Mathf.Lerp(0.85f, 1.80f, norm) + (isFlare ? 0.20f : 0f);
+                }
+                yield return null;
+            }
         }
 
         state = CircleState.BurningLoop;
@@ -324,12 +368,67 @@ public class SummoningCircle : MonoBehaviour, IInteractable
 
             if (candleLight != null)
             {
-                float pulse = Mathf.Sin(Time.time * 11f + loopIdx * 0.9f) * 0.14f;
-                candleLight.intensity = 1.65f + pulse;
+                float pulse = Mathf.Sin(Time.time * 11f + loopIdx * 0.9f) * 0.16f;
+                candleLight.intensity = 1.75f + pulse;
             }
 
             loopIdx++;
             yield return new WaitForSeconds(loopStep);
+        }
+    }
+
+    private static float[] BuildIgnitionFrameWeights(int maxIgniteFrame)
+    {
+        float[] weights = new float[maxIgniteFrame + 1];
+        if (maxIgniteFrame >= 11)
+        {
+            // Paced across ~7.5s for deliberate horror suspense:
+            // F0 tremble -> F1 crimson rune wake -> F2/3..F10/11 candles 1..5 -> full climax surge
+            float[] preset12 = { 0.35f, 0.85f, 0.38f, 0.84f, 0.38f, 0.84f, 0.38f, 0.84f, 0.38f, 0.84f, 0.42f, 0.98f };
+            for (int i = 0; i <= maxIgniteFrame; i++)
+            {
+                weights[i] = i < preset12.Length ? preset12[i] : 0.75f;
+            }
+        }
+        else
+        {
+            for (int i = 0; i <= maxIgniteFrame; i++)
+            {
+                weights[i] = i == 0 ? 0.5f : 1.0f;
+            }
+        }
+        return weights;
+    }
+
+    private void PlayIgnitionStageAudio(int frame, int maxIgniteFrame)
+    {
+        if (maxIgniteFrame >= 11)
+        {
+            if (frame == 1)
+            {
+                AudioClip awaken = GetOrCreateAwakenDroneClip();
+                if (awaken != null)
+                {
+                    GameAudioManager.PlayClipAt(awaken, transform.position, 0.48f, 0.9f, 1.0f, 0.4f, 3.6f, 0.08f);
+                }
+            }
+            else if (frame == 2 || frame == 4 || frame == 6 || frame == 8 || frame == 10)
+            {
+                int candleNumber = (frame / 2);
+                PlayCandleIgniteTick(candleNumber);
+            }
+            else if (frame == 11)
+            {
+                AudioClip surge = GetOrCreateClimaxSurgeClip();
+                if (surge != null)
+                {
+                    GameAudioManager.PlayClipAt(surge, transform.position, 0.56f, 0.9f, 1.0f, 0.5f, 4.2f, 0.10f);
+                }
+            }
+        }
+        else if (frame > 0)
+        {
+            PlayCandleIgniteTick(frame);
         }
     }
 
@@ -338,9 +437,64 @@ public class SummoningCircle : MonoBehaviour, IInteractable
         AudioClip clip = customCandleIgniteClip != null ? customCandleIgniteClip : GetOrCreateIgniteTickClip();
         if (clip != null)
         {
-            float pitch = 0.92f + candleNumber * 0.05f;
-            GameAudioManager.PlayClipAt(clip, transform.position, 0.42f, 0.9f, pitch, 0.35f, 3.0f, 0.05f);
+            float pitch = 0.88f + candleNumber * 0.055f;
+            GameAudioManager.PlayClipAt(clip, transform.position, 0.46f, 0.9f, pitch, 0.35f, 3.2f, 0.05f);
         }
+    }
+
+    private static AudioClip GetOrCreateAwakenDroneClip()
+    {
+        if (cachedAwakenDroneClip != null) return cachedAwakenDroneClip;
+
+        const int sr = 22050;
+        const float dur = 0.95f;
+        int len = Mathf.FloorToInt(sr * dur);
+        float[] samples = new float[len];
+
+        for (int i = 0; i < len; i++)
+        {
+            float t = (float)i / sr;
+            float env = Mathf.Clamp01(t / 0.08f) * Mathf.Exp(-t * 2.4f);
+            float lowHum = Mathf.Sin(2f * Mathf.PI * 82.4f * t) * 0.52f + Mathf.Sin(2f * Mathf.PI * 123.5f * t) * 0.24f;
+            float subOct = Mathf.Sin(2f * Mathf.PI * 55.0f * t) * 0.34f;
+            samples[i] = Mathf.Clamp((lowHum + subOct) * env * 0.72f, -0.8f, 0.8f);
+        }
+
+        cachedAwakenDroneClip = AudioClip.Create("CircleAwakenDrone", len, 1, sr, false);
+        cachedAwakenDroneClip.SetData(samples, 0);
+        return cachedAwakenDroneClip;
+    }
+
+    private static AudioClip GetOrCreateClimaxSurgeClip()
+    {
+        if (cachedClimaxSurgeClip != null) return cachedClimaxSurgeClip;
+
+        const int sr = 22050;
+        const float dur = 0.85f;
+        int len = Mathf.FloorToInt(sr * dur);
+        float[] samples = new float[len];
+        float lp = 0f;
+        uint state = 48271u;
+
+        for (int i = 0; i < len; i++)
+        {
+            float t = (float)i / sr;
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            float n = ((state & 0xFFFF) / 32767.5f) - 1f;
+            lp = lp * 0.82f + n * 0.18f;
+
+            float env = Mathf.Clamp01(t / 0.04f) * Mathf.Exp(-t * 3.1f);
+            float fSweep = Mathf.Lerp(110f, 245f, Mathf.Clamp01(t / 0.55f));
+            float chord = Mathf.Sin(2f * Mathf.PI * fSweep * t) * 0.45f + Mathf.Sin(2f * Mathf.PI * (fSweep * 1.498f) * t) * 0.28f;
+            float fireWhoosh = lp * 0.55f;
+            samples[i] = Mathf.Clamp((chord + fireWhoosh) * env * 0.78f, -0.85f, 0.85f);
+        }
+
+        cachedClimaxSurgeClip = AudioClip.Create("CircleClimaxSurge", len, 1, sr, false);
+        cachedClimaxSurgeClip.SetData(samples, 0);
+        return cachedClimaxSurgeClip;
     }
 
     private static AudioClip GetOrCreateIgniteTickClip()
