@@ -45,6 +45,7 @@ public struct MatchPayoutBreakdown
     public float difficultyMultiplier;
     public bool isDeceased;
     public float survivalMultiplier;
+    public int insuranceRefund;
     public int totalEarned;
     public int newBalance;
 }
@@ -1045,9 +1046,95 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         switch (difficulty)
         {
             case ContractDifficulty.Amateur: return 1.0f;
+            case ContractDifficulty.Intermediate: return 2.0f;
+            case ContractDifficulty.Professional: return 3.0f;
+            case ContractDifficulty.Nightmare: return 4.0f;
+            default: return 1.0f;
+        }
+    }
+
+    public static float GetDifficultySetupTimeSeconds(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 300f;
+            case ContractDifficulty.Intermediate: return 120f;
+            case ContractDifficulty.Professional:
+            case ContractDifficulty.Nightmare:
+                return 0f;
+            default: return 300f;
+        }
+    }
+
+    public static float GetDifficultyHuntGracePeriodSeconds(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 5f;
+            case ContractDifficulty.Intermediate: return 3f;
+            case ContractDifficulty.Professional: return 1f;
+            case ContractDifficulty.Nightmare: return 0f;
+            default: return 5f;
+        }
+    }
+
+    public static float GetDifficultySanityDrainMultiplier(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 1.0f;
             case ContractDifficulty.Intermediate: return 1.5f;
             case ContractDifficulty.Professional: return 2.0f;
-            case ContractDifficulty.Nightmare: return 3.0f;
+            case ContractDifficulty.Nightmare: return 2.0f;
+            default: return 1.0f;
+        }
+    }
+
+    public static float GetDifficultySanityPillRestore(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 40f;
+            case ContractDifficulty.Intermediate: return 35f;
+            case ContractDifficulty.Professional: return 20f;
+            case ContractDifficulty.Nightmare: return 15f;
+            default: return 40f;
+        }
+    }
+
+    public static bool GetDifficultyFuseBoxStartsOn(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return true;
+            case ContractDifficulty.Intermediate: return false;
+            case ContractDifficulty.Professional: return true;
+            case ContractDifficulty.Nightmare: return false;
+            default: return true;
+        }
+    }
+
+    public static float GetDifficultyInsuranceRate(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 0.5f;
+            case ContractDifficulty.Intermediate: return 0.25f;
+            case ContractDifficulty.Professional:
+            case ContractDifficulty.Nightmare:
+                return 0f;
+            default: return 0.5f;
+        }
+    }
+
+    public static float GetDifficultyEventIntervalMultiplier(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 1.0f;
+            case ContractDifficulty.Intermediate: return 0.9f;
+            case ContractDifficulty.Professional: return 0.8f;
+            case ContractDifficulty.Nightmare: return 0.6f;
             default: return 1.0f;
         }
     }
@@ -1057,16 +1144,30 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         switch (difficulty)
         {
             case ContractDifficulty.Amateur:
-                return "1.0x Payout | Standard sanity drain & shorter hunts.";
+                return "1.0x Payout | 5m setup, fuse box ON, slow sanity drain, 40% pills, 50% insurance.";
             case ContractDifficulty.Intermediate:
-                return "1.5x Payout | 1.25x sanity drain & longer hunts.";
+                return "2.0x Payout | 2m setup, fuse box OFF, 1.5x sanity drain, 35% pills, 25% insurance.";
             case ContractDifficulty.Professional:
-                return "2.0x Payout | 1.5x sanity drain & aggressive hunts.";
+                return "3.0x Payout | 0m setup, fuse box ON, 2.0x sanity drain, 20% pills, no insurance.";
             case ContractDifficulty.Nightmare:
-                return "3.0x Payout | 2.0x sanity drain & relentless hunts.";
+                return "4.0x Payout | 0m setup, fuse box OFF, 2.0x sanity drain, 15% pills, relentless ghost.";
             default:
                 return "1.0x Payout";
         }
+    }
+
+    public int CalculateCurrentLoadoutValue()
+    {
+        int total = 0;
+        foreach (var entry in Catalog)
+        {
+            int count = loadoutCounts.TryGetValue(entry.id, out int c) ? c : 0;
+            if (count > 0 && entry.cost > 0)
+            {
+                total += count * entry.cost;
+            }
+        }
+        return total;
     }
 
     /// <summary>
@@ -1092,8 +1193,18 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         float survivalMult = isDeceased ? DECEASED_PAYOUT_MULTIPLIER : 1.0f;
         int totalEarned = Mathf.RoundToInt(baseReward * multiplier * survivalMult);
 
-        // Credit the payout BEFORE consuming/resetting loadout so post-match broke relief checks the updated balance
-        AddCurrency(totalEarned);
+        int insuranceRefund = 0;
+        if (isDeceased)
+        {
+            float insuranceRate = GetDifficultyInsuranceRate(SelectedDifficulty);
+            if (insuranceRate > 0f)
+            {
+                insuranceRefund = Mathf.RoundToInt(CalculateCurrentLoadoutValue() * insuranceRate);
+            }
+        }
+
+        // Credit the payout and insurance BEFORE consuming/resetting loadout so post-match broke relief checks the updated balance
+        AddCurrency(totalEarned + insuranceRefund);
         ConsumeLoadoutAfterCompletedMatch();
 
         return new MatchPayoutBreakdown
@@ -1108,6 +1219,7 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
             difficultyMultiplier = multiplier,
             isDeceased = isDeceased,
             survivalMultiplier = survivalMult,
+            insuranceRefund = insuranceRefund,
             totalEarned = totalEarned,
             newBalance = Currency
         };

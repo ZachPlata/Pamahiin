@@ -4,11 +4,18 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
+using Unity.Networking.Transport.Relay;
+using Unity.Services.Authentication;
+using Unity.Services.Core;
+using Unity.Services.Relay;
+using Unity.Services.Relay.Models;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UIElements;
 
 public class NetworkController : MonoBehaviour
 {
@@ -20,15 +27,27 @@ public class NetworkController : MonoBehaviour
     private const string PARTY_PREF_PREFIX = "Pamahiin_PartyCode_";
     private const string PARTY_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private const int LAN_DISCOVERY_PORT = 47777;
+    private const int MAX_RELAY_PEER_CONNECTIONS = 3; // 1 Host + up to 3 Clients = 4 Players total
+    private const int MIN_PARTY_CODE_LENGTH = 5;
+    private const int MAX_PARTY_CODE_LENGTH = 8;
     private const string MSG_LOADOUT_REQ = "Pamahiin_LoadoutReq";
     private const string MSG_LOADOUT_SYNC = "Pamahiin_LoadoutSync";
     private const string MSG_LOADOUT_ACK = "Pamahiin_LoadoutAck";
 
     private ushort activeHostPort = 7777;
     private UdpClient lanResponderUdp;
+    private bool isConnectedAsRemoteClient = false;
+    private bool isVoluntaryClientDisconnect = false;
+    private bool reopenLobbyJournalAfterRelaySwap = false;
+    private bool pendingRelaySwapFadeIn = false;
+    private GameObject fallbackDisconnectOverlayObj;
+    private Task unityServicesInitTask;
 
     public string CurrentPartyCode { get; private set; } = string.Empty;
     public bool IsMultiplayerPartyOpen { get; private set; } = false;
+    public bool IsOnlineRelayParty { get; private set; } = false;
+    public bool IsCreatingParty { get; private set; } = false;
+    public bool IsConnectingToParty { get; private set; } = false;
     public string LastStatusMessage { get; private set; } = string.Empty;
 
     public event Action OnPartyStateChanged;
@@ -53,6 +72,13 @@ public class NetworkController : MonoBehaviour
     private void OnDestroy()
     {
         StopLanResponder();
+        var nm = NetworkManager.Singleton;
+        if (nm != null)
+        {
+            nm.OnClientConnectedCallback -= OnClientConnected;
+            nm.OnClientDisconnectCallback -= OnClientDisconnected;
+            nm.OnClientStopped -= OnClientStopped;
+        }
     }
 
     private IEnumerator WaitForNetworkManager()
@@ -81,6 +107,7 @@ public class NetworkController : MonoBehaviour
 
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
+        NetworkManager.Singleton.OnClientStopped += OnClientStopped;
     }
 
     private void OnClientConnected(ulong clientId)
@@ -95,6 +122,12 @@ public class NetworkController : MonoBehaviour
             }
             else if (clientId == nm.LocalClientId)
             {
+                isConnectedAsRemoteClient = true;
+                isVoluntaryClientDisconnect = false;
+                IsConnectingToParty = false;
+                LastStatusMessage = IsOnlineRelayParty
+                    ? $"Joined Online Party [{CurrentPartyCode}]."
+                    : $"Joined Party [{CurrentPartyCode}].";
                 RegisterClientLobbyMessagingHandlers();
                 ProgressionAndLoadoutManager.EnsureInstance().OnJoinedMultiplayerLobbyAsClient();
                 SendLobbyLoadoutRequestToServer(0, string.Empty);
@@ -113,12 +146,217 @@ public class NetworkController : MonoBehaviour
                 ProgressionAndLoadoutManager.Instance?.ServerOnClientDisconnected(clientId);
                 if (!nm.ShutdownInProgress) BroadcastLobbyLoadoutSync();
             }
-            else if (clientId == nm.LocalClientId)
+            else if (clientId == nm.LocalClientId || clientId == NetworkManager.ServerClientId)
             {
-                ProgressionAndLoadoutManager.Instance?.OnLeftMultiplayerLobbyAsClient();
+                bool wasConnecting = IsConnectingToParty;
+                IsConnectingToParty = false;
+                if (ShouldHandleUnexpectedHostDisconnect())
+                {
+                    HandleHostDisconnectedOnClient();
+                }
+                else if (clientId == nm.LocalClientId)
+                {
+                    isConnectedAsRemoteClient = false;
+                    ProgressionAndLoadoutManager.Instance?.OnLeftMultiplayerLobbyAsClient();
+                    if (wasConnecting && !isVoluntaryClientDisconnect)
+                    {
+                        LastStatusMessage = "Could not connect to party. Check the code or host status.";
+                    }
+                }
             }
         }
         OnPartyStateChanged?.Invoke();
+    }
+
+    private void OnClientStopped(bool isHost)
+    {
+        bool wasConnecting = !isHost && IsConnectingToParty;
+        IsConnectingToParty = false;
+
+        if (!isHost && ShouldHandleUnexpectedHostDisconnect())
+        {
+            HandleHostDisconnectedOnClient();
+            OnPartyStateChanged?.Invoke();
+        }
+        else if (wasConnecting && !isVoluntaryClientDisconnect)
+        {
+            LastStatusMessage = "Could not connect to party. Check the code or host status.";
+            OnPartyStateChanged?.Invoke();
+        }
+    }
+
+    private bool ShouldHandleUnexpectedHostDisconnect()
+    {
+        if (isVoluntaryClientDisconnect) return false;
+        bool wasRemoteClient = isConnectedAsRemoteClient ||
+            (ProgressionAndLoadoutManager.Instance != null && ProgressionAndLoadoutManager.Instance.IsMultiplayerClientSession);
+        if (!wasRemoteClient) return false;
+
+        return SceneManager.GetActiveScene().name != ProgressionAndLoadoutManager.MAIN_MENU_SCENE_NAME;
+    }
+
+    private void HandleHostDisconnectedOnClient()
+    {
+        isConnectedAsRemoteClient = false;
+        isTransitioningToGameScene = false;
+
+        if (activeMatchIntermissionRoutine != null)
+        {
+            StopCoroutine(activeMatchIntermissionRoutine);
+            activeMatchIntermissionRoutine = null;
+        }
+        if (activeClientGearVerifyRoutine != null)
+        {
+            StopCoroutine(activeClientGearVerifyRoutine);
+            activeClientGearVerifyRoutine = null;
+        }
+        if (activeClientFallbackCheckRoutine != null)
+        {
+            StopCoroutine(activeClientFallbackCheckRoutine);
+            activeClientFallbackCheckRoutine = null;
+        }
+        if (activeClientIntermissionFailsafeRoutine != null)
+        {
+            StopCoroutine(activeClientIntermissionFailsafeRoutine);
+            activeClientIntermissionFailsafeRoutine = null;
+        }
+
+        EndGameRevealController.ClearPendingReveal();
+        WeatherManager.SetLocalInBurialMap(false);
+        DeathSequenceController.Instance?.CancelAndReset();
+        GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
+        ProgressionAndLoadoutManager.Instance?.OnLeftMultiplayerLobbyAsClient();
+
+        ResetPartyState();
+        LastStatusMessage = "Host disconnected.";
+
+        LoadingScreenManager.Instance?.HideIntermission(0.1f);
+
+        var nm = NetworkManager.Singleton;
+        if (nm != null && nm.IsListening && !nm.ShutdownInProgress)
+        {
+            nm.Shutdown();
+        }
+
+        const string message = "The lobby host has disconnected. Please return to the Main Menu.";
+        var pauseMenu = PauseMenuController.Instance ?? UnityEngine.Object.FindAnyObjectByType<PauseMenuController>(FindObjectsInactive.Include);
+        if (pauseMenu != null)
+        {
+            if (!pauseMenu.gameObject.activeSelf)
+            {
+                pauseMenu.gameObject.SetActive(true);
+            }
+            pauseMenu.ShowHostDisconnected(message);
+        }
+        else
+        {
+            ShowFallbackHostDisconnectedOverlay(message);
+        }
+    }
+
+    private void ShowFallbackHostDisconnectedOverlay(string message)
+    {
+        if (fallbackDisconnectOverlayObj != null)
+        {
+            Destroy(fallbackDisconnectOverlayObj);
+            fallbackDisconnectOverlayObj = null;
+        }
+
+        var go = new GameObject("HostDisconnectedFallbackUI");
+        var doc = go.AddComponent<UIDocument>();
+        doc.panelSettings = PamahiinUIThemeUtility.ResolveRuntimePanelSettings();
+        doc.sortingOrder = 60;
+        fallbackDisconnectOverlayObj = go;
+
+        var root = doc.rootVisualElement;
+        if (root == null) return;
+
+        var overlay = new VisualElement();
+        overlay.style.position = Position.Absolute;
+        overlay.style.left = 0;
+        overlay.style.top = 0;
+        overlay.style.right = 0;
+        overlay.style.bottom = 0;
+        overlay.style.width = Length.Percent(100);
+        overlay.style.height = Length.Percent(100);
+        overlay.style.backgroundColor = new Color(6f / 255f, 4f / 255f, 8f / 255f, 0.92f);
+        overlay.style.alignItems = Align.Center;
+        overlay.style.justifyContent = Justify.Center;
+
+        var panel = new VisualElement();
+        panel.AddToClassList("pm-panel--crimson");
+        panel.style.width = 520;
+        panel.style.maxWidth = Length.Percent(92);
+        panel.style.paddingTop = 28;
+        panel.style.paddingBottom = 30;
+        panel.style.paddingLeft = 32;
+        panel.style.paddingRight = 32;
+        panel.style.backgroundColor = new Color(24f / 255f, 14f / 255f, 18f / 255f, 0.98f);
+        panel.style.borderTopWidth = 3;
+        panel.style.borderLeftWidth = 3;
+        panel.style.borderRightWidth = 3;
+        panel.style.borderBottomWidth = 3;
+        panel.style.borderTopColor = new Color(220f / 255f, 72f / 255f, 84f / 255f, 1f);
+        panel.style.borderLeftColor = new Color(220f / 255f, 72f / 255f, 84f / 255f, 1f);
+        panel.style.borderRightColor = new Color(72f / 255f, 16f / 255f, 22f / 255f, 1f);
+        panel.style.borderBottomColor = new Color(72f / 255f, 16f / 255f, 22f / 255f, 1f);
+
+        var tag = new Label("CONNECTION LOST");
+        tag.style.fontSize = 9;
+        tag.style.color = new Color(214f / 255f, 174f / 255f, 96f / 255f, 1f);
+        tag.style.unityTextAlign = TextAnchor.MiddleCenter;
+        tag.style.marginBottom = 8;
+
+        var title = new Label("HOST DISCONNECTED");
+        title.style.fontSize = 22;
+        title.style.color = new Color(224f / 255f, 58f / 255f, 72f / 255f, 1f);
+        title.style.unityTextAlign = TextAnchor.MiddleCenter;
+        title.style.marginBottom = 14;
+        title.style.whiteSpace = WhiteSpace.Normal;
+
+        var divider = new VisualElement();
+        divider.style.height = 2;
+        divider.style.backgroundColor = new Color(88f / 255f, 66f / 255f, 36f / 255f, 1f);
+        divider.style.borderTopWidth = 1;
+        divider.style.borderTopColor = new Color(166f / 255f, 132f / 255f, 74f / 255f, 1f);
+        divider.style.marginBottom = 16;
+
+        var desc = new Label(message);
+        desc.style.fontSize = 10;
+        desc.style.color = new Color(186f / 255f, 172f / 255f, 152f / 255f, 1f);
+        desc.style.unityTextAlign = TextAnchor.MiddleCenter;
+        desc.style.whiteSpace = WhiteSpace.Normal;
+        desc.style.marginBottom = 22;
+
+        var btn = new Button(DisconnectAndReturnToMenu) { text = "RETURN TO MAIN MENU" };
+        btn.AddToClassList("pm-btn");
+        btn.AddToClassList("pm-btn--danger");
+        btn.style.fontSize = 11;
+        btn.style.paddingTop = 12;
+        btn.style.paddingBottom = 12;
+        btn.style.paddingLeft = 14;
+        btn.style.paddingRight = 14;
+        btn.style.color = new Color(255f / 255f, 196f / 255f, 196f / 255f, 1f);
+        btn.style.backgroundColor = new Color(88f / 255f, 18f / 255f, 24f / 255f, 0.95f);
+        btn.style.borderTopWidth = 3;
+        btn.style.borderLeftWidth = 3;
+        btn.style.borderRightWidth = 3;
+        btn.style.borderBottomWidth = 3;
+        btn.style.borderTopColor = new Color(224f / 255f, 191f / 255f, 118f / 255f, 1f);
+        btn.style.borderLeftColor = new Color(224f / 255f, 191f / 255f, 118f / 255f, 1f);
+        btn.style.borderRightColor = new Color(72f / 255f, 16f / 255f, 22f / 255f, 1f);
+        btn.style.borderBottomColor = new Color(72f / 255f, 16f / 255f, 22f / 255f, 1f);
+
+        panel.Add(tag);
+        panel.Add(title);
+        panel.Add(divider);
+        panel.Add(desc);
+        panel.Add(btn);
+        overlay.Add(panel);
+        root.Add(overlay);
+
+        UnityEngine.Cursor.visible = true;
+        UnityEngine.Cursor.lockState = CursorLockMode.None;
     }
 
     private void OnSceneLoaded(string sceneName, LoadSceneMode loadSceneMode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
@@ -216,7 +454,20 @@ public class NetworkController : MonoBehaviour
                 BroadcastLobbyLoadoutSync();
                 StartServerEquipmentSpawnRoutine();
             }
+
+            if (pendingRelaySwapFadeIn)
+            {
+                pendingRelaySwapFadeIn = false;
+                LoadingScreenManager.Instance?.FadeFromBlack(0.22f);
+            }
         }
+    }
+
+    public bool ConsumeReopenLobbyJournalFlag()
+    {
+        bool flag = reopenLobbyJournalAfterRelaySwap;
+        reopenLobbyJournalAfterRelaySwap = false;
+        return flag;
     }
 
     /// <summary>
@@ -234,11 +485,18 @@ public class NetworkController : MonoBehaviour
                 LoadLobbyScene();
                 return;
             }
+            isVoluntaryClientDisconnect = true;
+            isConnectedAsRemoteClient = false;
             NetworkManager.Singleton.Shutdown();
         }
 
+        isVoluntaryClientDisconnect = false;
+        isConnectedAsRemoteClient = false;
         CurrentPartyCode = string.Empty;
         IsMultiplayerPartyOpen = false;
+        IsOnlineRelayParty = false;
+        IsCreatingParty = false;
+        IsConnectingToParty = false;
         LastStatusMessage = "Solo Lobby Active";
 
         activeHostPort = FindAvailableUdpPort(defaultPort, 20);
@@ -255,12 +513,13 @@ public class NetworkController : MonoBehaviour
 
     public void HostGame()
     {
-        EnterLobbyMap();
-        CreateMultiplayerPartyCode();
+        if (IsCreatingParty || IsConnectingToParty) return;
+        StartCoroutine(HostOnlineGameRoutine());
     }
 
     /// <summary>
-    /// Creates a 5-character alphanumeric Party Code so other players can join this Lobby Map.
+    /// Opens Multiplayer from the current Solo Lobby (or starts an online Relay party).
+    /// Returns an immediately available code if already open; otherwise updates CurrentPartyCode asynchronously via OnPartyStateChanged.
     /// </summary>
     public string CreateMultiplayerPartyCode()
     {
@@ -271,8 +530,143 @@ public class NetworkController : MonoBehaviour
             return CurrentPartyCode;
         }
 
-        if (!string.IsNullOrEmpty(CurrentPartyCode) && CurrentPartyCode.Length == 5 && IsMultiplayerPartyOpen)
+        if (!string.IsNullOrEmpty(CurrentPartyCode) && IsMultiplayerPartyOpen)
         {
+            return CurrentPartyCode;
+        }
+
+        if (IsCreatingParty || IsConnectingToParty)
+        {
+            return CurrentPartyCode;
+        }
+
+        // If remote peers are already connected on LAN, keep the session intact and issue a LAN code in-place.
+        if (NetworkManager.Singleton.ConnectedClientsIds.Count > 1)
+        {
+            return CreateLocalLanPartyCodeInternal("Multiplayer Open (LAN)! Share Code: ");
+        }
+
+        StartCoroutine(UpgradeSoloLobbyToOnlineRelayRoutine());
+        return CurrentPartyCode;
+    }
+
+    private IEnumerator HostOnlineGameRoutine()
+    {
+        ProgressionAndLoadoutManager.EnsureInstance();
+        IsCreatingParty = true;
+        LastStatusMessage = "Connecting to Online Relay...";
+        OnPartyStateChanged?.Invoke();
+
+        var relayTask = TryAllocateRelayHostAsync(MAX_RELAY_PEER_CONNECTIONS);
+        while (!relayTask.IsCompleted)
+        {
+            yield return null;
+        }
+
+        var allocationResult = relayTask.Result;
+        if (!allocationResult.success)
+        {
+            IsCreatingParty = false;
+            EnterLobbyMap();
+            CreateLocalLanPartyCodeInternal("Relay offline — LAN Party Open! Share Code: ");
+            yield break;
+        }
+
+        yield return ShutdownNetworkManagerRoutine();
+
+        isVoluntaryClientDisconnect = false;
+        isConnectedAsRemoteClient = false;
+        SetRelayTransportData(allocationResult.serverData);
+
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.StartHost())
+        {
+            IsCreatingParty = false;
+            EnterLobbyMap();
+            CreateLocalLanPartyCodeInternal("Relay start failed — LAN Party Open! Share Code: ");
+            yield break;
+        }
+
+        ApplyOpenRelayPartyState(allocationResult.joinCode);
+        LoadLobbyScene();
+    }
+
+    private IEnumerator UpgradeSoloLobbyToOnlineRelayRoutine()
+    {
+        IsCreatingParty = true;
+        LastStatusMessage = "Connecting to Online Relay...";
+        OnPartyStateChanged?.Invoke();
+
+        var relayTask = TryAllocateRelayHostAsync(MAX_RELAY_PEER_CONNECTIONS);
+        while (!relayTask.IsCompleted)
+        {
+            yield return null;
+        }
+
+        var allocationResult = relayTask.Result;
+        if (!allocationResult.success)
+        {
+            IsCreatingParty = false;
+            CreateLocalLanPartyCodeInternal("Relay offline — LAN Party Open! Share Code: ");
+            yield break;
+        }
+
+        // Guard: if a LAN peer connected while Relay was allocating, do not kick them.
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && NetworkManager.Singleton.ConnectedClientsIds.Count > 1)
+        {
+            IsCreatingParty = false;
+            CreateLocalLanPartyCodeInternal("Peer already connected — LAN Code: ");
+            yield break;
+        }
+
+        // Fade to black cleanly before swapping the active Solo Host onto Relay transport.
+        reopenLobbyJournalAfterRelaySwap = JournalController.IsOpen;
+        var loadingMgr = LoadingScreenManager.EnsureInstance();
+        if (loadingMgr != null)
+        {
+            pendingRelaySwapFadeIn = true;
+            loadingMgr.FadeToBlack(0.16f);
+            yield return new WaitForSecondsRealtime(0.16f);
+        }
+
+        TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
+        yield return ShutdownNetworkManagerRoutine();
+
+        isVoluntaryClientDisconnect = false;
+        isConnectedAsRemoteClient = false;
+        SetRelayTransportData(allocationResult.serverData);
+
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.StartHost())
+        {
+            IsCreatingParty = false;
+            pendingRelaySwapFadeIn = false;
+            loadingMgr?.FadeFromBlack(0.2f);
+            EnterLobbyMap();
+            CreateLocalLanPartyCodeInternal("Relay start failed — LAN Party Open! Share Code: ");
+            yield break;
+        }
+
+        ApplyOpenRelayPartyState(allocationResult.joinCode);
+        LoadLobbyScene();
+    }
+
+    private void ApplyOpenRelayPartyState(string joinCode)
+    {
+        StopLanResponder();
+        CurrentPartyCode = joinCode;
+        IsMultiplayerPartyOpen = true;
+        IsOnlineRelayParty = true;
+        IsCreatingParty = false;
+        GUIUtility.systemCopyBuffer = joinCode;
+        LastStatusMessage = $"Online Party Open! Share Code: {joinCode} (Copied)";
+        OnPartyStateChanged?.Invoke();
+    }
+
+    private string CreateLocalLanPartyCodeInternal(string statusPrefix)
+    {
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+        {
+            LastStatusMessage = "Only the Lobby Host can create a Party Code.";
+            OnPartyStateChanged?.Invoke();
             return CurrentPartyCode;
         }
 
@@ -287,6 +681,8 @@ public class NetworkController : MonoBehaviour
 
         CurrentPartyCode = new string(chars);
         IsMultiplayerPartyOpen = true;
+        IsOnlineRelayParty = false;
+        IsCreatingParty = false;
 
         string localIp = GetLocalIPv4();
         string endpointRecord = $"{localIp}:{activeHostPort}";
@@ -294,28 +690,31 @@ public class NetworkController : MonoBehaviour
         PlayerPrefs.Save();
 
         StartLanResponder(CurrentPartyCode, activeHostPort);
+        GUIUtility.systemCopyBuffer = CurrentPartyCode;
 
-        LastStatusMessage = $"Multiplayer Open! Share Code: {CurrentPartyCode}";
+        LastStatusMessage = $"{statusPrefix}{CurrentPartyCode}";
         OnPartyStateChanged?.Invoke();
         return CurrentPartyCode;
     }
 
     /// <summary>
-    /// Joins another player's Multiplayer Lobby using their 5-character Party Code.
+    /// Joins another player's Multiplayer Lobby using a 5–8 character Party Code (Online Relay or LAN).
     /// </summary>
     public void JoinMultiplayerByPartyCode(string rawCode)
     {
+        if (IsConnectingToParty || IsCreatingParty) return;
+
         if (string.IsNullOrWhiteSpace(rawCode))
         {
-            LastStatusMessage = "Enter a valid 5-character Party Code.";
+            LastStatusMessage = "Enter a valid Party Code (5-8 characters).";
             OnPartyStateChanged?.Invoke();
             return;
         }
 
         string code = rawCode.Trim().ToUpperInvariant();
-        if (code.Length != 5)
+        if (code.Length < MIN_PARTY_CODE_LENGTH || code.Length > MAX_PARTY_CODE_LENGTH)
         {
-            LastStatusMessage = "Party Code must be 5 characters long.";
+            LastStatusMessage = $"Party Code must be {MIN_PARTY_CODE_LENGTH}-{MAX_PARTY_CODE_LENGTH} characters long.";
             OnPartyStateChanged?.Invoke();
             return;
         }
@@ -332,94 +731,142 @@ public class NetworkController : MonoBehaviour
 
     private IEnumerator ResolveCodeAndConnectRoutine(string code)
     {
+        IsConnectingToParty = true;
         LastStatusMessage = $"Searching for Party [{code}]...";
         OnPartyStateChanged?.Invoke();
 
-        string targetIp = "127.0.0.1";
+        bool useRelay = false;
+        RelayServerData relayServerData = default;
+        string targetIp = defaultIpAddress;
         ushort targetPort = defaultPort;
-        bool resolved = false;
+        bool resolvedLocally = false;
 
-        // 1. Check same-machine PlayerPrefs registry first
-        PlayerPrefs.Save();
-        string savedEndpoint = PlayerPrefs.GetString(PARTY_PREF_PREFIX + code, string.Empty);
-        if (!string.IsNullOrEmpty(savedEndpoint))
+        // 1. For 5-character codes, check same-machine PlayerPrefs and LAN UDP broadcast first.
+        if (code.Length == MIN_PARTY_CODE_LENGTH)
         {
-            string[] parts = savedEndpoint.Split(':');
-            if (parts.Length == 2 && ushort.TryParse(parts[1], out ushort parsedPort))
+            PlayerPrefs.Save();
+            string savedEndpoint = PlayerPrefs.GetString(PARTY_PREF_PREFIX + code, string.Empty);
+            if (!string.IsNullOrEmpty(savedEndpoint))
             {
-                targetIp = "127.0.0.1";
-                targetPort = parsedPort;
-                resolved = true;
-            }
-        }
-
-        // 2. Try quick UDP LAN broadcast query if not resolved locally
-        if (!resolved)
-        {
-            string lanResult = QueryLanPartyCode(code, 250);
-            if (!string.IsNullOrEmpty(lanResult))
-            {
-                string[] parts = lanResult.Split(':');
+                string[] parts = savedEndpoint.Split(':');
                 if (parts.Length == 2 && ushort.TryParse(parts[1], out ushort parsedPort))
                 {
-                    targetIp = parts[0];
+                    targetIp = "127.0.0.1";
                     targetPort = parsedPort;
-                    resolved = true;
+                    resolvedLocally = true;
+                }
+            }
+
+            if (!resolvedLocally)
+            {
+                string lanResult = QueryLanPartyCode(code, 250);
+                if (!string.IsNullOrEmpty(lanResult))
+                {
+                    string[] parts = lanResult.Split(':');
+                    if (parts.Length == 2 && ushort.TryParse(parts[1], out ushort parsedPort))
+                    {
+                        targetIp = parts[0];
+                        targetPort = parsedPort;
+                        resolvedLocally = true;
+                    }
                 }
             }
         }
 
-        // 3. Fallback deterministic port decoding from the 5th character of the Party Code
-        if (!resolved)
+        // 2. If not resolved locally on LAN, try Online Unity Relay BEFORE tearing down the active Solo Lobby.
+        if (!resolvedLocally)
         {
-            int portOffset = PARTY_CHARS.IndexOf(code[4]);
-            if (portOffset >= 0)
+            LastStatusMessage = $"Joining Online Party [{code}]...";
+            OnPartyStateChanged?.Invoke();
+
+            var joinTask = TryJoinRelayAllocationAsync(code);
+            while (!joinTask.IsCompleted)
             {
-                targetPort = (ushort)(defaultPort + portOffset);
+                yield return null;
             }
-            targetIp = defaultIpAddress;
+
+            var joinResult = joinTask.Result;
+            if (joinResult.success)
+            {
+                useRelay = true;
+                relayServerData = joinResult.serverData;
+            }
+            else if (code.Length > MIN_PARTY_CODE_LENGTH)
+            {
+                // Online Relay codes (6-8 chars) cannot fall back to LAN ports; abort safely without disturbing the Solo Lobby.
+                IsConnectingToParty = false;
+                LastStatusMessage = joinResult.errorMessage;
+                OnPartyStateChanged?.Invoke();
+                yield break;
+            }
+            else
+            {
+                // 5-char fallback: deterministic local port decoding from the 5th character
+                int portOffset = PARTY_CHARS.IndexOf(code[4]);
+                if (portOffset >= 0)
+                {
+                    targetPort = (ushort)(defaultPort + portOffset);
+                }
+                targetIp = defaultIpAddress;
+            }
         }
 
         StopLanResponder();
         IsMultiplayerPartyOpen = false;
+        IsOnlineRelayParty = useRelay;
         CurrentPartyCode = code;
 
-        if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient))
+        yield return ShutdownNetworkManagerRoutine();
+
+        if (useRelay)
         {
-            NetworkManager.Singleton.Shutdown();
-            float waitTimer = 0f;
-            while (NetworkManager.Singleton.ShutdownInProgress && waitTimer < 2f)
-            {
-                waitTimer += Time.unscaledDeltaTime;
-                yield return null;
-            }
-            yield return null;
+            SetRelayTransportData(relayServerData);
+        }
+        else
+        {
+            SetConnectionAddress(targetIp, targetPort);
         }
 
-        SetConnectionAddress(targetIp, targetPort);
         bool started = StartClientAndRegisterLobbyHandlers();
+        if (!started)
+        {
+            IsConnectingToParty = false;
+        }
         LastStatusMessage = started
-            ? $"Connecting to Party [{code}] ({targetIp}:{targetPort})..."
+            ? (useRelay ? $"Connecting to Online Party [{code}]..." : $"Connecting to Party [{code}] ({targetIp}:{targetPort})...")
             : $"Failed to connect to Party [{code}].";
         OnPartyStateChanged?.Invoke();
     }
 
     public void JoinGame(string ipInput)
     {
-        if (!string.IsNullOrEmpty(ipInput) && ipInput.Trim().Length == 5 && !ipInput.Contains("."))
+        string trimmed = string.IsNullOrWhiteSpace(ipInput) ? string.Empty : ipInput.Trim();
+        if (trimmed.Length >= MIN_PARTY_CODE_LENGTH && trimmed.Length <= MAX_PARTY_CODE_LENGTH &&
+            !trimmed.Contains(".") && !trimmed.Contains(":"))
         {
-            JoinMultiplayerByPartyCode(ipInput);
+            JoinMultiplayerByPartyCode(trimmed);
             return;
         }
 
-        string targetIp = string.IsNullOrEmpty(ipInput) ? defaultIpAddress : ipInput;
-        SetConnectionAddress(targetIp, defaultPort);
+        string targetIp = string.IsNullOrEmpty(trimmed) ? defaultIpAddress : trimmed;
+        ushort targetPort = defaultPort;
+        int colonIdx = targetIp.LastIndexOf(':');
+        if (colonIdx > 0 && ushort.TryParse(targetIp.Substring(colonIdx + 1), out ushort parsedPort))
+        {
+            targetPort = parsedPort;
+            targetIp = targetIp.Substring(0, colonIdx);
+        }
+
+        IsOnlineRelayParty = false;
+        SetConnectionAddress(targetIp, targetPort);
         StartClientAndRegisterLobbyHandlers();
     }
 
     private bool StartClientAndRegisterLobbyHandlers()
     {
         if (NetworkManager.Singleton == null) return false;
+        isVoluntaryClientDisconnect = false;
+        isConnectedAsRemoteClient = false;
         bool started = NetworkManager.Singleton.StartClient();
         if (started)
         {
@@ -430,6 +877,13 @@ public class NetworkController : MonoBehaviour
 
     public void DisconnectAndReturnToMenu()
     {
+        isVoluntaryClientDisconnect = true;
+        isConnectedAsRemoteClient = false;
+        if (fallbackDisconnectOverlayObj != null)
+        {
+            Destroy(fallbackDisconnectOverlayObj);
+            fallbackDisconnectOverlayObj = null;
+        }
         isTransitioningToGameScene = false;
         if (activeMatchIntermissionRoutine != null)
         {
@@ -446,9 +900,7 @@ public class NetworkController : MonoBehaviour
         DeathSequenceController.Instance?.CancelAndReset();
         GhostSpectatorVisuals.Instance?.SetSpectatorVisualsActive(false);
         LoadingScreenManager.Instance?.HideIntermission(0.15f);
-        StopLanResponder();
-        CurrentPartyCode = string.Empty;
-        IsMultiplayerPartyOpen = false;
+        ResetPartyState();
 
         string activeScene = SceneManager.GetActiveScene().name;
         bool inGameplayMatch = ProgressionAndLoadoutManager.IsGameplayMapScene(activeScene);
@@ -657,12 +1109,148 @@ public class NetworkController : MonoBehaviour
         }
     }
 
+    private void ResetPartyState()
+    {
+        StopLanResponder();
+        CurrentPartyCode = string.Empty;
+        IsMultiplayerPartyOpen = false;
+        IsOnlineRelayParty = false;
+        IsCreatingParty = false;
+        IsConnectingToParty = false;
+        reopenLobbyJournalAfterRelaySwap = false;
+        pendingRelaySwapFadeIn = false;
+    }
+
+    private IEnumerator ShutdownNetworkManagerRoutine()
+    {
+        var nm = NetworkManager.Singleton;
+        if (nm == null || (!nm.IsServer && !nm.IsClient && !nm.IsListening))
+        {
+            yield break;
+        }
+
+        isVoluntaryClientDisconnect = true;
+        isConnectedAsRemoteClient = false;
+        nm.Shutdown();
+
+        float waitTimer = 0f;
+        while (nm.ShutdownInProgress && waitTimer < 2f)
+        {
+            waitTimer += Time.unscaledDeltaTime;
+            yield return null;
+        }
+        yield return null;
+    }
+
     private void SetConnectionAddress(string ip, ushort port)
     {
+        if (NetworkManager.Singleton == null) return;
         var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
         if (transport != null)
         {
             transport.SetConnectionData(ip, port);
+        }
+    }
+
+    private void SetRelayTransportData(RelayServerData serverData)
+    {
+        if (NetworkManager.Singleton == null) return;
+        var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+        if (transport != null)
+        {
+            transport.SetRelayServerData(serverData);
+        }
+    }
+
+    private Task EnsureUnityServicesSignedInAsync()
+    {
+        if (unityServicesInitTask == null || unityServicesInitTask.IsFaulted || unityServicesInitTask.IsCanceled)
+        {
+            unityServicesInitTask = InitializeServicesAndSignInInternalAsync();
+        }
+        return unityServicesInitTask;
+    }
+
+    private static async Task InitializeServicesAndSignInInternalAsync()
+    {
+        if (UnityServices.State != ServicesInitializationState.Initialized)
+        {
+            await UnityServices.InitializeAsync();
+        }
+
+        if (!AuthenticationService.Instance.IsSignedIn)
+        {
+            await AuthenticationService.Instance.SignInAnonymouslyAsync();
+        }
+    }
+
+    private async Task<(bool success, string joinCode, RelayServerData serverData, string errorMessage)> TryAllocateRelayHostAsync(int maxPeerConnections)
+    {
+        try
+        {
+            await EnsureUnityServicesSignedInAsync();
+            Allocation allocation = await RelayService.Instance.CreateAllocationAsync(maxPeerConnections);
+            string joinCode = await RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId);
+            if (string.IsNullOrWhiteSpace(joinCode))
+            {
+                return (false, string.Empty, default, "Relay returned an empty Join Code.");
+            }
+
+            RelayServerData serverData = BuildRelayServerData(allocation);
+            return (true, joinCode.Trim().ToUpperInvariant(), serverData, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[NetworkController] Unity Relay host allocation unavailable, falling back to LAN/local: {ex.Message}");
+            return (false, string.Empty, default, ex.Message);
+        }
+    }
+
+    private async Task<(bool success, RelayServerData serverData, string errorMessage)> TryJoinRelayAllocationAsync(string joinCode)
+    {
+        try
+        {
+            await EnsureUnityServicesSignedInAsync();
+            JoinAllocation joinAllocation = await RelayService.Instance.JoinAllocationAsync(joinCode);
+            RelayServerData serverData = BuildRelayServerData(joinAllocation);
+            return (true, serverData, string.Empty);
+        }
+        catch (RelayServiceException relayEx)
+        {
+            Debug.LogWarning($"[NetworkController] Relay join failed for [{joinCode}] ({relayEx.Reason}): {relayEx.Message}");
+            string msg = relayEx.Reason == RelayExceptionReason.JoinCodeNotFound
+                ? $"Party [{joinCode}] was not found or has closed."
+                : $"Could not join Online Party [{joinCode}]: {relayEx.Reason}";
+            return (false, default, msg);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[NetworkController] Online Relay join unavailable for [{joinCode}]: {ex.Message}");
+            return (false, default, $"Offline or Relay unreachable for [{joinCode}].");
+        }
+    }
+
+    private static RelayServerData BuildRelayServerData(Allocation allocation)
+    {
+        try
+        {
+            return allocation.ToRelayServerData("dtls");
+        }
+        catch
+        {
+            return allocation.ToRelayServerData("udp");
+        }
+    }
+
+    private static RelayServerData BuildRelayServerData(JoinAllocation joinAllocation)
+    {
+        try
+        {
+            return joinAllocation.ToRelayServerData("dtls");
+        }
+        catch
+        {
+            return joinAllocation.ToRelayServerData("udp");
         }
     }
 

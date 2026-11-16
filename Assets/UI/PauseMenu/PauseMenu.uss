@@ -236,3 +236,113 @@
     -unity-font-style: normal;
     text-shadow: 1px 1px 0px rgba(0, 0, 0, 0.95);
 }
+
+/* Help & Controls Panel */
+.controls-container {
+    width: 600px;
+    max-width: 92%;
+}
+
+.controls-scroll {
+    max-height: 360px;
+    margin-bottom: 6px;
+    padding-right: 4px;
+}
+
+.control-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 7px 6px;
+    border-bottom-width: 1px;
+    border-color: var(--pm-border-dim);
+}
+
+.control-key {
+    width: 210px;
+    flex-shrink: 0;
+    font-size: 9px;
+    color: var(--pm-accent-brass);
+    -unity-text-align: middle-left;
+    padding-right: 10px;
+    white-space: normal;
+}
+
+.control-desc {
+    flex-grow: 1;
+    font-size: 9px;
+    color: var(--pm-text-primary);
+    -unity-text-align: middle-left;
+    white-space: normal;
+}
+
+.control-tip {
+    font-size: 8px;
+    color: var(--pm-text-muted);
+    margin-top: 6px;
+    margin-bottom: 6px;
+    white-space: normal;
+    -unity-text-align: middle-left;
+}
+
+/* ==========================================================================
+   HOST DISCONNECTED MODAL OVERLAY
+   ========================================================================== */
+
+.host-disconnect-overlay {
+    background-color: rgba(6, 4, 8, 0.92);
+}
+
+.host-disconnect-panel {
+    width: 520px;
+    max-width: 92%;
+    background-color: rgba(24, 14, 18, 0.98);
+    border-top-color: var(--pm-border-crimson-hi);
+    border-left-color: var(--pm-border-crimson-hi);
+    border-right-color: var(--pm-border-crimson-lo);
+    border-bottom-color: var(--pm-border-crimson-lo);
+}
+
+.host-disconnect-tag {
+    font-size: 9px;
+    color: var(--pm-accent-brass);
+    letter-spacing: 2px;
+    -unity-text-align: middle-center;
+    margin-bottom: 8px;
+}
+
+.host-disconnect-title {
+    font-size: 22px;
+    color: var(--pm-accent-crimson-hi);
+    margin-bottom: 14px;
+    white-space: normal;
+}
+
+.host-disconnect-divider {
+    height: 2px;
+    background-color: var(--pm-border-brass-lo);
+    border-top-width: 1px;
+    border-top-color: var(--pm-border-brass);
+    margin-bottom: 16px;
+}
+
+.host-disconnect-desc {
+    font-size: 10px;
+    line-height: 18px;
+    color: var(--pm-text-muted);
+    -unity-text-align: middle-center;
+    white-space: normal;
+    margin-bottom: 22px;
+}
+
+.host-disconnect-btn {
+    margin-top: 4px;
+    margin-bottom: 0px;
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+}
+
+.host-disconnect-btn:hover {
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    color: rgb(255, 248, 224);
+}

@@ -334,14 +334,14 @@
                             <ui:Label name="lbl-difficulty-desc" text="1.0x Payout | Standard sanity drain &amp; shorter hunts." class="lobby-sub-note" />
                         </ui:VisualElement>
 
-                        <!-- Multiplayer 5-Character Party Code -->
+                        <!-- Multiplayer Party Code (Online Relay / LAN) -->
                         <ui:VisualElement class="lobby-section-box">
-                            <ui:Label text="MULTIPLAYER PARTY (5-CHAR CODE):" class="lobby-section-heading" />
+                            <ui:Label text="MULTIPLAYER PARTY (PARTY CODE):" class="lobby-section-heading" />
                             <ui:Button name="btn-create-party" text="CREATE MULTIPLAYER PARTY CODE" class="lobby-action-btn" />
                             <ui:Label name="lbl-party-code" text="PARTY CODE: SOLO (NOT CREATED)" class="lobby-party-code-badge" />
 
                             <ui:VisualElement class="lobby-join-row">
-                                <ui:TextField name="input-party-code" label="Join Code:" max-length="5" value="" class="lobby-code-input" />
+                                <ui:TextField name="input-party-code" label="Join Code:" max-length="8" value="" class="lobby-code-input" />
                                 <ui:Button name="btn-join-party" text="JOIN PARTY" class="lobby-join-btn" />
                             </ui:VisualElement>
 

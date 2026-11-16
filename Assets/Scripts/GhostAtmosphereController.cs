@@ -56,6 +56,9 @@ public class GhostAtmosphereController : MonoBehaviour
     [Header("Camera Zoom (Chase only)")]
     [Tooltip("How many orthographic units to zoom in when ghost is chasing at max proximity.")]
     [SerializeField] private float chaseZoomAmount = 0.10f;
+    public float ChaseZoomAmount => chaseZoomAmount;
+    [SerializeField] private float chaseZoomMin = 0.06f;
+    [SerializeField] private float chaseZoomMax = 0.26f;
     [SerializeField] private float zoomLerpSpeed = 3f;
 
     // ── Heartbeat ──────────────────────────────────────────────────────────────
@@ -216,12 +219,23 @@ public class GhostAtmosphereController : MonoBehaviour
     {
         if (mainCamera == null) return;
 
-        float targetSize = chaseActive
-            ? baseOrthoSize - (chaseZoomAmount * proximity)
-            : baseOrthoSize;
+        float targetSize;
+        float lerpSpeed;
+        if (chaseActive && proximity > 0f)
+        {
+            float pulseSine = (Mathf.Sin(pulseTimer) + 1f) * 0.5f;
+            float zoomOffset = Mathf.Lerp(chaseZoomMin, chaseZoomMax, pulseSine) * proximity;
+            targetSize = Mathf.Max(0.1f, baseOrthoSize - zoomOffset);
+            lerpSpeed = Mathf.Max(zoomLerpSpeed, 6f);
+        }
+        else
+        {
+            targetSize = baseOrthoSize;
+            lerpSpeed = zoomLerpSpeed;
+        }
 
         mainCamera.orthographicSize = Mathf.Lerp(
-            mainCamera.orthographicSize, targetSize, Time.deltaTime * zoomLerpSpeed);
+            mainCamera.orthographicSize, targetSize, Time.deltaTime * lerpSpeed);
     }
 
     private void UpdateHeartbeat(bool huntActive, float proximity)

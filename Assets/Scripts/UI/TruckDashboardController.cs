@@ -831,6 +831,14 @@ public class TruckDashboardController : MonoBehaviour, IInteractable
     public void OnDragUpdate(Vector2 targetPosition) {}
     public void OnDragEnd(ulong clientId) {}
 
+    public void CloseDashboard()
+    {
+        if (isDashboardOpen)
+        {
+            ToggleDashboard();
+        }
+    }
+
     private void ToggleDashboard()
     {
         isDashboardOpen = !isDashboardOpen;

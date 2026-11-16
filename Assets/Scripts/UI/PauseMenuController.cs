@@ -3,13 +3,14 @@ using UnityEngine;
 using UnityEngine.UIElements;
 
 /// <summary>
-/// In-game pause menu with three panels:
-///   1. Main  — Resume / Settings / Players / Quit
-///   2. Settings — Audio sliders, graphics toggles, FPS counter
-///   3. Players  — Connected player list with host-kick / vote-kick
+/// In-game pause menu with four panels:
+///   1. Main            — Resume / Settings / Help &amp; Controls / Players / Quit
+///   2. Settings        — Audio sliders, graphics toggles, FPS counter, tutorial hints
+///   3. Help &amp; Controls — Keybind reference and quick investigation tips
+///   4. Players         — Connected player list with host-kick / vote-kick
 ///
 /// Works in both singleplayer (host-only mode) and multiplayer.
-/// ESC toggles the pause overlay; the HUD "pause" button also works.
+/// ESC toggles the pause overlay (or steps back from sub-panels); the HUD "pause" button also works.
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class PauseMenuController : MonoBehaviour
@@ -20,7 +21,13 @@ public class PauseMenuController : MonoBehaviour
     private VisualElement pauseOverlay;
     private VisualElement panelMain;
     private VisualElement panelSettings;
+    private VisualElement panelControls;
     private VisualElement panelPlayers;
+
+    // Host Disconnect modal
+    private VisualElement hostDisconnectOverlay;
+    private Label lblHostDisconnectMsg;
+    private Button btnHostDisconnectMenu;
 
     // Settings controls
     private Slider sliderMaster, sliderMusic, sliderSFX;
@@ -37,12 +44,14 @@ public class PauseMenuController : MonoBehaviour
     private int   fpsFrameCount;
 
     private bool isPaused = false;
+    private bool isHostDisconnectVisible = false;
     private int closedFrame = -1;
 
     public static PauseMenuController Instance { get; private set; }
-    public static bool IsOpen => Instance != null && Instance.isPaused;
+    public static bool IsOpen => Instance != null && (Instance.isPaused || Instance.isHostDisconnectVisible);
     public static bool WasOpenThisFrame => IsOpen || (Instance != null && Instance.closedFrame == Time.frameCount);
     public bool IsPaused => isPaused;
+    public bool IsHostDisconnectVisible => isHostDisconnectVisible;
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
     private void Awake()
@@ -70,11 +79,15 @@ public class PauseMenuController : MonoBehaviour
         pauseOverlay  = root.Q<VisualElement>("pause-overlay");
         panelMain     = root.Q<VisualElement>("panel-main");
         panelSettings = root.Q<VisualElement>("panel-settings");
+        panelControls = root.Q<VisualElement>("panel-controls");
         panelPlayers  = root.Q<VisualElement>("panel-players");
+        BindHostDisconnectModal(root);
 
         // ── Main panel buttons ─────────────────────────────────────────
         root.Q<Button>("btn-resume")  .clicked += TogglePause;
         root.Q<Button>("btn-settings").clicked += ShowSettings;
+        var btnControls = root.Q<Button>("btn-controls");
+        if (btnControls != null) btnControls.clicked += ShowControls;
         root.Q<Button>("btn-players") .clicked += ShowPlayers;
         root.Q<Button>("btn-quit")    .clicked += OnQuitClicked;
 
@@ -103,6 +116,10 @@ public class PauseMenuController : MonoBehaviour
 
         root.Q<Button>("btn-settings-back").clicked += ShowMain;
 
+        // ── Help & Controls panel ──────────────────────────────────────
+        var btnControlsBack = root.Q<Button>("btn-controls-back");
+        if (btnControlsBack != null) btnControlsBack.clicked += ShowMain;
+
         // ── Players panel ──────────────────────────────────────────────
         playerListScroll = root.Q<ScrollView>("player-list-scroll");
         root.Q<Button>("btn-players-back").clicked += ShowMain;
@@ -125,6 +142,11 @@ public class PauseMenuController : MonoBehaviour
 
     private void OnDisable()
     {
+        isHostDisconnectVisible = false;
+        if (btnHostDisconnectMenu != null)
+        {
+            btnHostDisconnectMenu.clicked -= OnQuitClicked;
+        }
         if (VoteKickManager.Instance != null)
             VoteKickManager.Instance.OnVoteStateChanged -= RefreshPlayerList;
 
@@ -138,11 +160,7 @@ public class PauseMenuController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (DeveloperConsoleManager.WasOpenThisFrame) return;
-            if (TruckDashboardController.WasOpenThisFrame) return;
-            if (JournalController.WasOpenThisFrame) return;
-            if (SpiritBoxDialogueUI.WasOpenThisFrame) return;
-            TogglePause();
+            HandleEscapePressed();
         }
 
         // FPS counter
@@ -167,8 +185,27 @@ public class PauseMenuController : MonoBehaviour
 
     // ── Panel Navigation ──────────────────────────────────────────────────
 
+    private void HandleEscapePressed()
+    {
+        if (isHostDisconnectVisible) return;
+        if (DeveloperConsoleManager.WasOpenThisFrame) return;
+        if (TruckDashboardController.WasOpenThisFrame) return;
+        if (JournalController.WasOpenThisFrame) return;
+        if (SpiritBoxDialogueUI.WasOpenThisFrame) return;
+        if (ExorcismManager.WasOpenThisFrame) return;
+
+        if (isPaused && panelMain != null && panelMain.ClassListContains("hidden"))
+        {
+            ShowMain();
+            return;
+        }
+
+        TogglePause();
+    }
+
     public void TogglePause()
     {
+        if (isHostDisconnectVisible) return;
         isPaused = !isPaused;
         if (isPaused)
         {
@@ -183,6 +220,63 @@ public class PauseMenuController : MonoBehaviour
         }
     }
 
+    private void BindHostDisconnectModal(VisualElement root)
+    {
+        if (root == null) return;
+        hostDisconnectOverlay = root.Q<VisualElement>("host-disconnect-overlay");
+        lblHostDisconnectMsg = root.Q<Label>("lbl-host-disconnect-msg");
+        btnHostDisconnectMenu = root.Q<Button>("btn-host-disconnect-menu");
+        if (btnHostDisconnectMenu != null)
+        {
+            btnHostDisconnectMenu.clicked -= OnQuitClicked;
+            btnHostDisconnectMenu.clicked += OnQuitClicked;
+        }
+        if (!isHostDisconnectVisible)
+        {
+            hostDisconnectOverlay?.AddToClassList("hidden");
+        }
+    }
+
+    public void ShowHostDisconnected(string message = null)
+    {
+        if (uiDocument == null) uiDocument = GetComponent<UIDocument>();
+        if (hostDisconnectOverlay == null && uiDocument != null && uiDocument.rootVisualElement != null)
+        {
+            BindHostDisconnectModal(uiDocument.rootVisualElement);
+        }
+
+        isHostDisconnectVisible = true;
+        isPaused = false;
+        pauseOverlay?.AddToClassList("hidden");
+
+        if (JournalController.IsOpen) JournalController.Instance?.ToggleJournal();
+        if (TruckDashboardController.IsOpen) TruckDashboardController.Instance?.CloseDashboard();
+        if (SpiritBoxDialogueUI.Instance != null && SpiritBoxDialogueUI.Instance.IsOpen)
+        {
+            SpiritBoxDialogueUI.Instance.CloseDialogue();
+        }
+        LoadingScreenManager.Instance?.HideIntermission(0.1f);
+
+        if (uiDocument != null)
+        {
+            uiDocument.sortingOrder = 60;
+        }
+
+        if (!string.IsNullOrEmpty(message) && lblHostDisconnectMsg != null)
+        {
+            lblHostDisconnectMsg.text = message;
+        }
+
+        if (hostDisconnectOverlay != null)
+        {
+            hostDisconnectOverlay.RemoveFromClassList("hidden");
+            hostDisconnectOverlay.style.display = DisplayStyle.Flex;
+        }
+
+        UnityEngine.Cursor.visible = true;
+        UnityEngine.Cursor.lockState = CursorLockMode.None;
+    }
+
     private void ShowMain()
     {
         SetPanel(panelMain);
@@ -194,6 +288,11 @@ public class PauseMenuController : MonoBehaviour
         SetPanel(panelSettings);
     }
 
+    private void ShowControls()
+    {
+        SetPanel(panelControls);
+    }
+
     private void ShowPlayers()
     {
         RefreshPlayerList();
@@ -202,10 +301,11 @@ public class PauseMenuController : MonoBehaviour
 
     private void SetPanel(VisualElement active)
     {
-        panelMain    .AddToClassList("hidden");
-        panelSettings.AddToClassList("hidden");
-        panelPlayers .AddToClassList("hidden");
-        active.RemoveFromClassList("hidden");
+        panelMain    ?.AddToClassList("hidden");
+        panelSettings?.AddToClassList("hidden");
+        panelControls?.AddToClassList("hidden");
+        panelPlayers ?.AddToClassList("hidden");
+        active       ?.RemoveFromClassList("hidden");
     }
 
     // ── Settings Helpers ──────────────────────────────────────────────────
@@ -328,6 +428,7 @@ public class PauseMenuController : MonoBehaviour
 
     private void OnQuitClicked()
     {
+        isHostDisconnectVisible = false;
         GameSettingsManager.Instance?.SaveAll();
 
         if (NetworkController.Instance != null)
@@ -335,6 +436,10 @@ public class PauseMenuController : MonoBehaviour
         else if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.Shutdown();
+            UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
+        }
+        else
+        {
             UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
         }
     }

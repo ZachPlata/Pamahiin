@@ -2,6 +2,7 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
     <Style src="LoadingScreen.uss" />
     <ui:VisualElement name="loading-overlay" class="loading-overlay hidden" picking-mode="Ignore">
+        <ui:VisualElement name="loading-scene-backdrop" class="loading-scene-backdrop" picking-mode="Ignore" />
         <ui:VisualElement class="loading-vignette" picking-mode="Ignore" />
         <ui:VisualElement class="loading-frame" picking-mode="Ignore">
             <ui:VisualElement class="loading-header-row" picking-mode="Ignore">
@@ -27,4 +28,5 @@
             </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
+    <ui:VisualElement name="loading-black-fade" class="loading-black-fade hidden" picking-mode="Ignore" />
 </ui:UXML>

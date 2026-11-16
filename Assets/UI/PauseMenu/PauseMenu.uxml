@@ -15,10 +15,11 @@
         <ui:VisualElement name="panel-main" class="menu-container">
             <ui:Label text="PAUSED" class="title-label" />
             <ui:VisualElement class="button-container">
-                <ui:Button name="btn-resume"   text="▶  RESUME"        class="menu-button" />
-                <ui:Button name="btn-settings" text="SETTINGS"         class="menu-button" />
-                <ui:Button name="btn-players"  text="PLAYERS"          class="menu-button" />
-                <ui:Button name="btn-quit"     text="X  QUIT TO MENU"  class="menu-button btn-danger" />
+                <ui:Button name="btn-resume"   text="▶  RESUME"          class="menu-button" />
+                <ui:Button name="btn-settings" text="SETTINGS"           class="menu-button" />
+                <ui:Button name="btn-controls" text="HELP &amp; CONTROLS" class="menu-button" />
+                <ui:Button name="btn-players"  text="PLAYERS"            class="menu-button" />
+                <ui:Button name="btn-quit"     text="X  QUIT TO MENU"    class="menu-button btn-danger" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -78,5 +79,82 @@
             <ui:Button name="btn-players-back" text="← Back" class="menu-button back-button" />
         </ui:VisualElement>
 
+        <!-- ── HELP & CONTROLS PANEL ─────────────────────────────────── -->
+        <ui:VisualElement name="panel-controls" class="menu-container controls-container hidden">
+            <ui:Label text="HELP &amp; CONTROLS" class="title-label" />
+
+            <ui:ScrollView name="controls-scroll" class="controls-scroll" vertical-scroller-visibility="Auto" horizontal-scroller-visibility="Hidden">
+                <ui:Label text="CONTROLS" class="section-label" />
+
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="WASD" class="control-key" />
+                    <ui:Label text="Move" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="Mouse" class="control-key" />
+                    <ui:Label text="Aim / Look" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="Left Shift" class="control-key" />
+                    <ui:Label text="Sprint" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="C" class="control-key" />
+                    <ui:Label text="Crouch (Hide in Hide Spots)" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="E / L-Click" class="control-key" />
+                    <ui:Label text="Interact / Pick Up / Drag" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="L-Click" class="control-key" />
+                    <ui:Label text="Use Held Item" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="R-Click" class="control-key" />
+                    <ui:Label text="Place Equipment on Floor" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="1-3 / Scroll / Click" class="control-key" />
+                    <ui:Label text="Select Hotbar Slot" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="G" class="control-key" />
+                    <ui:Label text="Drop Held Item" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="J" class="control-key" />
+                    <ui:Label text="Open / Close Journal" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="Esc" class="control-key" />
+                    <ui:Label text="Pause / Back / Close UI" class="control-desc" />
+                </ui:VisualElement>
+
+                <ui:Label text="QUICK TIPS" class="section-label" />
+
+                <ui:Label text="• Use equipment in the Ghost Room to gather 3 evidences and identify the entity in your Journal [J]." class="control-tip" />
+                <ui:Label text="• Keep sanity up with lights and Sanity Pills; turn off handheld electronics and crouch [C] to hide during hunts." class="control-tip" />
+                <ui:Label text="• Place Ritual Chalk [R-Click] in the Ghost Room to summon and exorcise the entity." class="control-tip" />
+            </ui:ScrollView>
+
+            <ui:Button name="btn-controls-back" text="← Back" class="menu-button back-button" />
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <!--  HOST DISCONNECTED OVERLAY                                         -->
+    <!-- ══════════════════════════════════════════════════════════════════ -->
+    <ui:VisualElement name="host-disconnect-overlay" class="overlay host-disconnect-overlay hidden">
+        <ui:VisualElement name="panel-host-disconnect" class="menu-container host-disconnect-panel">
+            <ui:Label text="CONNECTION LOST" class="host-disconnect-tag" />
+            <ui:Label name="lbl-host-disconnect-title" text="HOST DISCONNECTED" class="title-label host-disconnect-title" />
+            <ui:VisualElement class="host-disconnect-divider" />
+            <ui:Label name="lbl-host-disconnect-msg" text="The lobby host has ended the session or lost connection. You can no longer continue in this lobby." class="host-disconnect-desc" />
+            <ui:VisualElement class="button-container">
+                <ui:Button name="btn-host-disconnect-menu" text="RETURN TO MAIN MENU" class="menu-button btn-danger host-disconnect-btn" />
+            </ui:VisualElement>
+        </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>

@@ -14,48 +14,48 @@
 
         <ui:VisualElement class="inventory-container">
             <ui:VisualElement name="Slot0" class="inventory-slot inventory-slot-active">
-                <ui:VisualElement name="TemperatureContainer0" class="temperature-container">
-                    <ui:Label name="TemperatureText0" text="27.0°C" class="temperature-text" />
+                <ui:VisualElement name="TemperatureContainer0" class="temperature-container" picking-mode="Ignore">
+                    <ui:Label name="TemperatureText0" text="27.0°C" class="temperature-text" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement name="PowerIndicator0" class="power-indicator" />
-                <ui:VisualElement name="EmfContainer0" class="emf-container">
-                    <ui:VisualElement name="EmfDot0_0" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot0_1" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot0_2" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot0_3" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot0_4" class="emf-dot" />
+                <ui:VisualElement name="PowerIndicator0" class="power-indicator" picking-mode="Ignore" />
+                <ui:VisualElement name="EmfContainer0" class="emf-container" picking-mode="Ignore">
+                    <ui:VisualElement name="EmfDot0_0" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot0_1" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot0_2" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot0_3" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot0_4" class="emf-dot" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:Label name="ItemText0" text="Empty" class="inventory-slot-text" />
+                <ui:Label name="ItemText0" text="Empty" class="inventory-slot-text" picking-mode="Ignore" />
             </ui:VisualElement>
             
             <ui:VisualElement name="Slot1" class="inventory-slot">
-                <ui:VisualElement name="TemperatureContainer1" class="temperature-container">
-                    <ui:Label name="TemperatureText1" text="27.0°C" class="temperature-text" />
+                <ui:VisualElement name="TemperatureContainer1" class="temperature-container" picking-mode="Ignore">
+                    <ui:Label name="TemperatureText1" text="27.0°C" class="temperature-text" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement name="PowerIndicator1" class="power-indicator" />
-                <ui:VisualElement name="EmfContainer1" class="emf-container">
-                    <ui:VisualElement name="EmfDot1_0" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot1_1" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot1_2" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot1_3" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot1_4" class="emf-dot" />
+                <ui:VisualElement name="PowerIndicator1" class="power-indicator" picking-mode="Ignore" />
+                <ui:VisualElement name="EmfContainer1" class="emf-container" picking-mode="Ignore">
+                    <ui:VisualElement name="EmfDot1_0" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot1_1" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot1_2" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot1_3" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot1_4" class="emf-dot" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:Label name="ItemText1" text="Empty" class="inventory-slot-text" />
+                <ui:Label name="ItemText1" text="Empty" class="inventory-slot-text" picking-mode="Ignore" />
             </ui:VisualElement>
             
             <ui:VisualElement name="Slot2" class="inventory-slot">
-                <ui:VisualElement name="TemperatureContainer2" class="temperature-container">
-                    <ui:Label name="TemperatureText2" text="27.0°C" class="temperature-text" />
+                <ui:VisualElement name="TemperatureContainer2" class="temperature-container" picking-mode="Ignore">
+                    <ui:Label name="TemperatureText2" text="27.0°C" class="temperature-text" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement name="PowerIndicator2" class="power-indicator" />
-                <ui:VisualElement name="EmfContainer2" class="emf-container">
-                    <ui:VisualElement name="EmfDot2_0" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot2_1" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot2_2" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot2_3" class="emf-dot" />
-                    <ui:VisualElement name="EmfDot2_4" class="emf-dot" />
+                <ui:VisualElement name="PowerIndicator2" class="power-indicator" picking-mode="Ignore" />
+                <ui:VisualElement name="EmfContainer2" class="emf-container" picking-mode="Ignore">
+                    <ui:VisualElement name="EmfDot2_0" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot2_1" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot2_2" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot2_3" class="emf-dot" picking-mode="Ignore" />
+                    <ui:VisualElement name="EmfDot2_4" class="emf-dot" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:Label name="ItemText2" text="Empty" class="inventory-slot-text" />
+                <ui:Label name="ItemText2" text="Empty" class="inventory-slot-text" picking-mode="Ignore" />
             </ui:VisualElement>
         </ui:VisualElement>
 

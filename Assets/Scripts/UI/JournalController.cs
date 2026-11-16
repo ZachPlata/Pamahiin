@@ -368,6 +368,10 @@ public class JournalController : MonoBehaviour
         if (ProgressionAndLoadoutManager.IsInLobbyScene)
         {
             ShowSpread(LobbySpreadIndex);
+            if (NetworkController.Instance != null && NetworkController.Instance.ConsumeReopenLobbyJournalFlag())
+            {
+                OpenToLobbyTab();
+            }
         }
         else
         {
@@ -890,13 +894,16 @@ public class JournalController : MonoBehaviour
 
         // Multiplayer Party UI
         var net = NetworkController.Instance;
+        bool isHostOrSolo = ProgressionAndLoadoutManager.IsNetworkHostOrOffline;
+
         if (net != null)
         {
             if (lblPartyCode != null)
             {
                 if (!string.IsNullOrEmpty(net.CurrentPartyCode))
                 {
-                    lblPartyCode.text = $"PARTY CODE: {net.CurrentPartyCode}";
+                    string modeBadge = net.IsOnlineRelayParty ? "ONLINE" : "LAN";
+                    lblPartyCode.text = $"PARTY CODE ({modeBadge}): {net.CurrentPartyCode}";
                 }
                 else
                 {
@@ -908,9 +915,32 @@ public class JournalController : MonoBehaviour
             {
                 lblPartyStatus.text = net.LastStatusMessage;
             }
+
+            if (btnCreateParty != null)
+            {
+                bool canCreate = isHostOrSolo && !net.IsCreatingParty && !net.IsConnectingToParty;
+                btnCreateParty.SetEnabled(canCreate);
+                if (net.IsCreatingParty)
+                {
+                    btnCreateParty.text = "CREATING ONLINE PARTY...";
+                }
+                else if (net.IsMultiplayerPartyOpen && !string.IsNullOrEmpty(net.CurrentPartyCode))
+                {
+                    btnCreateParty.text = $"PARTY OPEN ({net.CurrentPartyCode})";
+                }
+                else
+                {
+                    btnCreateParty.text = "CREATE MULTIPLAYER PARTY CODE";
+                }
+            }
+
+            if (btnJoinParty != null)
+            {
+                btnJoinParty.SetEnabled(!net.IsConnectingToParty && !net.IsCreatingParty);
+                btnJoinParty.text = net.IsConnectingToParty ? "JOINING..." : "JOIN PARTY";
+            }
         }
 
-        bool isHostOrSolo = ProgressionAndLoadoutManager.IsNetworkHostOrOffline;
         int connectedCount = 1;
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
@@ -1232,6 +1262,7 @@ public class JournalController : MonoBehaviour
             if (PauseMenuController.IsOpen) return;
             if (TruckDashboardController.IsOpen) return;
             if (SpiritBoxItem.IsLocalDialogueActive) return;
+            if (ExorcismManager.IsUIOpen) return;
             ToggleJournal();
         }
 

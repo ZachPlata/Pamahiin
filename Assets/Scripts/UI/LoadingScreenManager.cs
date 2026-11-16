@@ -14,6 +14,7 @@ public class LoadingScreenManager : MonoBehaviour
     public static bool IsLoadingVisible => Instance != null && Instance.IsVisible;
 
     private const string UXML_RESOURCE_PATH = "UI/LoadingScreen";
+    private const string LOADING_SCENE_NAME = "LoadingScene";
     private const int OVERLAY_SORT_ORDER = 100;
 
     private static readonly string[] FieldTips =
@@ -30,6 +31,8 @@ public class LoadingScreenManager : MonoBehaviour
     private PanelSettings resolvedAssetPanelSettings;
 
     private VisualElement loadingOverlay;
+    private VisualElement loadingSceneBackdrop;
+    private VisualElement loadingBlackFade;
     private Label lblTag;
     private Label lblPercent;
     private Label lblTitle;
@@ -46,7 +49,10 @@ public class LoadingScreenManager : MonoBehaviour
     private int tipIndex = 0;
 
     private Coroutine fadeCoroutine;
+    private Coroutine blackFadeCoroutine;
     private Coroutine timedIntermissionCoroutine;
+    private RenderTexture backdropRenderTexture;
+    private bool isLoadingBackdropScene = false;
 
     public bool IsVisible => isVisible;
 
@@ -101,6 +107,12 @@ public class LoadingScreenManager : MonoBehaviour
             Destroy(fallbackPanelSettings);
             fallbackPanelSettings = null;
         }
+        if (backdropRenderTexture != null)
+        {
+            backdropRenderTexture.Release();
+            Destroy(backdropRenderTexture);
+            backdropRenderTexture = null;
+        }
     }
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -109,6 +121,29 @@ public class LoadingScreenManager : MonoBehaviour
         if (resolvedAssetPanelSettings == null)
         {
             EnsureUIReady();
+        }
+
+        if (string.Equals(scene.name, LOADING_SCENE_NAME, StringComparison.Ordinal))
+        {
+            isLoadingBackdropScene = false;
+            if (isVisible)
+            {
+                EnsureBackdropRenderTexture();
+                if (LoadingRoadBackdropController.ActiveInstance != null)
+                {
+                    LoadingRoadBackdropController.ActiveInstance.ConfigureForOverlayRender(backdropRenderTexture);
+                }
+            }
+            else if (SceneManager.sceneCount > 1)
+            {
+                SceneManager.UnloadSceneAsync(scene);
+            }
+            return;
+        }
+
+        if (isVisible && !isFadingOut)
+        {
+            EnsureBackdropSceneActive();
         }
     }
 
@@ -165,6 +200,8 @@ public class LoadingScreenManager : MonoBehaviour
     private void BindVisualElements(VisualElement root)
     {
         loadingOverlay = root.Q<VisualElement>("loading-overlay");
+        loadingSceneBackdrop = root.Q<VisualElement>("loading-scene-backdrop");
+        loadingBlackFade = root.Q<VisualElement>("loading-black-fade");
         lblTag = root.Q<Label>("lbl-loading-tag");
         lblPercent = root.Q<Label>("lbl-loading-percent");
         lblTitle = root.Q<Label>("lbl-loading-title");
@@ -179,6 +216,13 @@ public class LoadingScreenManager : MonoBehaviour
             loadingOverlay.RemoveFromClassList("loading-visible");
             loadingOverlay.style.opacity = 0f;
             loadingOverlay.pickingMode = PickingMode.Ignore;
+        }
+
+        if (loadingBlackFade != null && blackFadeCoroutine == null)
+        {
+            loadingBlackFade.AddToClassList("hidden");
+            loadingBlackFade.style.opacity = 0f;
+            loadingBlackFade.pickingMode = PickingMode.Ignore;
         }
     }
 
@@ -246,15 +290,32 @@ public class LoadingScreenManager : MonoBehaviour
         if (lblTip != null) lblTip.text = PickFieldTip(tip);
         ApplyProgressVisuals(displayedProgress);
 
-        loadingOverlay.RemoveFromClassList("hidden");
-        loadingOverlay.AddToClassList("loading-visible");
-        loadingOverlay.pickingMode = PickingMode.Position;
+        EnsureBackdropSceneActive();
 
         if (fadeCoroutine != null)
         {
             StopCoroutine(fadeCoroutine);
+            fadeCoroutine = null;
         }
-        fadeCoroutine = StartCoroutine(FadeOverlayRoutine(1f, fadeInDuration, hideAtEnd: false));
+        if (blackFadeCoroutine != null)
+        {
+            StopCoroutine(blackFadeCoroutine);
+            blackFadeCoroutine = null;
+        }
+
+        if (loadingBlackFade != null)
+        {
+            float toBlackDuration = Mathf.Clamp(fadeInDuration, 0.12f, 0.28f);
+            float fromBlackDuration = Mathf.Clamp(fadeInDuration + 0.04f, 0.16f, 0.32f);
+            fadeCoroutine = StartCoroutine(ShowIntermissionWithBlackFadeRoutine(toBlackDuration, fromBlackDuration));
+        }
+        else
+        {
+            loadingOverlay.RemoveFromClassList("hidden");
+            loadingOverlay.AddToClassList("loading-visible");
+            loadingOverlay.pickingMode = PickingMode.Position;
+            fadeCoroutine = StartCoroutine(FadeOverlayRoutine(1f, fadeInDuration, hideAtEnd: false));
+        }
     }
 
     /// <summary>
@@ -270,7 +331,7 @@ public class LoadingScreenManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Smoothly fades out and hides the intermission screen.
+    /// Smoothly fades out and hides the intermission screen via a black veil transition.
     /// </summary>
     public void HideIntermission(float fadeDuration = 0.35f)
     {
@@ -295,8 +356,52 @@ public class LoadingScreenManager : MonoBehaviour
         if (fadeCoroutine != null)
         {
             StopCoroutine(fadeCoroutine);
+            fadeCoroutine = null;
         }
-        fadeCoroutine = StartCoroutine(FadeOverlayRoutine(0f, Mathf.Max(0.05f, fadeDuration), hideAtEnd: true));
+        if (blackFadeCoroutine != null)
+        {
+            StopCoroutine(blackFadeCoroutine);
+            blackFadeCoroutine = null;
+        }
+
+        if (loadingBlackFade != null)
+        {
+            float toBlackDuration = Mathf.Clamp(fadeDuration * 0.65f, 0.06f, 0.28f);
+            float fromBlackDuration = Mathf.Clamp(fadeDuration, 0.08f, 0.38f);
+            fadeCoroutine = StartCoroutine(HideIntermissionWithBlackFadeRoutine(toBlackDuration, fromBlackDuration));
+        }
+        else
+        {
+            fadeCoroutine = StartCoroutine(FadeOverlayRoutine(0f, Mathf.Max(0.05f, fadeDuration), hideAtEnd: true));
+        }
+    }
+
+    /// <summary>
+    /// Fades the standalone black veil to opaque black (used for non-truck scene/host transitions).
+    /// </summary>
+    public void FadeToBlack(float duration = 0.18f)
+    {
+        if (!EnsureUIReady() || loadingBlackFade == null) return;
+
+        if (blackFadeCoroutine != null)
+        {
+            StopCoroutine(blackFadeCoroutine);
+        }
+        blackFadeCoroutine = StartCoroutine(AnimateBlackFadeRoutine(1f, Mathf.Max(0.01f, duration), hideWhenZero: false));
+    }
+
+    /// <summary>
+    /// Fades the standalone black veil back to transparent.
+    /// </summary>
+    public void FadeFromBlack(float duration = 0.24f)
+    {
+        if (!EnsureUIReady() || loadingBlackFade == null) return;
+
+        if (blackFadeCoroutine != null)
+        {
+            StopCoroutine(blackFadeCoroutine);
+        }
+        blackFadeCoroutine = StartCoroutine(AnimateBlackFadeRoutine(0f, Mathf.Max(0.01f, duration), hideWhenZero: true));
     }
 
     /// <summary>
@@ -350,6 +455,128 @@ public class LoadingScreenManager : MonoBehaviour
         onComplete?.Invoke();
     }
 
+    private IEnumerator ShowIntermissionWithBlackFadeRoutine(float toBlackDuration, float fromBlackDuration)
+    {
+        if (loadingBlackFade != null)
+        {
+            loadingBlackFade.RemoveFromClassList("hidden");
+            loadingBlackFade.pickingMode = PickingMode.Position;
+            yield return LerpElementAlphaRoutine(loadingBlackFade, 1f, toBlackDuration, 0f);
+        }
+
+        // Let the additive truck backdrop finish initializing behind pure black (capped so it never stalls).
+        float backdropWait = 0f;
+        while (isLoadingBackdropScene && backdropWait < 0.15f)
+        {
+            backdropWait += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (loadingOverlay != null)
+        {
+            loadingOverlay.RemoveFromClassList("hidden");
+            loadingOverlay.AddToClassList("loading-visible");
+            loadingOverlay.style.opacity = 1f;
+            loadingOverlay.pickingMode = PickingMode.Position;
+        }
+
+        if (loadingBlackFade != null)
+        {
+            yield return LerpElementAlphaRoutine(loadingBlackFade, 0f, fromBlackDuration, 1f);
+            loadingBlackFade.AddToClassList("hidden");
+            loadingBlackFade.pickingMode = PickingMode.Ignore;
+        }
+
+        fadeCoroutine = null;
+    }
+
+    private IEnumerator HideIntermissionWithBlackFadeRoutine(float toBlackDuration, float fromBlackDuration)
+    {
+        if (loadingBlackFade != null)
+        {
+            loadingBlackFade.RemoveFromClassList("hidden");
+            loadingBlackFade.pickingMode = PickingMode.Position;
+            yield return LerpElementAlphaRoutine(loadingBlackFade, 1f, toBlackDuration, 0f);
+        }
+
+        ResetAndHideLoadingOverlay();
+
+        if (loadingBlackFade != null)
+        {
+            yield return LerpElementAlphaRoutine(loadingBlackFade, 0f, fromBlackDuration, 1f);
+            loadingBlackFade.AddToClassList("hidden");
+            loadingBlackFade.pickingMode = PickingMode.Ignore;
+        }
+
+        isVisible = false;
+        isFadingOut = false;
+        fadeCoroutine = null;
+    }
+
+    private IEnumerator AnimateBlackFadeRoutine(float targetAlpha, float duration, bool hideWhenZero)
+    {
+        if (loadingBlackFade == null)
+        {
+            blackFadeCoroutine = null;
+            yield break;
+        }
+
+        loadingBlackFade.RemoveFromClassList("hidden");
+        loadingBlackFade.pickingMode = targetAlpha > 0.01f ? PickingMode.Position : PickingMode.Ignore;
+
+        yield return LerpElementAlphaRoutine(loadingBlackFade, targetAlpha, duration, targetAlpha > 0.5f ? 0f : 1f);
+
+        if (hideWhenZero && targetAlpha <= 0.01f)
+        {
+            loadingBlackFade.AddToClassList("hidden");
+            loadingBlackFade.pickingMode = PickingMode.Ignore;
+        }
+
+        blackFadeCoroutine = null;
+    }
+
+    private static IEnumerator LerpElementAlphaRoutine(VisualElement element, float targetAlpha, float duration, float fallbackStartAlpha)
+    {
+        if (element == null) yield break;
+
+        float startAlpha = element.resolvedStyle.opacity;
+        if (float.IsNaN(startAlpha))
+        {
+            startAlpha = fallbackStartAlpha;
+        }
+
+        if (duration <= 0.01f)
+        {
+            element.style.opacity = targetAlpha;
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            element.style.opacity = Mathf.Lerp(startAlpha, targetAlpha, t);
+            yield return null;
+        }
+        element.style.opacity = targetAlpha;
+    }
+
+    private void ResetAndHideLoadingOverlay()
+    {
+        targetProgress = 0f;
+        displayedProgress = 0f;
+        lastAppliedProgress = -1f;
+        if (loadingOverlay != null)
+        {
+            loadingOverlay.style.opacity = 0f;
+            loadingOverlay.RemoveFromClassList("loading-visible");
+            loadingOverlay.AddToClassList("hidden");
+            loadingOverlay.pickingMode = PickingMode.Ignore;
+        }
+        ReleaseBackdropScene();
+    }
+
     private IEnumerator FadeOverlayRoutine(float targetAlpha, float duration, bool hideAtEnd)
     {
         if (loadingOverlay == null)
@@ -358,41 +585,96 @@ public class LoadingScreenManager : MonoBehaviour
             yield break;
         }
 
-        float startAlpha = loadingOverlay.resolvedStyle.opacity;
-        if (float.IsNaN(startAlpha))
-        {
-            startAlpha = hideAtEnd ? 1f : 0f;
-        }
-
-        if (duration <= 0.01f)
-        {
-            loadingOverlay.style.opacity = targetAlpha;
-        }
-        else
-        {
-            float elapsed = 0f;
-            while (elapsed < duration)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
-                loadingOverlay.style.opacity = Mathf.Lerp(startAlpha, targetAlpha, t);
-                yield return null;
-            }
-            loadingOverlay.style.opacity = targetAlpha;
-        }
+        yield return LerpElementAlphaRoutine(loadingOverlay, targetAlpha, duration, hideAtEnd ? 1f : 0f);
 
         if (hideAtEnd)
         {
             isVisible = false;
             isFadingOut = false;
-            targetProgress = 0f;
-            displayedProgress = 0f;
-            lastAppliedProgress = -1f;
-            loadingOverlay.RemoveFromClassList("loading-visible");
-            loadingOverlay.AddToClassList("hidden");
-            loadingOverlay.pickingMode = PickingMode.Ignore;
+            ResetAndHideLoadingOverlay();
         }
 
         fadeCoroutine = null;
+    }
+
+    private void EnsureBackdropRenderTexture()
+    {
+        float aspect = Screen.height > 0 ? Mathf.Max(0.5f, (float)Screen.width / Screen.height) : (16f / 9f);
+        int targetW = 1280;
+        int targetH = Mathf.Clamp(Mathf.RoundToInt(targetW / aspect), 480, 1280);
+
+        if (backdropRenderTexture == null || backdropRenderTexture.width != targetW || backdropRenderTexture.height != targetH)
+        {
+            if (backdropRenderTexture != null)
+            {
+                backdropRenderTexture.Release();
+                Destroy(backdropRenderTexture);
+            }
+
+            backdropRenderTexture = new RenderTexture(targetW, targetH, 16, RenderTextureFormat.ARGB32)
+            {
+                name = "LoadingSceneBackdropRT",
+                filterMode = FilterMode.Point,
+                useMipMap = false
+            };
+            backdropRenderTexture.Create();
+        }
+
+        if (loadingSceneBackdrop != null)
+        {
+            loadingSceneBackdrop.style.backgroundImage = new StyleBackground(Background.FromRenderTexture(backdropRenderTexture));
+        }
+    }
+
+    private void EnsureBackdropSceneActive()
+    {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        EnsureBackdropRenderTexture();
+
+        if (LoadingRoadBackdropController.ActiveInstance != null)
+        {
+            LoadingRoadBackdropController.OverlayModeRequested = true;
+            LoadingRoadBackdropController.ActiveInstance.ConfigureForOverlayRender(backdropRenderTexture);
+            return;
+        }
+
+        Scene loadedBackdrop = SceneManager.GetSceneByName(LOADING_SCENE_NAME);
+        if (!loadedBackdrop.isLoaded && !isLoadingBackdropScene && Application.CanStreamedLevelBeLoaded(LOADING_SCENE_NAME))
+        {
+            LoadingRoadBackdropController.OverlayModeRequested = true;
+            isLoadingBackdropScene = true;
+            SceneManager.LoadSceneAsync(LOADING_SCENE_NAME, LoadSceneMode.Additive);
+        }
+    }
+
+    private void ReleaseBackdropScene()
+    {
+        LoadingRoadBackdropController.OverlayModeRequested = false;
+        isLoadingBackdropScene = false;
+
+        if (loadingSceneBackdrop != null)
+        {
+            loadingSceneBackdrop.style.backgroundImage = StyleKeyword.None;
+        }
+
+        if (LoadingRoadBackdropController.ActiveInstance != null)
+        {
+            LoadingRoadBackdropController.ActiveInstance.ConfigureForOverlayRender(null);
+        }
+
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        Scene loadedBackdrop = SceneManager.GetSceneByName(LOADING_SCENE_NAME);
+        if (loadedBackdrop.isLoaded && SceneManager.sceneCount > 1)
+        {
+            SceneManager.UnloadSceneAsync(loadedBackdrop);
+        }
     }
 }

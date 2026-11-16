@@ -6,6 +6,43 @@ using System.Collections.Generic;
 /// covering every unique 3-evidence combination of the 6 investigation proofs:
 /// EMF, Freezing, GhostWriting, DOTS, SpiritBox, GhostOrbs (C(6,3) = 20).
 /// </summary>
+public enum GhostHuntConditionType
+{
+    Always = 0,
+    PlayerMovingNearby = 1,
+    PlayerSprintingNearby = 2,
+    PlayerInGhostRoom = 3,
+    EarlyHuntAbility = 4,
+    SingleObsessionTarget = 5,
+    GroupedInGhostRoom = 6,
+    RecentInteriorDoor = 7,
+    SoloInHouse = 8,
+    SummoningCirclePlaced = 9,
+    GhostRoomLightsOn = 10,
+    FailedRitual = 11,
+    LunarPhaseCycle = 12
+}
+
+public readonly struct GhostHuntProfile
+{
+    public readonly float BaseThreshold;
+    public readonly float AlternateThreshold;
+    public readonly GhostHuntConditionType Condition;
+    public readonly float AbilityChance;
+
+    public GhostHuntProfile(
+        float baseThreshold,
+        float alternateThreshold = -1f,
+        GhostHuntConditionType condition = GhostHuntConditionType.Always,
+        float abilityChance = 0f)
+    {
+        BaseThreshold = baseThreshold;
+        AlternateThreshold = alternateThreshold >= 0f ? alternateThreshold : baseThreshold;
+        Condition = condition;
+        AbilityChance = abilityChance;
+    }
+}
+
 public static class GhostCatalog
 {
     public sealed class GhostDefinition
@@ -19,6 +56,7 @@ public static class GhostCatalog
         public string ArtCssClass { get; }
         public EvidenceType[] Evidences { get; }
         public string[] EvidenceKeys { get; }
+        public GhostHuntProfile HuntProfile { get; }
 
         public GhostDefinition(
             string id,
@@ -30,7 +68,8 @@ public static class GhostCatalog
             string artCssClass,
             EvidenceType ev1,
             EvidenceType ev2,
-            EvidenceType ev3)
+            EvidenceType ev3,
+            GhostHuntProfile? huntProfile = null)
         {
             Id = id;
             Subtitle = subtitle;
@@ -46,6 +85,7 @@ public static class GhostCatalog
                 EvidenceTypeToKey(ev2),
                 EvidenceTypeToKey(ev3)
             };
+            HuntProfile = huntProfile ?? new GhostHuntProfile(50f);
         }
     }
 
@@ -75,7 +115,8 @@ public static class GhostCatalog
             },
             "Tip: Invert your outerwear (baliktarin ang damit) if illusions cloud your path.",
             "ghost-art-tikbalang",
-            EvidenceType.EMF, EvidenceType.SpiritBox, EvidenceType.GhostOrbs
+            EvidenceType.EMF, EvidenceType.SpiritBox, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(45f, 65f, GhostHuntConditionType.PlayerMovingNearby)
         ),
         new GhostDefinition(
             "Kapre",
@@ -90,7 +131,8 @@ public static class GhostCatalog
             },
             "Tip: A faint aroma of burning tobacco in the air signals its immediate presence.",
             "ghost-art-kapre",
-            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.DOTS
+            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.DOTS,
+            new GhostHuntProfile(50f, 60f, GhostHuntConditionType.PlayerInGhostRoom)
         ),
         new GhostDefinition(
             "Manananggal",
@@ -106,7 +148,8 @@ public static class GhostCatalog
             },
             "Tip: Listen closely for leathery wing flaps and rooftop ticking noises.",
             "ghost-art-manananggal",
-            EvidenceType.Freezing, EvidenceType.GhostWriting, EvidenceType.GhostOrbs
+            EvidenceType.Freezing, EvidenceType.GhostWriting, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(70f, 70f, GhostHuntConditionType.EarlyHuntAbility, 0.08f)
         ),
 
         // ── 17 Folklore Ghost Types Completing All 20 Proof Combinations ────
@@ -123,7 +166,8 @@ public static class GhostCatalog
             },
             "Tip: Pay close attention to sudden cold spots and whispered static in the dark.",
             "ghost-art-multo",
-            EvidenceType.Freezing, EvidenceType.SpiritBox, EvidenceType.GhostOrbs
+            EvidenceType.Freezing, EvidenceType.SpiritBox, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(50f)
         ),
         new GhostDefinition(
             "Kaperosa",
@@ -138,7 +182,8 @@ public static class GhostCatalog
             },
             "Tip: Watch doorways and hallways via Video Camera—she favors silent optical sightings.",
             "ghost-art-kaperosa",
-            EvidenceType.Freezing, EvidenceType.DOTS, EvidenceType.GhostOrbs
+            EvidenceType.Freezing, EvidenceType.DOTS, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(50f, 50f, GhostHuntConditionType.SingleObsessionTarget)
         ),
         new GhostDefinition(
             "Pasatsat",
@@ -153,7 +198,8 @@ public static class GhostCatalog
             },
             "Tip: Never trap yourself in narrow hallways; deploy D.O.T.S. at room choke points.",
             "ghost-art-pasatsat",
-            EvidenceType.Freezing, EvidenceType.GhostWriting, EvidenceType.DOTS
+            EvidenceType.Freezing, EvidenceType.GhostWriting, EvidenceType.DOTS,
+            new GhostHuntProfile(50f)
         ),
         new GhostDefinition(
             "Kalag",
@@ -168,7 +214,8 @@ public static class GhostCatalog
             },
             "Tip: Place an open Writing Book beside an active Spirit Box to provoke fast replies.",
             "ghost-art-kalag",
-            EvidenceType.GhostWriting, EvidenceType.SpiritBox, EvidenceType.GhostOrbs
+            EvidenceType.GhostWriting, EvidenceType.SpiritBox, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(55f, 35f, GhostHuntConditionType.GroupedInGhostRoom)
         ),
         new GhostDefinition(
             "Kumakatok",
@@ -183,7 +230,8 @@ public static class GhostCatalog
             },
             "Tip: Sweep doors with an EMF Reader immediately after hearing distant knocks.",
             "ghost-art-kumakatok",
-            EvidenceType.EMF, EvidenceType.GhostWriting, EvidenceType.SpiritBox
+            EvidenceType.EMF, EvidenceType.GhostWriting, EvidenceType.SpiritBox,
+            new GhostHuntProfile(45f, 60f, GhostHuntConditionType.RecentInteriorDoor)
         ),
         new GhostDefinition(
             "Akop",
@@ -198,7 +246,8 @@ public static class GhostCatalog
             },
             "Tip: Avoid exploring deep interiors alone—isolated investigators lose sanity faster.",
             "ghost-art-akop",
-            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.GhostOrbs
+            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(40f, 60f, GhostHuntConditionType.SoloInHouse)
         ),
         new GhostDefinition(
             "Ibwa",
@@ -213,7 +262,8 @@ public static class GhostCatalog
             },
             "Tip: Track sudden Thermometer drops when objects are hurled nearby.",
             "ghost-art-ibwa",
-            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.GhostWriting
+            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.GhostWriting,
+            new GhostHuntProfile(50f)
         ),
         new GhostDefinition(
             "Paring Pugot",
@@ -228,7 +278,8 @@ public static class GhostCatalog
             },
             "Tip: Pair a Ghost Writing Book with a D.O.T.S. Projector aimed down central halls.",
             "ghost-art-paring-pugot",
-            EvidenceType.EMF, EvidenceType.GhostWriting, EvidenceType.DOTS
+            EvidenceType.EMF, EvidenceType.GhostWriting, EvidenceType.DOTS,
+            new GhostHuntProfile(50f, 65f, GhostHuntConditionType.SummoningCirclePlaced)
         ),
         new GhostDefinition(
             "Amalanhig",
@@ -243,7 +294,8 @@ public static class GhostCatalog
             },
             "Tip: Watch for relentless pursuits—break line of sight early and take cover.",
             "ghost-art-amalanhig",
-            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.SpiritBox
+            EvidenceType.EMF, EvidenceType.Freezing, EvidenceType.SpiritBox,
+            new GhostHuntProfile(60f)
         ),
         new GhostDefinition(
             "Santelmo",
@@ -258,7 +310,8 @@ public static class GhostCatalog
             },
             "Tip: Do not dismiss flickering lights as faulty wiring—verify with EMF and Camera.",
             "ghost-art-santelmo",
-            EvidenceType.EMF, EvidenceType.DOTS, EvidenceType.GhostOrbs
+            EvidenceType.EMF, EvidenceType.DOTS, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(60f, 40f, GhostHuntConditionType.GhostRoomLightsOn)
         ),
         new GhostDefinition(
             "Bagat",
@@ -273,7 +326,8 @@ public static class GhostCatalog
             },
             "Tip: Keep a Crucifix near main thresholds before probing the Spirit Box.",
             "ghost-art-bagat",
-            EvidenceType.EMF, EvidenceType.DOTS, EvidenceType.SpiritBox
+            EvidenceType.EMF, EvidenceType.DOTS, EvidenceType.SpiritBox,
+            new GhostHuntProfile(50f, 65f, GhostHuntConditionType.PlayerSprintingNearby)
         ),
         new GhostDefinition(
             "Mantiw",
@@ -288,7 +342,8 @@ public static class GhostCatalog
             },
             "Tip: Angle Video Cameras wide across the ghost room to spot both D.O.T.S. and Orbs.",
             "ghost-art-mantiw",
-            EvidenceType.GhostWriting, EvidenceType.DOTS, EvidenceType.GhostOrbs
+            EvidenceType.GhostWriting, EvidenceType.DOTS, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(40f)
         ),
         new GhostDefinition(
             "Batibat",
@@ -302,8 +357,9 @@ public static class GhostCatalog
                 "Speaks suffocating whispers into the Spirit Box when lights are out."
             },
             "Tip: Keep room lights active whenever possible to preserve investigator sanity.",
-            null,
-            EvidenceType.Freezing, EvidenceType.GhostWriting, EvidenceType.SpiritBox
+            "ghost-art-batibat",
+            EvidenceType.Freezing, EvidenceType.GhostWriting, EvidenceType.SpiritBox,
+            new GhostHuntProfile(60f, 40f, GhostHuntConditionType.GhostRoomLightsOn)
         ),
         new GhostDefinition(
             "Tiyanak",
@@ -318,7 +374,8 @@ public static class GhostCatalog
             },
             "Tip: Stay alert for deceptively small silhouettes and sudden Spirit Box cries.",
             "ghost-art-tiyanak",
-            EvidenceType.Freezing, EvidenceType.DOTS, EvidenceType.SpiritBox
+            EvidenceType.Freezing, EvidenceType.DOTS, EvidenceType.SpiritBox,
+            new GhostHuntProfile(65f)
         ),
         new GhostDefinition(
             "Tamawo",
@@ -333,7 +390,8 @@ public static class GhostCatalog
             },
             "Tip: Confirm all optical signs from the truck or hallway before risking an exorcism.",
             "ghost-art-tamawo",
-            EvidenceType.DOTS, EvidenceType.SpiritBox, EvidenceType.GhostOrbs
+            EvidenceType.DOTS, EvidenceType.SpiritBox, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(40f)
         ),
         new GhostDefinition(
             "Mangkukutod",
@@ -348,7 +406,8 @@ public static class GhostCatalog
             },
             "Tip: Place your Ghost Writing Book early; this entity prioritizes occult inscriptions.",
             "ghost-art-mangkukutod",
-            EvidenceType.EMF, EvidenceType.GhostWriting, EvidenceType.GhostOrbs
+            EvidenceType.EMF, EvidenceType.GhostWriting, EvidenceType.GhostOrbs,
+            new GhostHuntProfile(55f, 70f, GhostHuntConditionType.FailedRitual)
         ),
         new GhostDefinition(
             "Tagamaling",
@@ -362,8 +421,9 @@ public static class GhostCatalog
                 "Echoes primal roars and guttural commands over the Spirit Box."
             },
             "Tip: Once Spirit Box aggression escalates, keep a clear escape route to cover.",
-            null,
-            EvidenceType.GhostWriting, EvidenceType.DOTS, EvidenceType.SpiritBox
+            "ghost-art-tagamaling",
+            EvidenceType.GhostWriting, EvidenceType.DOTS, EvidenceType.SpiritBox,
+            new GhostHuntProfile(35f, 65f, GhostHuntConditionType.LunarPhaseCycle)
         )
     };
 

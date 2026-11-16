@@ -363,6 +363,10 @@ public class SpiritBoxItem : EquipmentItem
         else
         {
             // Offline / local editor testing
+            if (PlayerController.LocalInstance != null)
+            {
+                HunterGhostBehavior.Instance?.OnPlayerSpiritBoxPing(PlayerController.LocalInstance);
+            }
             bool ghostResponded = CheckGhostResponse();
             ReceiveGhostResponseRpc(questionIndex, ghostResponded);
         }
@@ -373,6 +377,11 @@ public class SpiritBoxItem : EquipmentItem
     {
         if (!IsPlayerAliveAndPresent(rpcParams.Receive.SenderClientId)) return;
         if (!isPoweredOn.Value) return;
+
+        if (PlayerController.TryGetByClientId(rpcParams.Receive.SenderClientId, out var askingPlayer))
+        {
+            HunterGhostBehavior.Instance?.OnPlayerSpiritBoxPing(askingPlayer);
+        }
 
         bool ghostResponded = CheckGhostResponse();
 

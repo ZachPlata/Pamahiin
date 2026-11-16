@@ -201,7 +201,7 @@
 }
 
 .controls-list {
-    width: 580px;
+    width: 620px;
     max-width: 92%;
     background-color: var(--pm-bg-panel);
     padding: 26px 32px;
@@ -211,17 +211,57 @@
     border-left-color: var(--pm-border-brass-hi);
     border-right-color: var(--pm-border-crimson-lo);
     border-bottom-color: var(--pm-border-crimson-lo);
+    align-items: stretch;
 }
 
-.control-text {
-    font-size: 11px;
-    line-height: 18px;
+.controls-scroll {
+    max-height: 400px;
+    margin-bottom: 6px;
+    padding-right: 4px;
+}
+
+.control-row {
+    flex-direction: row;
+    align-items: center;
+    padding: 7px 6px;
+    border-bottom-width: 1px;
+    border-color: var(--pm-border-dim);
+}
+
+.control-key {
+    width: 215px;
+    flex-shrink: 0;
+    font-size: 9px;
+    color: var(--pm-accent-brass);
     -unity-font: url('project://database/Assets/Fonts/PressStart2P-Regular.ttf');
     -unity-font-definition: initial;
     -unity-font-style: normal;
-    color: var(--pm-text-primary);
-    margin-bottom: 14px;
+    -unity-text-align: middle-left;
+    padding-right: 10px;
     white-space: normal;
+}
+
+.control-desc {
+    flex-grow: 1;
+    font-size: 9px;
+    color: var(--pm-text-primary);
+    -unity-font: url('project://database/Assets/Fonts/PressStart2P-Regular.ttf');
+    -unity-font-definition: initial;
+    -unity-font-style: normal;
+    -unity-text-align: middle-left;
+    white-space: normal;
+}
+
+.control-tip {
+    font-size: 8px;
+    color: var(--pm-text-muted);
+    -unity-font: url('project://database/Assets/Fonts/PressStart2P-Regular.ttf');
+    -unity-font-definition: initial;
+    -unity-font-style: normal;
+    margin-top: 6px;
+    margin-bottom: 6px;
+    white-space: normal;
+    -unity-text-align: middle-left;
 }
 
 .settings-container {

@@ -19,6 +19,7 @@
                     <!-- Column 1: Hunt & Ghost AI -->
                     <ui:VisualElement class="column">
                         <ui:Label text="--- Hunt &amp; Ghost AI ---" class="column-header" />
+                        <ui:Label name="GraceTimerLabel" text="Setup: 00:00 | Hunt Grace: 0.0s" class="dev-console-status" />
                         <ui:Button name="ForceHuntBtn" text="Force Hunt" class="dev-console-button btn-danger" />
                         <ui:Button name="StopHuntBtn" text="Stop Hunt" class="dev-console-button" />
                         <ui:Button name="ToggleGhostOutlineBtn" text="Toggle Ghost Visibility" class="dev-console-button" />

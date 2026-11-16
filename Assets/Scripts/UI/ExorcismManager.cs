@@ -71,6 +71,16 @@ public class ExorcismManager : NetworkBehaviour
     [Header("Exorcism Failure Atmosphere")]
     [SerializeField] private float redLightTransitionDuration = 3.2f;
 
+    // Server-authoritative multiplayer ritual ownership lock
+    private NetworkVariable<ulong> activeRitualClientId = new NetworkVariable<ulong>(
+        ulong.MaxValue, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<bool> syncedExorcismActive = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<bool> syncedExorcismCompleted = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private NetworkVariable<bool> syncedRitualChanting = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     // Red volume & smooth transition state for failure state
     private Volume redAtmosphereVolume;
     private readonly Dictionary<Light2D, Color> originalLightColors = new Dictionary<Light2D, Color>();
@@ -80,12 +90,28 @@ public class ExorcismManager : NetworkBehaviour
     private Coroutine bannerHideCoroutine;
     private bool isExorcismActive = false;
     private bool isExorcismCompleted = false;
+    private bool isOwningLocalRitual = false;
+    private int closedFrame = -1;
     private bool uiButtonsBound = false;
 
+    private bool IsNetworkSpawned =>
+        NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && NetworkObject != null && IsSpawned;
+
+    public static bool IsUIOpen => Instance != null && Instance.IsUiPanelOpen;
+    public static bool WasOpenThisFrame => IsUIOpen || (Instance != null && Instance.closedFrame == Time.frameCount);
+
     public bool IsMinigameActive => isMinigameActive;
-    public bool IsExorcismActive => isExorcismActive || isMinigameActive;
-    public bool IsExorcismCompleted => isExorcismCompleted;
+    public bool IsExorcismActive => IsNetworkSpawned
+        ? (syncedExorcismActive.Value || isExorcismActive || isMinigameActive)
+        : (isExorcismActive || isMinigameActive);
+    public bool IsExorcismCompleted => IsNetworkSpawned
+        ? (syncedExorcismCompleted.Value || isExorcismCompleted)
+        : isExorcismCompleted;
     public bool IsRedEnvironmentActive { get; private set; }
+    public bool IsUiPanelOpen =>
+        isMinigameActive ||
+        (ghostSelectPopup != null && !ghostSelectPopup.ClassListContains("hidden")) ||
+        (exorcismOverlay != null && !exorcismOverlay.ClassListContains("hidden"));
 
     private void Awake()
     {
@@ -96,6 +122,15 @@ public class ExorcismManager : NetworkBehaviour
         }
         Instance = this;
         uiDocument = GetComponent<UIDocument>();
+    }
+
+    public override void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+        base.OnDestroy();
     }
 
     private void OnEnable()
@@ -199,20 +234,20 @@ public class ExorcismManager : NetworkBehaviour
 
     /// <summary>
     /// Triggered when the chalk diagram is placed or interacted with on the floor.
-    /// Opens the ghost selection popup to finalize the guess before the minigame starts.
+    /// Requests a server-authoritative ritual lock and opens the ghost selection popup only for the initiating player.
     /// </summary>
     public void InitiateRitual(Vector3 diagramPos)
     {
-        if (isExorcismCompleted || isExorcismActive || isMinigameActive)
+        if (IsExorcismCompleted || IsExorcismActive)
         {
             return;
         }
 
         chalkDiagramPos = diagramPos;
 
-        if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+        if (IsNetworkSpawned)
         {
-            InitiateRitualClientRpc(diagramPos);
+            RequestInitiateRitualServerRpc(diagramPos);
         }
         else
         {
@@ -220,8 +255,35 @@ public class ExorcismManager : NetworkBehaviour
         }
     }
 
-    [Rpc(SendTo.ClientsAndHost)]
-    private void InitiateRitualClientRpc(Vector3 diagramPos)
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void RequestInitiateRitualServerRpc(Vector3 diagramPos, RpcParams rpcParams = default)
+    {
+        if (syncedExorcismCompleted.Value || syncedExorcismActive.Value || activeRitualClientId.Value != ulong.MaxValue)
+        {
+            return;
+        }
+
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+        if (!PlayerController.TryGetByClientId(senderClientId, out var sender) || sender == null || !sender.IsAlive)
+        {
+            return;
+        }
+
+        if (Vector2.Distance(sender.transform.position, diagramPos) > sender.MaxReachRadius + 1.5f)
+        {
+            return;
+        }
+
+        activeRitualClientId.Value = senderClientId;
+        syncedExorcismActive.Value = true;
+        syncedRitualChanting.Value = false;
+        chalkDiagramPos = diagramPos;
+
+        OpenGhostSelectClientRpc(diagramPos, RpcTarget.Single(senderClientId, RpcTargetUse.Temp));
+    }
+
+    [Rpc(SendTo.SpecifiedInParams)]
+    private void OpenGhostSelectClientRpc(Vector3 diagramPos, RpcParams rpcParams = default)
     {
         InitiateRitualLocal(diagramPos);
     }
@@ -233,6 +295,7 @@ public class ExorcismManager : NetworkBehaviour
             return;
         }
 
+        isOwningLocalRitual = true;
         isExorcismActive = true;
         chalkDiagramPos = diagramPos;
         EnsureUIReferences();
@@ -245,9 +308,44 @@ public class ExorcismManager : NetworkBehaviour
         }
     }
 
+    private void CancelGhostSelectPopup()
+    {
+        closedFrame = Time.frameCount;
+        SetGhostButtonsInteractable(false);
+        if (ghostSelectPopup != null)
+        {
+            ghostSelectPopup.AddToClassList("hidden");
+        }
+        isExorcismActive = false;
+        isOwningLocalRitual = false;
+
+        if (IsNetworkSpawned)
+        {
+            CancelGhostSelectServerRpc();
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void CancelGhostSelectServerRpc(RpcParams rpcParams = default)
+    {
+        if (!syncedExorcismActive.Value || syncedRitualChanting.Value || syncedExorcismCompleted.Value)
+        {
+            return;
+        }
+
+        if (rpcParams.Receive.SenderClientId != activeRitualClientId.Value)
+        {
+            return;
+        }
+
+        activeRitualClientId.Value = ulong.MaxValue;
+        syncedExorcismActive.Value = false;
+        isExorcismActive = false;
+    }
+
     private void OnGhostSelected(string ghostName)
     {
-        if (!isExorcismActive || isMinigameActive)
+        if (!isExorcismActive || isMinigameActive || !isOwningLocalRitual)
         {
             return;
         }
@@ -259,29 +357,52 @@ public class ExorcismManager : NetworkBehaviour
         JournalController.LastLockedInGuess = ghostName;
         Debug.Log($"[ExorcismManager] Ghost type selected: {ghostName}");
 
+        closedFrame = Time.frameCount;
         if (ghostSelectPopup != null)
         {
             ghostSelectPopup.AddToClassList("hidden");
         }
 
-        // Start the circular skill check minigame
-        if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+        if (IsNetworkSpawned)
         {
-            StartCircularSkillCheckClientRpc(chalkDiagramPos);
+            SubmitGhostSelectionServerRpc(ghostName, chalkDiagramPos);
         }
         else
         {
-            StartCircularSkillCheckLocal(chalkDiagramPos);
+            StartCircularSkillCheckLocal(chalkDiagramPos, true);
         }
     }
 
-    [Rpc(SendTo.ClientsAndHost)]
-    private void StartCircularSkillCheckClientRpc(Vector3 diagramPos)
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void SubmitGhostSelectionServerRpc(string ghostName, Vector3 diagramPos, RpcParams rpcParams = default)
     {
-        StartCircularSkillCheckLocal(diagramPos);
+        if (syncedExorcismCompleted.Value || !syncedExorcismActive.Value || syncedRitualChanting.Value)
+        {
+            return;
+        }
+
+        if (rpcParams.Receive.SenderClientId != activeRitualClientId.Value)
+        {
+            return;
+        }
+
+        syncedRitualChanting.Value = true;
+        selectedGhostGuess = ghostName;
+        chalkDiagramPos = diagramPos;
+
+        StartRitualSequenceClientRpc(diagramPos, activeRitualClientId.Value, ghostName);
     }
 
-    private void StartCircularSkillCheckLocal(Vector3 diagramPos)
+    [Rpc(SendTo.ClientsAndHost)]
+    private void StartRitualSequenceClientRpc(Vector3 diagramPos, ulong ritualOwnerClientId, string guessedGhostName)
+    {
+        selectedGhostGuess = guessedGhostName;
+        bool isLocalOwner = NetworkManager.Singleton != null && NetworkManager.Singleton.LocalClientId == ritualOwnerClientId;
+        isOwningLocalRitual = isLocalOwner;
+        StartCircularSkillCheckLocal(diagramPos, isLocalOwner);
+    }
+
+    private void StartCircularSkillCheckLocal(Vector3 diagramPos, bool showMinigameForLocalPlayer)
     {
         chalkDiagramPos = diagramPos;
         EnsureUIReferences();
@@ -290,10 +411,10 @@ public class ExorcismManager : NetworkBehaviour
         {
             StopCoroutine(summonSequenceCoroutine);
         }
-        summonSequenceCoroutine = StartCoroutine(SummonAndBeginMinigameRoutine(diagramPos));
+        summonSequenceCoroutine = StartCoroutine(SummonAndBeginMinigameRoutine(diagramPos, showMinigameForLocalPlayer));
     }
 
-    private IEnumerator SummonAndBeginMinigameRoutine(Vector3 diagramPos)
+    private IEnumerator SummonAndBeginMinigameRoutine(Vector3 diagramPos, bool showMinigameForLocalPlayer)
     {
         isExorcismActive = true;
         isMinigameActive = false;
@@ -323,14 +444,17 @@ public class ExorcismManager : NetworkBehaviour
         mistakesCount = 0;
         successfulChants = 0;
         currentRotationSpeed = baseRotationSpeed;
-        isMinigameActive = true;
         summonSequenceCoroutine = null;
 
-        PickNewKeyAndTarget();
-        UpdateMinigameUI();
+        if (showMinigameForLocalPlayer)
+        {
+            isMinigameActive = true;
+            PickNewKeyAndTarget();
+            UpdateMinigameUI();
 
-        if (lblFeedback != null) lblFeedback.text = "Press key when needle overlaps the target bar (Max 2 loops)!";
-        if (exorcismOverlay != null) exorcismOverlay.RemoveFromClassList("hidden");
+            if (lblFeedback != null) lblFeedback.text = "Press key when needle overlaps the target bar (Max 2 loops)!";
+            if (exorcismOverlay != null) exorcismOverlay.RemoveFromClassList("hidden");
+        }
     }
 
     private void SetupGhostInRitualCircle(Vector3 centerPos)
@@ -389,6 +513,38 @@ public class ExorcismManager : NetworkBehaviour
 
     private void Update()
     {
+        // Server disconnect / death safeguard: release ritual lock if the owning player leaves or dies mid-ritual
+        if (IsNetworkSpawned && IsServer && syncedExorcismActive.Value && activeRitualClientId.Value != ulong.MaxValue)
+        {
+            bool ownerAliveAndConnected =
+                PlayerController.TryGetByClientId(activeRitualClientId.Value, out var ownerPlayer) &&
+                ownerPlayer != null &&
+                ownerPlayer.IsAlive;
+
+            if (!ownerAliveAndConnected)
+            {
+                activeRitualClientId.Value = ulong.MaxValue;
+                syncedExorcismActive.Value = false;
+                syncedRitualChanting.Value = false;
+                isExorcismActive = false;
+                AbortRitualLockClientRpc(chalkDiagramPos);
+            }
+        }
+
+        // Allow cancelling during Ghost Selection popup via Esc or walking out of reach
+        if (ghostSelectPopup != null && !ghostSelectPopup.ClassListContains("hidden") && !isMinigameActive)
+        {
+            bool escPressed = Input.GetKeyDown(KeyCode.Escape);
+            bool outOfReachOrDead = PlayerController.LocalInstance == null ||
+                                    !PlayerController.LocalInstance.IsAlive ||
+                                    Vector2.Distance(PlayerController.LocalInstance.transform.position, chalkDiagramPos) > PlayerController.LocalInstance.MaxReachRadius + 1.2f;
+            if (escPressed || outOfReachOrDead)
+            {
+                CancelGhostSelectPopup();
+                return;
+            }
+        }
+
         if (!isMinigameActive) return;
 
         // 1. Rotate the needle
@@ -481,7 +637,16 @@ public class ExorcismManager : NetworkBehaviour
     private void EvaluateOutcome()
     {
         isMinigameActive = false;
+        closedFrame = Time.frameCount;
         if (exorcismOverlay != null) exorcismOverlay.AddToClassList("hidden");
+
+        bool isMinigameSuccess = (mistakesCount < maxMistakes && successfulChants >= requiredChants);
+
+        if (IsNetworkSpawned)
+        {
+            SubmitExorcismOutcomeServerRpc(isMinigameSuccess, selectedGhostGuess);
+            return;
+        }
 
         string actualGhostName = "";
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
@@ -493,43 +658,121 @@ public class ExorcismManager : NetworkBehaviour
         bool isGhostCorrect = !string.IsNullOrEmpty(selectedGhostGuess) &&
                               selectedGhostGuess.Equals(actualGhostName, System.StringComparison.OrdinalIgnoreCase);
 
-        bool isMinigameSuccess = (mistakesCount < maxMistakes && successfulChants >= requiredChants);
-
         if (isGhostCorrect && isMinigameSuccess)
         {
             isExorcismActive = false;
             isExorcismCompleted = true;
-            if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
-            {
-                TriggerSuccessClientRpc();
-            }
-            else
-            {
-                TriggerSuccessLocal();
-            }
+            isOwningLocalRitual = false;
+            TriggerSuccessLocal(selectedGhostGuess);
         }
         else
         {
             isExorcismActive = false;
-            if (IsServer && NetworkObject != null && NetworkObject.IsSpawned)
+            isOwningLocalRitual = false;
+            ghostHandler?.NotifyRitualFailed();
+            TriggerFailureLocal();
+        }
+    }
+
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    private void SubmitExorcismOutcomeServerRpc(bool minigamePassed, string guessedGhostName, RpcParams rpcParams = default)
+    {
+        if (syncedExorcismCompleted.Value || !syncedExorcismActive.Value)
+        {
+            return;
+        }
+
+        if (rpcParams.Receive.SenderClientId != activeRitualClientId.Value)
+        {
+            return;
+        }
+
+        activeRitualClientId.Value = ulong.MaxValue;
+        syncedExorcismActive.Value = false;
+        syncedRitualChanting.Value = false;
+        isExorcismActive = false;
+        selectedGhostGuess = guessedGhostName;
+
+        string actualGhostName = "";
+        var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
+        if (ghostHandler != null)
+        {
+            actualGhostName = ghostHandler.ghostName;
+        }
+
+        bool isGhostCorrect = !string.IsNullOrEmpty(guessedGhostName) &&
+                              !string.IsNullOrEmpty(actualGhostName) &&
+                              guessedGhostName.Equals(actualGhostName, System.StringComparison.OrdinalIgnoreCase);
+
+        if (isGhostCorrect && minigamePassed)
+        {
+            syncedExorcismCompleted.Value = true;
+            isExorcismCompleted = true;
+            TriggerSuccessClientRpc(guessedGhostName);
+        }
+        else
+        {
+            ghostHandler?.NotifyRitualFailed();
+            TriggerFailureClientRpc();
+        }
+    }
+
+    [Rpc(SendTo.ClientsAndHost)]
+    private void AbortRitualLockClientRpc(Vector3 diagramPos)
+    {
+        if (summonSequenceCoroutine != null)
+        {
+            StopCoroutine(summonSequenceCoroutine);
+            summonSequenceCoroutine = null;
+        }
+
+        closedFrame = Time.frameCount;
+        isMinigameActive = false;
+        isExorcismActive = false;
+        isOwningLocalRitual = false;
+
+        SetGhostButtonsInteractable(false);
+        if (ghostSelectPopup != null) ghostSelectPopup.AddToClassList("hidden");
+        if (exorcismOverlay != null) exorcismOverlay.AddToClassList("hidden");
+
+        SummoningCircle circle = SummoningCircle.FindClosest(diagramPos, 0.75f);
+        if (circle != null)
+        {
+            circle.ResetToUnlit();
+        }
+
+        var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
+        if (ghostHandler != null && ghostHandler.hunterGhost != null)
+        {
+            ghostHandler.hunterGhost.enabled = true;
+            if (ghostHandler.CurrentState == GhostHandlerState.Dormant)
             {
-                TriggerFailureClientRpc();
-            }
-            else
-            {
-                TriggerFailureLocal();
+                var sr = ghostHandler.hunterGhost.GetComponentInChildren<SpriteRenderer>();
+                if (sr != null)
+                {
+                    sr.enabled = false;
+                    sr.color = Color.white;
+                    sr.sortingOrder = 10;
+                }
             }
         }
     }
 
     [Rpc(SendTo.ClientsAndHost)]
-    private void TriggerSuccessClientRpc()
+    private void TriggerSuccessClientRpc(string guessedGhostName)
     {
-        TriggerSuccessLocal();
+        isExorcismActive = false;
+        isExorcismCompleted = true;
+        isOwningLocalRitual = false;
+        TriggerSuccessLocal(guessedGhostName);
     }
 
-    private void TriggerSuccessLocal()
+    private void TriggerSuccessLocal(string guessedGhostName)
     {
+        if (!string.IsNullOrEmpty(guessedGhostName))
+        {
+            selectedGhostGuess = guessedGhostName;
+        }
         Debug.Log("[ExorcismManager] SUCCESS! Correct ghost identified and minigame passed.");
 
         // 1. Ghost shakes, plays dying shriek, and slowly disappears (GhostHandler is kept intact)
@@ -582,6 +825,8 @@ public class ExorcismManager : NetworkBehaviour
     [Rpc(SendTo.ClientsAndHost)]
     private void TriggerFailureClientRpc()
     {
+        isExorcismActive = false;
+        isOwningLocalRitual = false;
         TriggerFailureLocal();
     }
 
@@ -599,12 +844,16 @@ public class ExorcismManager : NetworkBehaviour
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
         if (ghostHandler != null)
         {
+            if (ghostHandler.hunterGhost != null)
+            {
+                ghostHandler.hunterGhost.enabled = true;
+            }
+
             bool networkActive = NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
             if (!networkActive)
             {
                 if (ghostHandler.hunterGhost != null)
                 {
-                    ghostHandler.hunterGhost.enabled = true;
                     ghostHandler.hunterGhost.OnHuntStarted();
                     ghostHandler.hunterGhost.EnterAngeredState();
                 }
@@ -613,10 +862,6 @@ public class ExorcismManager : NetworkBehaviour
             else if (IsServer || !IsSpawned)
             {
                 ghostHandler.StartHunt(true);
-            }
-            else
-            {
-                RequestFailedExorcismHuntServerRpc();
             }
         }
         else
@@ -630,16 +875,6 @@ public class ExorcismManager : NetworkBehaviour
             "The entity has broken free in an Angered State!",
             "USE A CRUCIFIX TO REPEL IT! Hide in a cabinet or escape the house!"
         );
-    }
-
-    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    private void RequestFailedExorcismHuntServerRpc()
-    {
-        var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
-        if (ghostHandler != null)
-        {
-            ghostHandler.StartHunt(true);
-        }
     }
 
     public void SetRedEnvironment(bool active)

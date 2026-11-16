@@ -212,7 +212,7 @@ MonoBehaviour:
   crouchSpeed: 0.3
   maxStamina: 1.25
   staminaRegenRate: 0.2
-  maxReachRadius: 0.1
+  maxReachRadius: 0.15
   interactLayer:
     serializedVersion: 2
     m_Bits: 256

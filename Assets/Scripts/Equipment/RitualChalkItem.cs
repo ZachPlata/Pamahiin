@@ -384,7 +384,9 @@ public class RitualChalkItem : EquipmentItem
         if (IsPlaced)
         {
             var exorcismManager = GetExorcismManager();
-            if (exorcismManager != null && (exorcismManager.IsExorcismActive || exorcismManager.IsExorcismCompleted))
+            var nearbyCircle = SummoningCircle.FindClosest(transform.position, 0.75f);
+            if ((exorcismManager != null && (exorcismManager.IsExorcismActive || exorcismManager.IsExorcismCompleted)) ||
+                (nearbyCircle != null && nearbyCircle.IsIgniting))
             {
                 return;
             }

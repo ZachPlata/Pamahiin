@@ -415,7 +415,10 @@ public class GameMatchManager : NetworkBehaviour
         var ghost = FindAnyObjectByType<GhostHandler>();
         if (ghost != null && ProgressionAndLoadoutManager.Instance != null)
         {
-            switch (ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
+            ContractDifficulty diff = ProgressionAndLoadoutManager.Instance.SelectedDifficulty;
+            ghost.ResetSetupGracePeriod(ProgressionAndLoadoutManager.GetDifficultySetupTimeSeconds(diff));
+
+            switch (diff)
             {
                 case ContractDifficulty.Amateur:
                     ghost.huntDurationMin = 18f;

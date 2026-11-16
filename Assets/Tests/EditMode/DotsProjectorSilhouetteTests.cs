@@ -396,9 +396,7 @@ public class DotsProjectorSilhouetteTests
 
     private static Type ResolveRuntimeType(string typeName)
     {
-        Assembly asm = AppDomain.CurrentDomain.GetAssemblies()
-            .FirstOrDefault(a => string.Equals(a.GetName().Name, "Assembly-CSharp", StringComparison.Ordinal))
-            ?? Assembly.Load("Assembly-CSharp");
+        Assembly asm = Assembly.Load("Assembly-CSharp");
 
         Type resolved = asm.GetType(typeName) ?? asm.GetTypes().FirstOrDefault(t => string.Equals(t.Name, typeName, StringComparison.Ordinal));
         Assert.IsNotNull(resolved, $"Could not resolve runtime type '{typeName}'.");

@@ -57,8 +57,15 @@ public class PlayerController : NetworkBehaviour
     private NetworkVariable<bool> netIsWalking = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
 
+    private NetworkVariable<bool> netIsSprinting = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
     private NetworkVariable<bool> netIsHolding = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Owner);
+
+    private static int nextJoinOrderCounter = 0;
+    private bool localIsWalking = false;
+    private bool localIsSprinting = false;
 
     [Header("Corpse Prefab (Auto-Resolved From NetworkPrefabs If Unset)")]
     [SerializeField] private GameObject playerCorpsePrefab;
@@ -80,6 +87,9 @@ public class PlayerController : NetworkBehaviour
     public Vector2 DeathWorldPosition => deathWorldPosition.Value;
     public GameObject CorpsePrefab => playerCorpsePrefab;
     public bool IsCrouching => isCrouching.Value;
+    public int JoinOrderIndex { get; private set; } = -1;
+    public bool IsMoving => IsAlive && (IsSpawned ? netIsWalking.Value : localIsWalking);
+    public bool IsSprinting => IsAlive && (IsSpawned ? netIsSprinting.Value : localIsSprinting);
     public float Sanity => sanity.Value;
     public float MaxReachRadius => maxReachRadius;
     public bool IsInHideZone { get; private set; }
@@ -151,6 +161,7 @@ public class PlayerController : NetworkBehaviour
     private static readonly System.Collections.Generic.List<Collider2D> s_StackOverlapBuffer = new System.Collections.Generic.List<Collider2D>(16);
     private static readonly System.Collections.Generic.HashSet<EquipmentItem> s_CountedEquipment = new System.Collections.Generic.HashSet<EquipmentItem>();
     private static readonly ContactFilter2D s_NoFilter = ContactFilter2D.noFilter;
+    private int wallLayerMask;
 
     [Header("Ambient Light Settings")]
     [SerializeField] private float playerAmbientRadius = 0.58f;
@@ -197,11 +208,19 @@ public class PlayerController : NetworkBehaviour
         animator = GetComponent<Animator>();
         originalScale = transform.localScale;
         currentStamina = maxStamina;
+        wallLayerMask = LayerMask.GetMask("Walls");
     }
 
     public override void OnNetworkSpawn()
     {
-        AllPlayers.Add(this);
+        if (!AllPlayers.Contains(this))
+        {
+            AllPlayers.Add(this);
+        }
+        if (JoinOrderIndex < 0)
+        {
+            JoinOrderIndex = nextJoinOrderCounter++;
+        }
 
         if (TryGetComponent<Light2D>(out var rootLight))
         {
@@ -261,12 +280,8 @@ public class PlayerController : NetworkBehaviour
         float multiplier = 1f;
         if (ProgressionAndLoadoutManager.Instance != null)
         {
-            switch (ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
-            {
-                case ContractDifficulty.Intermediate: multiplier = 1.25f; break;
-                case ContractDifficulty.Professional: multiplier = 1.5f; break;
-                case ContractDifficulty.Nightmare: multiplier = 2.0f; break;
-            }
+            multiplier = ProgressionAndLoadoutManager.GetDifficultySanityDrainMultiplier(
+                ProgressionAndLoadoutManager.Instance.SelectedDifficulty);
         }
         return darkSanityDrainRate * multiplier;
     }
@@ -392,27 +407,27 @@ public class PlayerController : NetworkBehaviour
     }
 
     /// <summary>
-    /// Checks whether player movement and rotation should be blocked by open full-screen GUIs:
-    /// Dev Console, Pause Menu, Truck Dashboard, Spirit Box Dialogue, or an active Journal text input.
-    /// (Note: Journal keeps movement functional while reading, unless typing into its Party Code input).
+    /// Checks whether player movement and rotation should be blocked by open modal GUIs:
+    /// Dev Console, Pause Menu, Truck Dashboard, Spirit Box Dialogue, Journal,
+    /// Loading Screen, End Game Reveal, Exorcism UI panels, or the player's death sequence.
     /// </summary>
     public static bool IsMovementBlocked =>
         DeveloperConsoleManager.IsConsoleOpen ||
         PauseMenuController.IsOpen ||
         TruckDashboardController.IsOpen ||
         SpiritBoxItem.IsLocalDialogueActive ||
-        JournalController.IsTextInputFocused ||
+        (SpiritBoxDialogueUI.Instance != null && SpiritBoxDialogueUI.Instance.IsOpen) ||
+        JournalController.IsOpen ||
         LoadingScreenManager.IsLoadingVisible ||
         EndGameRevealController.IsOpen ||
+        ExorcismManager.IsUIOpen ||
         (LocalInstance != null && LocalInstance.IsDyingSequence);
 
     /// <summary>
     /// Checks whether world interactions (clicks, item usage, dragging, E interact, drop, place, slot switching)
-    /// should be blocked by active GUIs (Journal, Pause Menu, Truck Dashboard, Dev Console, Spirit Box).
+    /// should be blocked by active modal GUIs.
     /// </summary>
-    public static bool IsInteractionBlocked =>
-        IsMovementBlocked ||
-        JournalController.IsOpen;
+    public static bool IsInteractionBlocked => IsMovementBlocked;
 
     private void Update()
     {
@@ -445,10 +460,15 @@ public class PlayerController : NetworkBehaviour
             return;
         }
 
-        // Block movement and world interactions while in locking GUIs (Pause Menu, Truck Dashboard, Dev Console, Spirit Box)
+        // Block movement and world interactions while in locking GUIs (Journal, Pause Menu, Truck Dashboard, Dev Console, Spirit Box, Exorcism UI)
         if (IsMovementBlocked)
         {
             moveInput = Vector2.zero;
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
             EndCurrentDrag();
             currentlyHoveredInteractable = null;
             ItemHoverIndicator.Instance?.Hide();
@@ -456,7 +476,7 @@ public class PlayerController : NetworkBehaviour
             return;
         }
 
-        // 1. Gather WASD input (functional during normal gameplay, GhostSpectator, and while Journal is open)
+        // 1. Gather WASD input (functional during normal gameplay and GhostSpectator)
         float moveX = Input.GetAxisRaw("Horizontal");
         float moveY = Input.GetAxisRaw("Vertical");
         moveInput = new Vector2(moveX, moveY).normalized;
@@ -468,15 +488,13 @@ public class PlayerController : NetworkBehaviour
             isCrouching.Value = crouchHeld;
         }
 
-        // If interaction is blocked (e.g. inside Journal), disable world interactions and clicks while keeping movement active
+        // If interaction is blocked, disable world interactions and clicks
         if (IsInteractionBlocked)
         {
             EndCurrentDrag();
             currentlyHoveredInteractable = null;
             ItemHoverIndicator.Instance?.Hide();
-
-            // Maintain walking animation state for WASD movement in Journal
-            SetLocalAnimationState(IsAlive && moveInput.sqrMagnitude > 0.01f, IsAlive && inventory != null && inventory.CurrentItem != null);
+            SetLocalAnimationState(false, IsAlive && inventory != null && inventory.CurrentItem != null);
             return;
         }
 
@@ -492,8 +510,10 @@ public class PlayerController : NetworkBehaviour
             localCamera = Camera.main;
         }
 
+        bool pointerOverInteractiveHud = PlayerHUDManager.WasHotbarClickedThisFrame || PlayerHUDManager.IsPointerOverInteractiveHUD();
+
         // Check for hovered interactable and update visual hover indicator every frame
-        currentlyHoveredInteractable = CalculateHoveredInteractable();
+        currentlyHoveredInteractable = pointerOverInteractiveHud ? null : CalculateHoveredInteractable();
         UpdateItemHoverIndicator();
 
         // 4. Targeted Interact Input (E)
@@ -503,7 +523,7 @@ public class PlayerController : NetworkBehaviour
         }
 
         // 5. Contextual Left Click (Drag vs Use Primary vs Interact)
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) && !pointerOverInteractiveHud)
         {
             var hovered = GetHoveredInteractable();
             if (hovered != null)
@@ -540,12 +560,28 @@ public class PlayerController : NetworkBehaviour
             }
             else
             {
+                Vector2 origin = transform.position;
                 Vector2 dragTarget = mousePosition;
-                Vector2 toTarget = dragTarget - (Vector2)transform.position;
+                Vector2 toTarget = dragTarget - origin;
 
                 if (toTarget.magnitude > maxReachRadius)
                 {
-                    dragTarget = (Vector2)transform.position + toTarget.normalized * maxReachRadius;
+                    dragTarget = origin + toTarget.normalized * maxReachRadius;
+                }
+
+                if (!IsGhostSpectator && wallLayerMask != 0)
+                {
+                    RaycastHit2D wallHit = Physics2D.Linecast(origin, dragTarget, wallLayerMask);
+                    if (wallHit.collider != null)
+                    {
+                        Vector2 dir = dragTarget - origin;
+                        float len = dir.magnitude;
+                        if (len > 1e-5f)
+                        {
+                            float clampedDist = Mathf.Max(0f, wallHit.distance - 0.02f);
+                            dragTarget = origin + (dir / len) * clampedDist;
+                        }
+                    }
                 }
 
                 currentDraggedInteractable.OnDragUpdate(dragTarget);
@@ -553,9 +589,9 @@ public class PlayerController : NetworkBehaviour
         }
 
         // 6. Place Item (Right Click) — Living players only
-        if (IsAlive && Input.GetMouseButtonDown(1))
+        if (IsAlive && Input.GetMouseButtonDown(1) && !pointerOverInteractiveHud)
         {
-            if (Vector2.Distance(transform.position, mousePosition) <= maxReachRadius)
+            if (Vector2.Distance(transform.position, mousePosition) <= maxReachRadius && !IsBlockedByWall(mousePosition))
             {
                 if (inventory != null) inventory.PlaceCurrentItem(mousePosition, transform.rotation);
             }
@@ -583,6 +619,16 @@ public class PlayerController : NetworkBehaviour
 
     private void SetLocalAnimationState(bool walking, bool holding)
     {
+        localIsWalking = walking;
+        if (!walking)
+        {
+            localIsSprinting = false;
+            if (IsSpawned && IsOwner && netIsSprinting.Value)
+            {
+                netIsSprinting.Value = false;
+            }
+        }
+
         if (animator != null)
         {
             animator.SetBool("isWalking", walking);
@@ -632,10 +678,20 @@ public class PlayerController : NetworkBehaviour
     private void FixedUpdate()
     {
         if (!IsOwner || IsDyingSequence) return;
-        if (IsMovementBlocked) return;
+        if (IsMovementBlocked)
+        {
+            moveInput = Vector2.zero;
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector2.zero;
+                rb.angularVelocity = 0f;
+            }
+            return;
+        }
 
         // 1. Determine current speed
         float currentSpeed = walkSpeed;
+        bool sprintingNow = false;
         if (IsGhostSpectator)
         {
             // Dead spectators float smoothly without exhausting stamina
@@ -649,28 +705,20 @@ public class PlayerController : NetworkBehaviour
         {
             currentSpeed = sprintSpeed;
             currentStamina -= Time.fixedDeltaTime;
+            sprintingNow = moveInput.sqrMagnitude > 0.01f;
         }
         else
         {
             currentStamina = Mathf.Min(maxStamina, currentStamina + staminaRegenRate * Time.fixedDeltaTime);
         }
 
-        rb.MovePosition(rb.position + moveInput * currentSpeed * Time.fixedDeltaTime);
-
-        // While Journal is open, rotate along movement direction so mouse UI interaction doesn't rotate character
-        if (JournalController.IsOpen)
+        localIsSprinting = sprintingNow;
+        if (IsSpawned && IsOwner && netIsSprinting.Value != sprintingNow)
         {
-            if (moveInput.sqrMagnitude > 0.01f)
-            {
-                float moveAngle = Mathf.Atan2(moveInput.y, moveInput.x) * Mathf.Rad2Deg - 90f;
-                rb.MoveRotation(moveAngle);
-            }
-            else
-            {
-                rb.angularVelocity = 0f;
-            }
-            return;
+            netIsSprinting.Value = sprintingNow;
         }
+
+        rb.MovePosition(rb.position + moveInput * currentSpeed * Time.fixedDeltaTime);
 
         // Update mouse position synchronously with physics step
         if (localCamera != null)
@@ -935,6 +983,18 @@ public class PlayerController : NetworkBehaviour
         }
     }
 
+    private bool IsBlockedByWall(Vector2 targetPoint)
+    {
+        if (IsGhostSpectator || wallLayerMask == 0) return false;
+
+        Vector2 origin = transform.position;
+        float dist = Vector2.Distance(origin, targetPoint);
+        if (dist <= 1e-5f) return false;
+
+        RaycastHit2D hit = Physics2D.Linecast(origin, targetPoint, wallLayerMask);
+        return hit.collider != null && hit.distance < dist - 0.01f;
+    }
+
     private IInteractable GetHoveredInteractable()
     {
         return currentlyHoveredInteractable;
@@ -996,6 +1056,11 @@ public class PlayerController : NetworkBehaviour
             if (interactable != null)
             {
                 if (interactable is NetworkDoor door && !door.AllowPlayerInteract)
+                {
+                    continue;
+                }
+
+                if (IsBlockedByWall(hit.ClosestPoint(transform.position)))
                 {
                     continue;
                 }

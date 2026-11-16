@@ -685,9 +685,11 @@
 .ghost-art-santelmo { background-image: url('project://database/Assets/UI/Journal/santelmo_art.jpg'); }
 .ghost-art-bagat { background-image: url('project://database/Assets/UI/Journal/bagat_art.jpg'); }
 .ghost-art-mantiw { background-image: url('project://database/Assets/UI/Journal/mantiw_art.jpg'); }
+.ghost-art-batibat { background-image: url('project://database/Assets/UI/Journal/batibat_art.jpg'); }
 .ghost-art-tiyanak { background-image: url('project://database/Assets/UI/Journal/tiyanak_art.jpg'); }
 .ghost-art-tamawo { background-image: url('project://database/Assets/UI/Journal/tamawo_art.jpg'); }
 .ghost-art-mangkukutod { background-image: url('project://database/Assets/UI/Journal/mangkukutod_art.jpg'); }
+.ghost-art-tagamaling { background-image: url('project://database/Assets/UI/Journal/tagamaling_art.jpg'); }
 
 .ghost-caption-text {
     font-size: 9px;

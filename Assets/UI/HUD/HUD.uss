@@ -53,7 +53,7 @@
 }
 
 .inventory-slot {
-    width: 98px;
+    width: 110px;
     height: 84px;
     margin: 0 8px;
     padding: 4px;
@@ -70,6 +70,18 @@
     transition-duration: 0.08s;
 }
 
+.inventory-slot:hover {
+    background-color: rgba(42, 24, 28, 0.95);
+    border-top-color: var(--pm-border-brass);
+    border-left-color: var(--pm-border-brass);
+    border-right-color: var(--pm-border-brass-lo);
+    border-bottom-color: var(--pm-border-brass-lo);
+}
+
+.inventory-slot:active {
+    translate: 0px 2px;
+}
+
 .inventory-slot-active {
     border-top-color: var(--pm-border-brass-hi);
     border-left-color: var(--pm-border-brass-hi);
@@ -79,10 +91,24 @@
     border-width: 3px;
 }
 
+.inventory-slot-active:hover {
+    border-top-color: var(--pm-border-brass-hi);
+    border-left-color: var(--pm-border-brass-hi);
+    border-right-color: var(--pm-border-crimson-hi);
+    border-bottom-color: var(--pm-border-crimson-hi);
+    background-color: rgba(62, 20, 26, 0.96);
+}
+
+.inventory-slot:hover .inventory-slot-text {
+    color: var(--pm-text-primary);
+}
+
 .inventory-slot-text {
     color: var(--pm-text-muted);
-    font-size: 8px;
-    line-height: 12px;
+    font-size: 7px;
+    line-height: 10px;
+    max-width: 100%;
+    overflow: hidden;
     -unity-font-style: normal;
     -unity-text-align: middle-center;
     white-space: normal;
@@ -279,13 +305,16 @@
     position: absolute;
     top: 18px;
     right: 18px;
+    max-width: 92%;
     align-items: flex-end;
     justify-content: flex-start;
 }
 
 .tutorial-toast {
     width: 500px;
-    max-width: 92%;
+    max-width: 100%;
+    flex-shrink: 1;
+    overflow: hidden;
     background-color: var(--pm-bg-deep);
     border-width: 3px;
     border-top-color: var(--pm-border-brass-hi);
@@ -305,6 +334,8 @@
 
 .toast-header-row {
     flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
     align-items: center;
     margin-bottom: 8px;
 }
@@ -321,14 +352,20 @@
     color: rgb(250, 212, 118);
     font-size: 9px;
     -unity-font-style: normal;
+    flex-shrink: 0;
     margin-right: 10px;
+    margin-bottom: 4px;
 }
 
 .toast-title {
     color: var(--pm-accent-brass);
-    font-size: 11px;
+    font-size: 10px;
     -unity-font-style: normal;
-    line-height: 16px;
+    line-height: 15px;
+    flex-shrink: 1;
+    flex-grow: 1;
+    min-width: 0;
+    max-width: 100%;
     white-space: normal;
 }
 
@@ -336,6 +373,10 @@
     color: var(--pm-text-primary);
     font-size: 9px;
     line-height: 15px;
+    width: 100%;
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
     white-space: normal;
     margin-bottom: 10px;
     -unity-text-align: middle-left;

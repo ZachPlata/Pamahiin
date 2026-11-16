@@ -273,20 +273,6 @@ public class TruckGearSpawner : MonoBehaviour
                     effectiveCounts[entry.id] = desiredCount;
                 }
             }
-
-            if (chosenEntries.Count == 0)
-            {
-                string[] defaultStarterIds = { "Flashlight", "EMFReader", "Thermometer", "SpiritBox", "GhostWritingBook", "VideoCamera" };
-                foreach (string starterId in defaultStarterIds)
-                {
-                    var entry = loadoutMgr.Catalog.Find(e => e.id == starterId);
-                    if (entry != null)
-                    {
-                        chosenEntries.Add(entry);
-                        effectiveCounts[entry.id] = 1;
-                    }
-                }
-            }
         }
 
         int totalSlots = chosenEntries.Count;

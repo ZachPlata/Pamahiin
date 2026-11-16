@@ -18,6 +18,7 @@ public class DeveloperConsoleManager : MonoBehaviour
 
     private VisualElement container;
     private Label statusLabel;
+    private Label graceTimerLabel;
     private Label currencyBalanceLabel;
     private TextField currencyAmountInput;
     private bool isConsoleOpen = false;
@@ -57,6 +58,7 @@ public class DeveloperConsoleManager : MonoBehaviour
 
         container = root.Q<VisualElement>("DevConsoleContainer");
         statusLabel = root.Q<Label>("DevStatusLabel");
+        graceTimerLabel = root.Q<Label>("GraceTimerLabel");
         currencyBalanceLabel = root.Q<Label>("CurrencyBalanceLabel");
         currencyAmountInput = root.Q<TextField>("CurrencyAmountInput");
 
@@ -161,6 +163,31 @@ public class DeveloperConsoleManager : MonoBehaviour
         {
             ToggleConsole();
         }
+
+        if (isConsoleOpen)
+        {
+            RefreshGraceTimerLabel();
+        }
+    }
+
+    private void RefreshGraceTimerLabel()
+    {
+        if (graceTimerLabel == null) return;
+
+        var ghost = FindAnyObjectByType<GhostHandler>();
+        if (ghost == null)
+        {
+            graceTimerLabel.text = "Setup: --:-- | Hunt Grace: --";
+            return;
+        }
+
+        float setupRem = ghost.SetupGracePeriodRemaining;
+        int setupMin = Mathf.FloorToInt(setupRem / 60f);
+        int setupSec = Mathf.FloorToInt(setupRem % 60f);
+        bool waitingForDoor = setupRem > 0f && NetworkDoor.HasAnyFrontDoor() && !NetworkDoor.HasAnyFrontDoorOpened();
+        string doorSuffix = waitingForDoor ? " (Door)" : "";
+        float huntGrace = ghost.HuntGracePeriodRemaining;
+        graceTimerLabel.text = $"Setup: {setupMin:00}:{setupSec:00}{doorSuffix} | Hunt Grace: {huntGrace:0.0}s";
     }
 
     public void ToggleConsole()

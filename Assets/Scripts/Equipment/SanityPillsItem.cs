@@ -126,8 +126,11 @@ public class SanityPillsItem : EquipmentItem
             var player = client.PlayerObject.GetComponent<PlayerController>();
             if (player != null && player.IsAlive)
             {
-                player.RestoreSanity(restoreAmount);
-                Debug.Log($"[SanityPills] Restored {restoreAmount} sanity for client {consumingClientId}. New sanity: {player.Sanity}");
+                float effectiveRestore = ProgressionAndLoadoutManager.Instance != null
+                    ? ProgressionAndLoadoutManager.GetDifficultySanityPillRestore(ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
+                    : restoreAmount;
+                player.RestoreSanity(effectiveRestore);
+                Debug.Log($"[SanityPills] Restored {effectiveRestore} sanity for client {consumingClientId}. New sanity: {player.Sanity}");
             }
 
             var inventory = client.PlayerObject.GetComponent<PlayerInventory>();

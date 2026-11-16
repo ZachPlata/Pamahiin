@@ -151,7 +151,10 @@ public class EventGhostBehavior : NetworkBehaviour
         {
             if (!isManifesting && Time.time >= nextEventTime)
             {
-                float interval = Random.Range(eventIntervalMin, eventIntervalMax) * WeatherManager.GetEventIntervalMultiplier();
+                float diffMult = ProgressionAndLoadoutManager.Instance != null
+                    ? ProgressionAndLoadoutManager.GetDifficultyEventIntervalMultiplier(ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
+                    : 1f;
+                float interval = Random.Range(eventIntervalMin, eventIntervalMax) * WeatherManager.GetEventIntervalMultiplier() * diffMult;
                 nextEventTime = Time.time + interval;
                 ChooseAndExecuteEvent();
             }

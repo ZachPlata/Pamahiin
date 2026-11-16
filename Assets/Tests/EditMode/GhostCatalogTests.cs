@@ -141,6 +141,7 @@ public class GhostCatalogTests
             string lore = GetProp<string>(ghost, "Lore");
             string[] traits = GetProp<string[]>(ghost, "Traits");
             string tip = GetProp<string>(ghost, "Tip");
+            string artCssClass = GetProp<string>(ghost, "ArtCssClass");
             string[] evKeys = GetProp<string[]>(ghost, "EvidenceKeys");
 
             Assert.IsFalse(string.IsNullOrWhiteSpace(subtitle), $"{id} missing Subtitle.");
@@ -149,6 +150,7 @@ public class GhostCatalogTests
             Assert.IsNotNull(traits);
             Assert.GreaterOrEqual(traits.Length, 3, $"{id} should have at least 3 behavior traits.");
             Assert.IsFalse(string.IsNullOrWhiteSpace(tip), $"{id} missing Tip.");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(artCssClass), $"{id} missing ArtCssClass.");
 
             Assert.IsTrue(map.TryGetValue(id, out var mappedKeys));
             CollectionAssert.AreEquivalent(evKeys, mappedKeys);

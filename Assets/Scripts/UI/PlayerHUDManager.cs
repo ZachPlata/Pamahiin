@@ -3,10 +3,16 @@ using UnityEngine.UIElements;
 
 public class PlayerHUDManager : MonoBehaviour
 {
+    public static PlayerHUDManager Instance { get; private set; }
+    private static int lastHotbarClickFrame = -1;
+
+    public static bool WasHotbarClickedThisFrame => lastHotbarClickFrame == Time.frameCount;
+
     [SerializeField] private UIDocument hudDocument;
     
     private PlayerInventory localInventory; 
     private VisualElement[] slots = new VisualElement[PlayerInventory.MaxSlots];
+    private readonly EventCallback<PointerDownEvent>[] slotPointerDownCallbacks = new EventCallback<PointerDownEvent>[PlayerInventory.MaxSlots];
     private Label[] slotLabels = new Label[PlayerInventory.MaxSlots];
     private VisualElement[] powerIndicators = new VisualElement[PlayerInventory.MaxSlots];
     private VisualElement[] emfContainers = new VisualElement[PlayerInventory.MaxSlots];
@@ -24,6 +30,7 @@ public class PlayerHUDManager : MonoBehaviour
 
     // Death / Spectator HUD elements
     private VisualElement deathOverlay;
+    private Button pauseButton;
     private Button btnEndGame;
     private VisualElement spectatorBanner;
     private Label spectatorGraceLabel;
@@ -54,6 +61,7 @@ public class PlayerHUDManager : MonoBehaviour
 
     private void OnEnable()
     {
+        Instance = this;
         if (hudDocument == null || hudDocument.rootVisualElement == null) return;
         
         hudDocument.sortingOrder = 1; // Explicitly put HUD in background
@@ -61,7 +69,19 @@ public class PlayerHUDManager : MonoBehaviour
 
         for (int i = 0; i < PlayerInventory.MaxSlots; i++)
         {
+            if (slots[i] != null && slotPointerDownCallbacks[i] != null)
+            {
+                slots[i].UnregisterCallback(slotPointerDownCallbacks[i]);
+            }
+
             slots[i] = root.Q<VisualElement>($"Slot{i}");
+            if (slots[i] != null)
+            {
+                int capturedIndex = i;
+                slotPointerDownCallbacks[i] = evt => OnSlotPointerDown(evt, capturedIndex);
+                slots[i].RegisterCallback(slotPointerDownCallbacks[i]);
+            }
+
             slotLabels[i] = root.Q<Label>($"ItemText{i}");
             powerIndicators[i] = root.Q<VisualElement>($"PowerIndicator{i}");
             emfContainers[i] = root.Q<VisualElement>($"EmfContainer{i}");
@@ -78,9 +98,10 @@ public class PlayerHUDManager : MonoBehaviour
         nvTimer = root.Q<Label>("NvTimer");
         nvTimestamp = root.Q<Label>("NvTimestamp");
 
-        var pauseButton = root.Q<Button>("PauseButton");
+        pauseButton = root.Q<Button>("PauseButton");
         if (pauseButton != null)
         {
+            pauseButton.clicked -= OnPauseClicked;
             pauseButton.clicked += OnPauseClicked;
         }
 
@@ -327,18 +348,37 @@ public class PlayerHUDManager : MonoBehaviour
 
     private void OnDisable()
     {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
         if (localInventory != null)
         {
             localInventory.OnSlotChanged -= HandleSlotChanged;
             localInventory.OnInventoryUpdated -= HandleInventoryUpdated;
         }
-        
-        if (hudDocument != null && hudDocument.rootVisualElement != null)
+
+        for (int i = 0; i < PlayerInventory.MaxSlots; i++)
         {
-            var pauseButton = hudDocument.rootVisualElement.Q<Button>("PauseButton");
-            if (pauseButton != null)
+            if (slots[i] != null && slotPointerDownCallbacks[i] != null)
             {
-                pauseButton.clicked -= OnPauseClicked;
+                slots[i].UnregisterCallback(slotPointerDownCallbacks[i]);
+                slotPointerDownCallbacks[i] = null;
+            }
+        }
+        
+        if (pauseButton != null)
+        {
+            pauseButton.clicked -= OnPauseClicked;
+            pauseButton = null;
+        }
+        else if (hudDocument != null && hudDocument.rootVisualElement != null)
+        {
+            var docPauseButton = hudDocument.rootVisualElement.Q<Button>("PauseButton");
+            if (docPauseButton != null)
+            {
+                docPauseButton.clicked -= OnPauseClicked;
             }
         }
 
@@ -350,6 +390,94 @@ public class PlayerHUDManager : MonoBehaviour
         {
             btnSpectatorEndMatch.clicked -= OnSpectatorEndMatchClicked;
         }
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns true when the mouse pointer currently sits over an interactive HUD element
+    /// (hotbar slots, pause button, or active spectator end-match button) so world clicks do not fire through the HUD.
+    /// </summary>
+    public static bool IsPointerOverInteractiveHUD()
+    {
+        if (Instance == null || !Instance.isActiveAndEnabled || Instance.hudDocument == null)
+        {
+            return false;
+        }
+
+        var root = Instance.hudDocument.rootVisualElement;
+        if (root == null || root.panel == null || root.resolvedStyle.display == DisplayStyle.None)
+        {
+            return false;
+        }
+
+        Vector2 screenPos = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+        Vector2 panelPos = RuntimePanelUtils.ScreenToPanel(root.panel, screenPos);
+        VisualElement picked = root.panel.Pick(panelPos);
+        if (picked == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < PlayerInventory.MaxSlots; i++)
+        {
+            if (IsElementOrDescendant(picked, Instance.slots[i]))
+            {
+                return true;
+            }
+        }
+
+        if (IsElementOrDescendant(picked, Instance.pauseButton))
+        {
+            return true;
+        }
+
+        if (IsElementOrDescendant(picked, Instance.btnSpectatorEndMatch))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsElementOrDescendant(VisualElement element, VisualElement target)
+    {
+        if (element == null || target == null || target.resolvedStyle.display == DisplayStyle.None)
+        {
+            return false;
+        }
+
+        for (VisualElement current = element; current != null; current = current.parent)
+        {
+            if (current == target)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void OnSlotPointerDown(PointerDownEvent evt, int slotIndex)
+    {
+        if (evt.button != 0) return;
+
+        lastHotbarClickFrame = Time.frameCount;
+        evt.StopPropagation();
+
+        if (PlayerController.IsInteractionBlocked || localInventory == null) return;
+        if (localPlayerController != null && !localPlayerController.IsAlive && !localPlayerController.IsGhostSpectator) return;
+
+        if (Application.isPlaying)
+        {
+            GameAudioManager.PlayUIClick();
+        }
+        localInventory.SwitchSlot(slotIndex);
     }
 
     private void UpdateSpectatorBanner()

@@ -116,9 +116,10 @@ public class CrucifixItem : EquipmentItem
     /// </summary>
     public bool TryBlockHunt()
     {
-        if (!IsServer || isBurned.Value || !IsPlaced) return false;
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !IsServer) return false;
+        if (isBurned.Value || !IsPlaced) return false;
 
-        // Burn the crucifix
+        // Burn the crucifix (1 hunt blocked per crucifix)
         isBurned.Value = true;
         return true;
     }

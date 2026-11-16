@@ -97,13 +97,54 @@ public class GhostHandler : NetworkBehaviour
     private NetworkVariable<Vector2> syncedRoomCenter = new NetworkVariable<Vector2>(
         Vector2.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    private NetworkVariable<float> syncedSetupGraceRemaining = new NetworkVariable<float>(
+        0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
+    private NetworkVariable<float> syncedHuntGraceRemaining = new NetworkVariable<float>(
+        0f, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
     private bool hasSubscribedSyncCallbacks = false;
 
     public GhostHandlerState CurrentState => currentState.Value;
     public bool IsExorcismFailedHunt => isExorcismFailedHunt.Value;
+    public bool IsInSetupGracePeriod => IsServer
+        ? (setupGraceDuration > 0f && (!setupGraceStarted || Time.time < setupGracePeriodEndTime))
+        : syncedSetupGraceRemaining.Value > 0f;
+    public float SetupGracePeriodRemaining => IsServer
+        ? (setupGraceStarted ? Mathf.Max(0f, setupGracePeriodEndTime - Time.time) : setupGraceDuration)
+        : syncedSetupGraceRemaining.Value;
+    public bool IsInHuntGracePeriod => syncedHuntGraceRemaining.Value > 0f;
+    public float HuntGracePeriodRemaining => syncedHuntGraceRemaining.Value;
 
     private float huntTimer = 0f;
     private float currentHuntDuration = 0f;
+    private float setupGraceDuration = 0f;
+    private float setupGracePeriodEndTime = 0f;
+    private bool setupGraceStarted = false;
+    private float huntGraceRemaining = 0f;
+
+    [Header("Automatic Hunt Loop & Thresholds")]
+    [SerializeField] private float huntPollInterval = 6f;
+    [SerializeField] private float postHuntCooldown = 25f;
+    [SerializeField] private float movementCheckRadius = 8f;
+    [SerializeField] private float kumakatokDoorWindow = 15f;
+    [SerializeField] private float tagamalingLunarCycleSeconds = 50f;
+    private float nextHuntAttemptTime = 0f;
+    private ulong kaperosaTargetClientId = ulong.MaxValue;
+    private PlayerController kaperosaObsessionPlayer;
+    private bool hasFailedRitualOccurred = false;
+    private static float lastInteriorDoorInteractionTime = -999f;
+    private static RoofFader[] cachedEnclosedRoofs;
+
+    public static void NotifyInteriorDoorInteracted(Vector3 doorPos)
+    {
+        lastInteriorDoorInteractionTime = Time.time;
+    }
+
+    public void NotifyRitualFailed()
+    {
+        hasFailedRitualOccurred = true;
+    }
     
     // Visibility State
     private float ghostEventTimer = 0f;
@@ -345,6 +386,10 @@ public class GhostHandler : NetworkBehaviour
         {
             SetState(GhostHandlerState.Dormant);
             isExorcismFailedHunt.Value = false;
+            ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
+                ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
+                : ContractDifficulty.Amateur;
+            ResetSetupGracePeriod(ProgressionAndLoadoutManager.GetDifficultySetupTimeSeconds(diff));
             SyncStateToNetworkVariables();
         }
         else
@@ -500,6 +545,7 @@ public class GhostHandler : NetworkBehaviour
             TruckGearSpawner.CleanupAllGhostOrbs();
         }
 
+        nextHuntAttemptTime = Time.time + huntPollInterval;
         SyncStateToNetworkVariables();
     }
 
@@ -620,53 +666,390 @@ public class GhostHandler : NetworkBehaviour
         }
     }
 
+    public void ResetSetupGracePeriod(float seconds)
+    {
+        if (!IsServer) return;
+        float clamped = Mathf.Max(0f, seconds);
+        setupGraceDuration = clamped;
+        bool shouldStartNow = clamped <= 0f || !NetworkDoor.HasAnyFrontDoor() || NetworkDoor.HasAnyFrontDoorOpened();
+        setupGraceStarted = shouldStartNow;
+        setupGracePeriodEndTime = shouldStartNow ? Time.time + clamped : 0f;
+        syncedSetupGraceRemaining.Value = clamped;
+    }
+
+    public static bool IsPlayerInInvestigationArea(PlayerController p)
+    {
+        if (p == null || !p.IsAlive) return false;
+        Vector3 pos = p.transform.position;
+        if (GameAudioManager.IsBasementPosition(pos)) return true;
+
+        if (cachedEnclosedRoofs == null || cachedEnclosedRoofs.Length == 0)
+        {
+            var all = FindObjectsByType<RoofFader>(FindObjectsInactive.Include);
+            var enclosed = new System.Collections.Generic.List<RoofFader>();
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i] != null && all[i].IsEnclosedBuilding) enclosed.Add(all[i]);
+            }
+            cachedEnclosedRoofs = enclosed.ToArray();
+        }
+
+        for (int i = 0; i < cachedEnclosedRoofs.Length; i++)
+        {
+            var roof = cachedEnclosedRoofs[i];
+            if (roof != null && roof.IsPositionInside(pos)) return true;
+        }
+        return false;
+    }
+
+    public static int CountLivingPlayersInInvestigationArea()
+    {
+        int count = 0;
+        for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+        {
+            if (IsPlayerInInvestigationArea(PlayerController.AllPlayers[i]))
+            {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private PlayerController ResolveKaperosaObsessionTarget()
+    {
+        if (kaperosaObsessionPlayer != null &&
+            kaperosaObsessionPlayer.IsAlive &&
+            PlayerController.AllPlayers.Contains(kaperosaObsessionPlayer))
+        {
+            return kaperosaObsessionPlayer;
+        }
+
+        if (kaperosaTargetClientId != ulong.MaxValue &&
+            PlayerController.TryGetByClientId(kaperosaTargetClientId, out var existing) &&
+            existing != null &&
+            existing.IsAlive)
+        {
+            kaperosaObsessionPlayer = existing;
+            return existing;
+        }
+
+        var living = new System.Collections.Generic.List<PlayerController>();
+        for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+        {
+            var p = PlayerController.AllPlayers[i];
+            if (p != null && p.IsAlive)
+            {
+                living.Add(p);
+            }
+        }
+
+        if (living.Count == 0)
+        {
+            kaperosaObsessionPlayer = null;
+            kaperosaTargetClientId = ulong.MaxValue;
+            return null;
+        }
+
+        kaperosaObsessionPlayer = living[Random.Range(0, living.Count)];
+        kaperosaTargetClientId = kaperosaObsessionPlayer.OwnerClientId;
+        return kaperosaObsessionPlayer;
+    }
+
+    public float GetEffectiveHuntSanity()
+    {
+        if (GhostCatalog.TryGetGhost(ghostName, out var def) &&
+            def.HuntProfile.Condition == GhostHuntConditionType.SingleObsessionTarget)
+        {
+            var obsession = ResolveKaperosaObsessionTarget();
+            return obsession != null ? obsession.Sanity : 100f;
+        }
+
+        float total = 0f;
+        int livingCount = 0;
+        for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+        {
+            var p = PlayerController.AllPlayers[i];
+            if (p != null && p.IsAlive)
+            {
+                total += p.Sanity;
+                livingCount++;
+            }
+        }
+
+        return livingCount > 0 ? (total / livingCount) : 100f;
+    }
+
+    private bool IsPositionInsideGhostRoom(Vector2 pos)
+    {
+        if (ghostroomMarker == null) return false;
+        if (ghostroomMarker.OverlapPoint(pos)) return true;
+        Bounds b = ghostroomMarker.bounds;
+        return pos.x >= b.min.x && pos.x <= b.max.x && pos.y >= b.min.y && pos.y <= b.max.y;
+    }
+
+    private bool IsGhostRoomLit()
+    {
+        if (ghostroomMarker == null) return false;
+        Bounds b = ghostroomMarker.bounds;
+        Vector2 center = b.center;
+
+        foreach (var sz in SafeZone.AllActiveZones)
+        {
+            if (sz == null || !sz.isActiveAndEnabled) continue;
+            string lower = sz.gameObject.name.ToLowerInvariant();
+            if (lower.Contains("van") || lower.Contains("jeepney")) continue;
+            if (sz.OverlapsPosition(center)) return true;
+        }
+
+        var lights = FindObjectsByType<UnityEngine.Rendering.Universal.Light2D>(FindObjectsInactive.Exclude);
+        for (int i = 0; i < lights.Length; i++)
+        {
+            var l = lights[i];
+            if (l == null || !l.enabled || l.intensity <= 0.1f) continue;
+            if (l.lightType == UnityEngine.Rendering.Universal.Light2D.LightType.Global) continue;
+
+            string lname = l.gameObject.name.ToLowerInvariant();
+            if (lname.Contains("playerpov") || lname.Contains("switchindicator") ||
+                lname.Contains("ghostauralight") || lname.Contains("candle"))
+            {
+                continue;
+            }
+            if (l.GetComponentInParent<PlayerController>() != null || l.GetComponentInParent<EquipmentItem>() != null)
+            {
+                continue;
+            }
+
+            if (IsPositionInsideGhostRoom(l.transform.position))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public float EvaluateCurrentHuntThreshold(out bool forceAbilityHunt)
+    {
+        forceAbilityHunt = false;
+        if (!GhostCatalog.TryGetGhost(ghostName, out var def))
+        {
+            return 50f;
+        }
+
+        GhostHuntProfile profile = def.HuntProfile;
+        Vector3 ghostPos = eventGhost != null ? eventGhost.transform.position : transform.position;
+
+        switch (profile.Condition)
+        {
+            case GhostHuntConditionType.PlayerMovingNearby:
+            {
+                for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+                {
+                    var p = PlayerController.AllPlayers[i];
+                    if (p == null || !p.IsAlive) continue;
+                    if ((p.IsMoving || p.IsSprinting) &&
+                        (Vector2.Distance(ghostPos, p.transform.position) <= movementCheckRadius || IsPositionInsideGhostRoom(p.transform.position)))
+                    {
+                        return profile.AlternateThreshold;
+                    }
+                }
+                return profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.PlayerSprintingNearby:
+            {
+                for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+                {
+                    var p = PlayerController.AllPlayers[i];
+                    if (p == null || !p.IsAlive) continue;
+                    if (p.IsSprinting &&
+                        (Vector2.Distance(ghostPos, p.transform.position) <= movementCheckRadius || IsPositionInsideGhostRoom(p.transform.position)))
+                    {
+                        return profile.AlternateThreshold;
+                    }
+                }
+                return profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.PlayerInGhostRoom:
+            {
+                for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+                {
+                    var p = PlayerController.AllPlayers[i];
+                    if (p != null && p.IsAlive && IsPositionInsideGhostRoom(p.transform.position))
+                    {
+                        return profile.AlternateThreshold;
+                    }
+                }
+                return profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.EarlyHuntAbility:
+            {
+                if (!IsInSetupGracePeriod && profile.AbilityChance > 0f && Random.value < profile.AbilityChance)
+                {
+                    forceAbilityHunt = true;
+                }
+                return profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.GroupedInGhostRoom:
+            {
+                int inRoomCount = 0;
+                for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+                {
+                    var p = PlayerController.AllPlayers[i];
+                    if (p != null && p.IsAlive && IsPositionInsideGhostRoom(p.transform.position))
+                    {
+                        inRoomCount++;
+                    }
+                }
+                return inRoomCount >= 2 ? profile.AlternateThreshold : profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.RecentInteriorDoor:
+                return (Time.time - lastInteriorDoorInteractionTime) <= kumakatokDoorWindow
+                    ? profile.AlternateThreshold
+                    : profile.BaseThreshold;
+
+            case GhostHuntConditionType.SoloInHouse:
+                return CountLivingPlayersInInvestigationArea() == 1
+                    ? profile.AlternateThreshold
+                    : profile.BaseThreshold;
+
+            case GhostHuntConditionType.SummoningCirclePlaced:
+            {
+                if (SummoningCircle.FindClosest(Vector3.zero, 10000f) != null)
+                {
+                    return profile.AlternateThreshold;
+                }
+                var items = EquipmentItem.AllEquipment;
+                for (int i = 0; i < items.Count; i++)
+                {
+                    if (items[i] is RitualChalkItem chalk && chalk.IsPlaced)
+                    {
+                        return profile.AlternateThreshold;
+                    }
+                }
+                return profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.GhostRoomLightsOn:
+                return IsGhostRoomLit() ? profile.AlternateThreshold : profile.BaseThreshold;
+
+            case GhostHuntConditionType.FailedRitual:
+                return hasFailedRitualOccurred ? profile.AlternateThreshold : profile.BaseThreshold;
+
+            case GhostHuntConditionType.LunarPhaseCycle:
+            {
+                float cycleSec = Mathf.Max(10f, tagamalingLunarCycleSeconds);
+                int phase = Mathf.FloorToInt(Time.time / cycleSec) % 2;
+                return phase == 1 ? profile.AlternateThreshold : profile.BaseThreshold;
+            }
+
+            case GhostHuntConditionType.SingleObsessionTarget:
+            case GhostHuntConditionType.Always:
+            default:
+                return profile.BaseThreshold;
+        }
+    }
+
+    private void TriggerFavoriteRoomState()
+    {
+        if (!IsServer || ghostroomMarker == null) return;
+
+        if (eventGhost != null)
+        {
+            Vector3 curPos = eventGhost.transform.position;
+            if (!IsPositionInsideGhostRoom(curPos))
+            {
+                Vector3 anchor = ghostroomMarker.bounds.center;
+                if (!ghostroomMarker.OverlapPoint(anchor))
+                {
+                    anchor = ghostroomMarker.ClosestPoint(anchor);
+                }
+                anchor.z = curPos.z;
+                eventGhost.InitializeOrigin(anchor);
+            }
+        }
+    }
+
     public void StartHunt(bool isFromFailedExorcism = false)
     {
         if (IsExorcised) return;
         if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
+        if (!isFromFailedExorcism && IsInSetupGracePeriod)
+        {
+            Debug.Log($"[GhostHandler] Hunt blocked during setup grace period ({SetupGracePeriodRemaining:F1}s remaining).");
+            return;
+        }
+
+        if (!isFromFailedExorcism && CountLivingPlayersInInvestigationArea() <= 0)
+        {
+            TriggerFavoriteRoomState();
+            return;
+        }
+
         eventGhost?.CancelActiveDotsProjectionOnServer();
 
-        isExorcismFailedHunt.Value = isFromFailedExorcism;
+        Vector3 spawnPos = transform.position;
+        if (!isFromFailedExorcism && ghostroomMarker != null)
+        {
+            Bounds bounds = ghostroomMarker.bounds;
+            spawnPos = new Vector3(
+                Random.Range(bounds.min.x, bounds.max.x),
+                Random.Range(bounds.min.y, bounds.max.y),
+                hunterGhost != null ? hunterGhost.transform.position.z : 0f
+            );
+        }
 
         if (!isFromFailedExorcism)
         {
-            // Check for nearby crucifixes that can block normal hunts
+            Vector3 ghostCurrentPos = eventGhost != null ? eventGhost.transform.position : transform.position;
             var crucifixes = FindObjectsByType<CrucifixItem>(FindObjectsInactive.Exclude);
             foreach (var crucifix in crucifixes)
             {
-                if (!crucifix.IsBurned && ghostroomMarker != null)
+                if (crucifix == null || crucifix.IsBurned || !crucifix.IsPlaced) continue;
+
+                Vector2 cPos = crucifix.transform.position;
+                bool inGhostRoom = ghostroomMarker != null &&
+                    (IsPositionInsideGhostRoom(cPos) || Vector2.Distance(ghostroomMarker.bounds.center, cPos) <= crucifix.blockRadius);
+                bool nearGhostOrSpawn =
+                    Vector2.Distance(ghostCurrentPos, cPos) <= crucifix.blockRadius ||
+                    Vector2.Distance(spawnPos, cPos) <= crucifix.blockRadius;
+
+                if (inGhostRoom || nearGhostOrSpawn)
                 {
-                    // If crucifix is inside the ghost room bounds, or near the center
-                    if (ghostroomMarker.OverlapPoint(crucifix.transform.position) ||
-                        Vector2.Distance(ghostroomMarker.bounds.center, crucifix.transform.position) <= crucifix.blockRadius)
+                    if (crucifix.TryBlockHunt())
                     {
-                        if (crucifix.TryBlockHunt())
-                        {
-                            // Hunt successfully blocked by crucifix
-                            Debug.Log("Hunt blocked by Crucifix!");
-                            return;
-                        }
+                        nextHuntAttemptTime = Time.time + postHuntCooldown;
+                        Debug.Log($"Hunt blocked by Crucifix! Enforcing {postHuntCooldown:F0}s cooldown.");
+                        return;
                     }
                 }
             }
 
-            // Teleport hunter to random valid position inside ghostroomMarker
             if (ghostroomMarker != null && hunterGhost != null)
             {
-                Bounds bounds = ghostroomMarker.bounds;
-                Vector2 randomPoint = new Vector2(
-                    Random.Range(bounds.min.x, bounds.max.x),
-                    Random.Range(bounds.min.y, bounds.max.y)
-                );
-                hunterGhost.transform.position = randomPoint;
+                hunterGhost.transform.position = spawnPos;
             }
         }
+
+        isExorcismFailedHunt.Value = isFromFailedExorcism;
 
         currentHuntDuration = (isFromFailedExorcism ? (huntDurationMax * 1.5f) : Random.Range(huntDurationMin, huntDurationMax))
             * WeatherManager.GetHuntDurationMultiplier();
         huntTimer = 0f;
         huntLightFlickerTimer = 0f;
         huntFuseTripTimer = 0f;
+
+        ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
+            ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
+            : ContractDifficulty.Amateur;
+        huntGraceRemaining = isFromFailedExorcism
+            ? 0f
+            : ProgressionAndLoadoutManager.GetDifficultyHuntGracePeriodSeconds(diff);
+        syncedHuntGraceRemaining.Value = huntGraceRemaining;
         
         if (hunterGhost != null)
         {
@@ -698,6 +1081,9 @@ public class GhostHandler : NetworkBehaviour
             TriggerRedEnvironmentClientRpc(false);
         }
 
+        huntGraceRemaining = 0f;
+        syncedHuntGraceRemaining.Value = 0f;
+
         if (hunterGhost != null)
         {
             hunterGhost.OnHuntEnded();
@@ -721,6 +1107,7 @@ public class GhostHandler : NetworkBehaviour
             hunterGhost.transform.position = targetPos;
         }
 
+        nextHuntAttemptTime = Mathf.Max(nextHuntAttemptTime, Time.time + postHuntCooldown);
         SetDoorsLocked(false);
         SetState(GhostHandlerState.Dormant);
     }
@@ -750,9 +1137,43 @@ public class GhostHandler : NetworkBehaviour
     {
         if (IsExorcised) return;
 
+        if (IsServer)
+        {
+            if (!setupGraceStarted && setupGraceDuration > 0f && (!NetworkDoor.HasAnyFrontDoor() || NetworkDoor.HasAnyFrontDoorOpened()))
+            {
+                setupGraceStarted = true;
+                setupGracePeriodEndTime = Time.time + setupGraceDuration;
+            }
+
+            float setupRem = SetupGracePeriodRemaining;
+            if (Mathf.Abs(syncedSetupGraceRemaining.Value - setupRem) > 0.05f || (setupRem <= 0f && syncedSetupGraceRemaining.Value > 0f))
+            {
+                syncedSetupGraceRemaining.Value = setupRem;
+            }
+        }
+
         // Visual logic should run on BOTH Server and Client!
         if (currentState.Value == GhostHandlerState.Dormant)
         {
+            if (IsServer && hasActivated && !IsInSetupGracePeriod && Time.time >= nextHuntAttemptTime)
+            {
+                nextHuntAttemptTime = Time.time + Mathf.Max(1f, huntPollInterval);
+                if (CountLivingPlayersInInvestigationArea() <= 0)
+                {
+                    TriggerFavoriteRoomState();
+                }
+                else
+                {
+                    float threshold = EvaluateCurrentHuntThreshold(out bool forceAbilityHunt);
+                    float effectiveSanity = GetEffectiveHuntSanity();
+                    if (forceAbilityHunt || effectiveSanity <= threshold)
+                    {
+                        StartHunt(false);
+                        if (currentState.Value != GhostHandlerState.Dormant) return;
+                    }
+                }
+            }
+
             if (ghostEventTimer > 0f)
             {
                 ghostEventTimer -= Time.deltaTime;
@@ -767,11 +1188,19 @@ public class GhostHandler : NetworkBehaviour
         {
             if (IsServer)
             {
-                huntTimer += Time.deltaTime;
-                if (huntTimer >= currentHuntDuration)
+                if (huntGraceRemaining > 0f)
                 {
-                    EndHunt();
-                    return;
+                    huntGraceRemaining = Mathf.Max(0f, huntGraceRemaining - Time.deltaTime);
+                    syncedHuntGraceRemaining.Value = huntGraceRemaining;
+                }
+                else
+                {
+                    huntTimer += Time.deltaTime;
+                    if (huntTimer >= currentHuntDuration)
+                    {
+                        EndHunt();
+                        return;
+                    }
                 }
 
                 // Flicker all active lights every 2 seconds during a hunt

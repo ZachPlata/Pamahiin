@@ -53,7 +53,10 @@ public class FuseBox : NetworkBehaviour, IInteractable
 
         if (IsServer)
         {
-            isEnabled.Value = false;
+            ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
+                ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
+                : ContractDifficulty.Amateur;
+            isEnabled.Value = ProgressionAndLoadoutManager.GetDifficultyFuseBoxStartsOn(diff);
         }
 
         OnFuseStateChanged(isEnabled.Value);

@@ -110,6 +110,23 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     private ShadowCaster2D runtimeShadowCaster;
     private float currentProgress = 0f;
 
+    private Vector2 closedBoxSize;
+    private Vector2 closedBoxOffset;
+    private Vector2 openBoxSize;
+    private Vector2 openBoxOffset;
+    private bool hasDistinctOpenBox = false;
+    private bool wasColliderSolidAtRest = true;
+    private readonly HashSet<Collider2D> overlapIgnoredPlayerColliders = new HashSet<Collider2D>();
+    private readonly List<Collider2D> tempOverlapCleanup = new List<Collider2D>();
+
+    private NetworkVariable<bool> syncedGhostForceLocked = new NetworkVariable<bool>(
+        false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+    private float ghostForceLockoutUntil = 0f;
+
+    public bool IsGhostForceLocked => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
+        ? (syncedGhostForceLocked.Value || Time.time < ghostForceLockoutUntil)
+        : (Time.time < ghostForceLockoutUntil);
+
     private static bool s_LocalSpectatorBypass;
     private static Collider2D s_LocalSpectatorCollider;
 
@@ -211,7 +228,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     private void Awake()
     {
-        if (!isHidingSpot && (gameObject.name.ToLower().Contains("cabinet") || gameObject.name.ToLower().Contains("closet")))
+        if (!isHidingSpot && gameObject.name.ToLowerInvariant().Contains("cabinet"))
         {
             isHidingSpot = true;
         }
@@ -261,6 +278,11 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             {
                 localHasBeenOpened = true;
                 if (IsServer) hasBeenOpened.Value = true;
+            }
+            if (usesReferenceSprites && IsStationarySpriteSwapDoor())
+            {
+                currentProgress = newVal ? 1f : 0f;
+                ApplyProgress(currentProgress);
             }
             if (oldVal != newVal)
             {
@@ -375,33 +397,95 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     private void CopyCollider(GameObject sourceObj, GameObject targetObj)
     {
-        Collider2D refCol = sourceObj.GetComponent<Collider2D>();
-        if (refCol is BoxCollider2D box)
+        hasDistinctOpenBox = false;
+
+        if (!TryExtractLocalBox(closedDoorRef, sourceObj, out closedBoxSize, out closedBoxOffset))
         {
-            BoxCollider2D newBox = targetObj.AddComponent<BoxCollider2D>();
-            newBox.size = box.size;
-            newBox.offset = box.offset;
-            newBox.isTrigger = box.isTrigger;
-            newBox.sharedMaterial = box.sharedMaterial;
-            runtimeCollider = newBox;
+            if (openDoorRef == null || !TryExtractLocalBox(openDoorRef, openDoorRef.gameObject, out closedBoxSize, out closedBoxOffset))
+            {
+                closedBoxSize = new Vector2(0.3f, 0.3f);
+                closedBoxOffset = Vector2.zero;
+            }
         }
-        else if (refCol is CircleCollider2D circle)
+
+        if (openDoorRef != null && TryExtractLocalBox(openDoorRef, openDoorRef.gameObject, out Vector2 candidateOpenSize, out Vector2 candidateOpenOffset))
         {
-            CircleCollider2D newCircle = targetObj.AddComponent<CircleCollider2D>();
-            newCircle.radius = circle.radius;
-            newCircle.offset = circle.offset;
-            newCircle.isTrigger = circle.isTrigger;
-            newCircle.sharedMaterial = circle.sharedMaterial;
-            runtimeCollider = newCircle;
+            bool hasOpenCollider = openDoorRef.GetComponent<Collider2D>() != null;
+            bool hasDistinctSprite = closedDoorRef != null && openDoorRef.sprite != null && openDoorRef.sprite != closedDoorRef.sprite;
+            if (hasOpenCollider || hasDistinctSprite)
+            {
+                if (Vector2.Distance(candidateOpenSize, closedBoxSize) > 0.001f ||
+                    Vector2.Distance(candidateOpenOffset, closedBoxOffset) > 0.001f)
+                {
+                    openBoxSize = candidateOpenSize;
+                    openBoxOffset = candidateOpenOffset;
+                    hasDistinctOpenBox = true;
+                }
+            }
         }
-        else if (refCol is PolygonCollider2D poly)
+
+        BoxCollider2D newBox = targetObj.AddComponent<BoxCollider2D>();
+        newBox.size = closedBoxSize;
+        newBox.offset = closedBoxOffset;
+        newBox.isTrigger = false;
+
+        Collider2D refCol = sourceObj != null ? sourceObj.GetComponent<Collider2D>() : null;
+        if (refCol != null)
         {
-            PolygonCollider2D newPoly = targetObj.AddComponent<PolygonCollider2D>();
-            newPoly.points = poly.points;
-            newPoly.isTrigger = poly.isTrigger;
-            newPoly.sharedMaterial = poly.sharedMaterial;
-            runtimeCollider = newPoly;
+            newBox.sharedMaterial = refCol.sharedMaterial;
         }
+        runtimeCollider = newBox;
+    }
+
+    private static bool TryExtractLocalBox(SpriteRenderer sr, GameObject obj, out Vector2 size, out Vector2 offset)
+    {
+        if (obj != null)
+        {
+            BoxCollider2D box = obj.GetComponent<BoxCollider2D>();
+            if (box != null)
+            {
+                size = box.size;
+                offset = box.offset;
+                return true;
+            }
+
+            Collider2D anyCol = obj.GetComponent<Collider2D>();
+            if (anyCol != null)
+            {
+                if (anyCol is CircleCollider2D circle)
+                {
+                    float d = Mathf.Max(0.05f, circle.radius * 2f);
+                    size = new Vector2(d, d);
+                    offset = circle.offset;
+                    return true;
+                }
+                if (anyCol is PolygonCollider2D poly && poly.points != null && poly.points.Length > 0)
+                {
+                    Vector2 min = poly.points[0];
+                    Vector2 max = poly.points[0];
+                    for (int i = 1; i < poly.points.Length; i++)
+                    {
+                        min = Vector2.Min(min, poly.points[i]);
+                        max = Vector2.Max(max, poly.points[i]);
+                    }
+                    size = new Vector2(Mathf.Max(0.05f, max.x - min.x), Mathf.Max(0.05f, max.y - min.y));
+                    offset = (min + max) * 0.5f + poly.offset;
+                    return true;
+                }
+            }
+        }
+
+        if (sr != null && sr.sprite != null)
+        {
+            Bounds sb = sr.sprite.bounds;
+            size = new Vector2(Mathf.Max(0.05f, sb.size.x), Mathf.Max(0.05f, sb.size.y));
+            offset = sb.center;
+            return true;
+        }
+
+        size = Vector2.zero;
+        offset = Vector2.zero;
+        return false;
     }
 
     private void CreatePersistentInteractionTrigger(GameObject sourceObj, GameObject targetObj)
@@ -565,6 +649,16 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
     }
 
+    private bool IsStationarySpriteSwapDoor()
+    {
+        return usesReferenceSprites && !hasValidPivot && Vector2.Distance(closedPos, openPos) < 0.01f;
+    }
+
+    private bool ShouldDisableObstacleWhenOpen()
+    {
+        return IsExcludedFromSpectatorBypass() || isHidingSpot || IsStationarySpriteSwapDoor();
+    }
+
     private void ApplyProgress(float t)
     {
         if (runtimeDoorObj == null) return;
@@ -599,10 +693,73 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             }
         }
 
-        // Disable obstacle collider when open if enabled (interactionTriggerCollider stays enabled)
-        if (disableObstacleColliderWhenOpen && runtimeCollider != null)
+        // Solid obstacle collider behavior:
+        // - Cabinet/hiding doors and automated Jeepney ramp stay solid ONLY while closed and disable when open so players can pass cleanly.
+        // - Standard swinging room doors stay solid at rest (t <= 0.02f or t >= 0.98f) and pass-through ONLY mid-animation (0.02f < t < 0.98f).
+        if (runtimeCollider != null)
         {
-            runtimeCollider.enabled = (t < 0.2f);
+            if (ShouldDisableObstacleWhenOpen())
+            {
+                ClearOverlapIgnoredPlayers();
+
+                bool solidWhenClosed = IsStationarySpriteSwapDoor() ? (t < 0.5f) : (t < 0.2f);
+                if (IsExcludedFromSpectatorBypass() && !disableObstacleColliderWhenOpen)
+                {
+                    solidWhenClosed = true;
+                }
+
+                runtimeCollider.enabled = solidWhenClosed;
+                if (runtimeCollider.enabled && s_LocalSpectatorBypass && s_LocalSpectatorCollider != null && !IsExcludedFromSpectatorBypass())
+                {
+                    Physics2D.IgnoreCollision(s_LocalSpectatorCollider, runtimeCollider, true);
+                }
+                wasColliderSolidAtRest = runtimeCollider.enabled;
+            }
+            else
+            {
+                if (hasDistinctOpenBox && runtimeCollider is BoxCollider2D runtimeBox)
+                {
+                    if (t >= 0.98f)
+                    {
+                        runtimeBox.size = openBoxSize;
+                        runtimeBox.offset = openBoxOffset;
+                    }
+                    else if (t <= 0.02f)
+                    {
+                        runtimeBox.size = closedBoxSize;
+                        runtimeBox.offset = closedBoxOffset;
+                    }
+                    else
+                    {
+                        runtimeBox.size = (t >= 0.5f) ? openBoxSize : closedBoxSize;
+                        runtimeBox.offset = (t >= 0.5f) ? openBoxOffset : closedBoxOffset;
+                    }
+                }
+
+                bool isAtRest = (t <= 0.02f || t >= 0.98f);
+                if (!isAtRest)
+                {
+                    ClearOverlapIgnoredPlayers();
+                    runtimeCollider.enabled = false;
+                }
+                else
+                {
+                    runtimeCollider.enabled = true;
+                    if (s_LocalSpectatorBypass && s_LocalSpectatorCollider != null)
+                    {
+                        Physics2D.IgnoreCollision(s_LocalSpectatorCollider, runtimeCollider, true);
+                    }
+                    if (t <= 0.02f)
+                    {
+                        ClearOverlapIgnoredPlayers();
+                    }
+                    else if (!wasColliderSolidAtRest)
+                    {
+                        IgnoreOverlappingLivingPlayers();
+                    }
+                }
+                wasColliderSolidAtRest = isAtRest;
+            }
         }
 
         if (interactionTriggerCollider != null)
@@ -618,12 +775,95 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         }
     }
 
+    private void IgnoreOverlappingLivingPlayers()
+    {
+        if (runtimeCollider == null || !runtimeCollider.enabled) return;
+
+        Physics2D.SyncTransforms();
+        for (int i = 0; i < PlayerController.AllPlayers.Count; i++)
+        {
+            var p = PlayerController.AllPlayers[i];
+            if (p == null || !p.IsAlive) continue;
+
+            Collider2D playerCol = p.PlayerCollider;
+            if (playerCol == null || !playerCol.enabled) continue;
+
+            if (runtimeCollider.Distance(playerCol).isOverlapped)
+            {
+                Physics2D.IgnoreCollision(playerCol, runtimeCollider, true);
+                overlapIgnoredPlayerColliders.Add(playerCol);
+            }
+        }
+    }
+
+    private void ClearOverlapIgnoredPlayers()
+    {
+        if (overlapIgnoredPlayerColliders.Count == 0) return;
+        if (runtimeCollider != null)
+        {
+            foreach (var col in overlapIgnoredPlayerColliders)
+            {
+                if (col == null) continue;
+                if (s_LocalSpectatorBypass && col == s_LocalSpectatorCollider && !IsExcludedFromSpectatorBypass())
+                {
+                    continue;
+                }
+                Physics2D.IgnoreCollision(col, runtimeCollider, false);
+            }
+        }
+        overlapIgnoredPlayerColliders.Clear();
+    }
+
+    private void UpdateOverlapIgnoredPlayers()
+    {
+        if (overlapIgnoredPlayerColliders.Count == 0 || runtimeCollider == null || !runtimeCollider.enabled) return;
+
+        tempOverlapCleanup.Clear();
+        foreach (var col in overlapIgnoredPlayerColliders)
+        {
+            if (col == null || !col.enabled || !col.gameObject.activeInHierarchy || !runtimeCollider.Distance(col).isOverlapped)
+            {
+                tempOverlapCleanup.Add(col);
+            }
+        }
+
+        for (int i = 0; i < tempOverlapCleanup.Count; i++)
+        {
+            Collider2D col = tempOverlapCleanup[i];
+            overlapIgnoredPlayerColliders.Remove(col);
+            if (col != null)
+            {
+                if (s_LocalSpectatorBypass && col == s_LocalSpectatorCollider && !IsExcludedFromSpectatorBypass())
+                {
+                    continue;
+                }
+                Physics2D.IgnoreCollision(col, runtimeCollider, false);
+            }
+        }
+    }
+
     private void Update()
     {
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsServer && IsSpawned)
+        {
+            if (syncedGhostForceLocked.Value && Time.time >= ghostForceLockoutUntil)
+            {
+                syncedGhostForceLocked.Value = false;
+            }
+        }
+
         if (usesReferenceSprites)
         {
             float targetT = IsOpen ? 1f : 0f;
-            if (Mathf.Abs(currentProgress - targetT) > 0.0001f)
+            if (IsStationarySpriteSwapDoor())
+            {
+                if (Mathf.Abs(currentProgress - targetT) > 0.0001f)
+                {
+                    currentProgress = targetT;
+                    ApplyProgress(currentProgress);
+                }
+            }
+            else if (Mathf.Abs(currentProgress - targetT) > 0.0001f)
             {
                 currentProgress = Mathf.Lerp(currentProgress, targetT, Time.deltaTime * swingSpeed);
                 if (Mathf.Abs(currentProgress - targetT) < 0.001f)
@@ -632,6 +872,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                 }
                 ApplyProgress(currentProgress);
             }
+            UpdateOverlapIgnoredPlayers();
         }
         else
         {
@@ -661,9 +902,9 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         if (!allowPlayerInteract) return;
         if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
 
-        if (IsLocked)
+        if (IsLocked || IsGhostForceLocked)
         {
-            // Door is locked (e.g. during a Hunt)
+            // Door is locked (e.g. during a Hunt or briefly forced by ghost)
             GameAudioManager.PlayDoorLocked(transform.position);
             return;
         }
@@ -698,7 +939,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                 if (open) hasBeenOpened.Value = true;
             }
             if (open) localHasBeenOpened = true;
-            if (immediate)
+            if (immediate || (usesReferenceSprites && IsStationarySpriteSwapDoor()))
             {
                 currentProgress = open ? 1f : 0f;
                 ApplyProgress(currentProgress);
@@ -708,7 +949,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         {
             localIsOpen = open;
             if (open) localHasBeenOpened = true;
-            if (immediate)
+            if (immediate || (usesReferenceSprites && IsStationarySpriteSwapDoor()))
             {
                 currentProgress = open ? 1f : 0f;
                 ApplyProgress(currentProgress);
@@ -744,6 +985,11 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                         Debug.LogError("NetworkDoor: GhostHandler not found in the scene!");
                     }
                 }
+                if (!isHidingSpot && !isFrontDoor)
+                {
+                    HunterGhostBehavior.Instance?.OnPlayerDoorNoise(transform.position);
+                    GhostHandler.NotifyInteriorDoorInteracted(transform.position);
+                }
             }
         }
         else
@@ -769,6 +1015,17 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
                     Debug.LogError("NetworkDoor: GhostHandler not found locally in the scene!");
                 }
             }
+            if (!isHidingSpot && !isFrontDoor)
+            {
+                HunterGhostBehavior.Instance?.OnPlayerDoorNoise(transform.position);
+                GhostHandler.NotifyInteriorDoorInteracted(transform.position);
+            }
+        }
+
+        if (usesReferenceSprites && IsStationarySpriteSwapDoor())
+        {
+            currentProgress = IsOpen ? 1f : 0f;
+            ApplyProgress(currentProgress);
         }
     }
 
@@ -779,7 +1036,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         {
             return;
         }
-        if (!allowPlayerInteract || isLocked.Value) return;
+        if (!allowPlayerInteract || isLocked.Value || IsGhostForceLocked) return;
         ToggleDoor();
     }
 
@@ -787,10 +1044,19 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     /// Called by the Ghost AI on the server to slam, close, or open a door.
     /// Emits an EMF level 2 paranormal event.
     /// </summary>
-    public void GhostInteract(bool? forceOpen = null)
+    public void GhostInteract(bool? forceOpen = null, float lockoutDuration = 0f)
     {
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !IsServer) return;
         if (IsLocked) return;
+
+        if (lockoutDuration > 0f)
+        {
+            ghostForceLockoutUntil = Mathf.Max(ghostForceLockoutUntil, Time.time + lockoutDuration);
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsServer && IsSpawned)
+            {
+                syncedGhostForceLocked.Value = true;
+            }
+        }
 
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
@@ -810,6 +1076,12 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
         if (ParanormalManager.Instance != null)
         {
             ParanormalManager.Instance.RegisterEvent(transform.position, 2, 25f);
+        }
+
+        if (usesReferenceSprites && IsStationarySpriteSwapDoor())
+        {
+            currentProgress = IsOpen ? 1f : 0f;
+            ApplyProgress(currentProgress);
         }
     }
 
@@ -840,7 +1112,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     public string GetInteractText()
     {
         if (!allowPlayerInteract) return string.Empty;
-        if (IsLocked) return "Locked";
+        if (IsLocked || IsGhostForceLocked) return "Locked";
         return IsOpen ? "Close Door" : "Open Door";
     }
 
