@@ -1267,7 +1267,10 @@ public static class BarangayMapSceneBuilder
             "Assets/Scenes/MainMenuScene.unity",
             "Assets/Scenes/LobbyScene.unity",
             BARANGAY_SCENE_PATH,
-            GAME_MAP_SCENE_PATH
+            SchoolMapSceneBuilder.SCHOOL_SCENE_PATH,
+            GAME_MAP_SCENE_PATH,
+            "Assets/Scenes/LoadingScene.unity",
+            "Assets/Scenes/WarehouseTutorialScene.unity"
         };
 
         var buildScenes = new List<EditorBuildSettingsScene>();

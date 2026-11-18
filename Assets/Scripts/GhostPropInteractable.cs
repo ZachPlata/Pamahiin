@@ -123,6 +123,14 @@ public class GhostPropInteractable : NetworkBehaviour, IInteractable
         }
 
         Texture2D tex = Resources.Load<Texture2D>($"Sprites/BarangayMap/{spriteSheetResource}");
+        if (tex == null)
+        {
+            tex = Resources.Load<Texture2D>($"Sprites/{spriteSheetResource}");
+        }
+        if (tex == null)
+        {
+            tex = Resources.Load<Texture2D>($"Sprites/SchoolMap/{spriteSheetResource}");
+        }
         if (tex == null) return;
 
         tex.filterMode = FilterMode.Point;

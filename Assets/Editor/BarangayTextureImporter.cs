@@ -11,6 +11,7 @@ using UnityEngine;
 public class BarangayTextureImporter : AssetPostprocessor
 {
     private const string TARGET_ROOT = "Assets/Resources/Sprites/BarangayMap/";
+    private const string SCHOOL_ROOT = "Assets/Resources/Sprites/SchoolMap/";
     private const string RITUAL_ROOT = "Assets/Resources/Sprites/Ritual/";
     private const string GHOST_DEATH_PATH = "Assets/Resources/Sprites/ghost_death_sheet.png";
     public const string PLAYER_DEATH_PATH = "Assets/Resources/Sprites/CHARACTERS/player_death_choke_sheet.png";
@@ -123,21 +124,24 @@ public class BarangayTextureImporter : AssetPostprocessor
     {
         string normalizedPath = assetPath.Replace('\\', '/');
         bool isBarangay = normalizedPath.StartsWith(TARGET_ROOT);
+        bool isSchool = normalizedPath.StartsWith(SCHOOL_ROOT);
         bool isSlicedHorrorSheet = TryGetSlicedSheetSpec(normalizedPath, out _);
         bool isRitualOrDeath = normalizedPath.StartsWith(RITUAL_ROOT)
             || normalizedPath == GHOST_DEATH_PATH
             || isSlicedHorrorSheet;
-        if (!isBarangay && !isRitualOrDeath) return;
+        if (!isBarangay && !isSchool && !isRitualOrDeath) return;
 
         TextureImporter ti = assetImporter as TextureImporter;
         if (ti == null) return;
 
-        bool isTileable = isBarangay && (normalizedPath.Contains("/Exterior/asphalt_road")
+        bool isTileable = (isBarangay && (normalizedPath.Contains("/Exterior/asphalt_road")
             || normalizedPath.Contains("/House/floor_")
             || normalizedPath.Contains("/House/wall_")
             || normalizedPath.Contains("/House/roof_")
             || normalizedPath.Contains("/Burial/burial_dirt_floor")
-            || normalizedPath.Contains("/Burial/burial_dirt_wall"));
+            || normalizedPath.Contains("/Burial/burial_dirt_wall")))
+            || (isSchool && (normalizedPath.Contains("/Floors/")
+                || normalizedPath.Contains("/Walls/wall_")));
 
         float ppu = isRitualOrDeath ? 100f : 64f;
         if (isBarangay)

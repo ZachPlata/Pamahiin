@@ -103,6 +103,21 @@ public class GameAudioManager : MonoBehaviour
 
     public static bool IsBasementPosition(Vector3 worldPos) => worldPos.y < BASEMENT_Y_THRESHOLD;
 
+    /// <summary>
+    /// Returns true if both positions belong to the same logical floor.
+    /// Consults FloorZone when present in multi-floor scenes, falling back to
+    /// BASEMENT_Y_THRESHOLD for legacy single-house scenes like BarangayMap.
+    /// </summary>
+    public static bool IsSameFloor(Vector3 posA, Vector3 posB)
+    {
+        if (FloorZone.TryGetFloorIndex(posA, out int floorA) &&
+            FloorZone.TryGetFloorIndex(posB, out int floorB))
+        {
+            return floorA == floorB;
+        }
+        return IsBasementPosition(posA) == IsBasementPosition(posB);
+    }
+
     public static float GetEffectiveSfxVolume(float baseVolume = 1f)
     {
         float sfx = GameSettingsManager.Instance != null ? GameSettingsManager.Instance.SFXVolume : 0.8f;
@@ -176,7 +191,7 @@ public class GameAudioManager : MonoBehaviour
     public static float GetFloorAttenuation(Vector3 soundPos, float crossFloorMultiplier = 0.08f)
     {
         if (!TryGetListenerWorldPosition(out Vector3 listenerPos)) return 1f;
-        return IsBasementPosition(soundPos) != IsBasementPosition(listenerPos) ? crossFloorMultiplier : 1f;
+        return !IsSameFloor(soundPos, listenerPos) ? crossFloorMultiplier : 1f;
     }
 
     public static void ConfigureProximityAudioSource(AudioSource src, float minDistance = DEFAULT_MIN_DISTANCE, float maxDistance = DEFAULT_MAX_DISTANCE, float spatialBlend = 1.0f)

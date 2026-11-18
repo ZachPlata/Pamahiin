@@ -125,6 +125,27 @@ public class WeatherManager : NetworkBehaviour
         new Rect( 4.53f, -1.85f, 0.86f, 3.45f)  // East perimeter alley [x >= 4.53]
     };
 
+    [Header("Custom Exterior Weather Bounds (Multi-Floor Maps)")]
+    [Tooltip("Optional scene-specific exterior rects for rain, fog, and fireflies (leaves BarangayMap defaults when empty).")]
+    [SerializeField] private Rect[] customExteriorZones;
+    [Tooltip("Optional ground-floor building perimeter rect for muffling indoor rain near exterior walls.")]
+    [SerializeField] private Rect customBuildingPerimeter;
+
+    private Rect[] ActiveExteriorZones =>
+        customExteriorZones != null && customExteriorZones.Length > 0 ? customExteriorZones : ExteriorZones;
+
+    private bool HasCustomExteriorZones =>
+        customExteriorZones != null && customExteriorZones.Length > 0;
+
+    /// <summary>
+    /// Assigns map-specific exterior weather zones and ground-floor building perimeter bounds.
+    /// </summary>
+    public void ConfigureCustomBounds(Rect[] exteriorZones, Rect buildingPerimeter)
+    {
+        customExteriorZones = exteriorZones;
+        customBuildingPerimeter = buildingPerimeter;
+    }
+
     private const int FIREFLY_COUNT = 64;
     private const int HERO_FIREFLY_LIGHTS = 12;
     private const int ROAD_RAIN_ROWS = 12;
@@ -712,6 +733,11 @@ public class WeatherManager : NetworkBehaviour
 
     private Vector3 SampleCurbOrYardAnchor()
     {
+        if (HasCustomExteriorZones)
+        {
+            return SampleExteriorAnchor(out _);
+        }
+
         float[] curbX = { -1.62f, -1.52f, -0.38f, -0.30f, -0.14f };
         for (int attempt = 0; attempt < 24; attempt++)
         {
@@ -730,6 +756,27 @@ public class WeatherManager : NetworkBehaviour
     private Vector3 ClampPointOutdoors(Vector3 candidate)
     {
         if (!IsPositionIndoors(candidate)) return candidate;
+        if (HasCustomExteriorZones)
+        {
+            Rect[] zones = ActiveExteriorZones;
+            Vector3 best = new Vector3(zones[0].center.x, zones[0].center.y, 0f);
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < zones.Length; i++)
+            {
+                Rect z = zones[i];
+                float cx = Mathf.Clamp(candidate.x, z.xMin, z.xMax);
+                float cy = Mathf.Clamp(candidate.y, z.yMin, z.yMax);
+                Vector3 clamped = new Vector3(cx, cy, 0f);
+                if (IsPositionIndoors(clamped)) continue;
+                float sqr = (clamped - candidate).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = clamped;
+                }
+            }
+            return best;
+        }
         return new Vector3(Mathf.Min(-0.18f, candidate.x), candidate.y, 0f);
     }
 
@@ -778,10 +825,11 @@ public class WeatherManager : NetworkBehaviour
 
     private Vector3 SampleExteriorAnchor(out int zoneIndex, VehicleExclusionMode exclusionMode = VehicleExclusionMode.None)
     {
+        Rect[] zones = ActiveExteriorZones;
         float totalArea = 0f;
-        for (int z = 0; z < ExteriorZones.Length; z++)
+        for (int z = 0; z < zones.Length; z++)
         {
-            totalArea += ExteriorZones[z].width * ExteriorZones[z].height;
+            totalArea += zones[z].width * zones[z].height;
         }
 
         int maxAttempts = exclusionMode != VehicleExclusionMode.None ? 64 : 32;
@@ -790,9 +838,9 @@ public class WeatherManager : NetworkBehaviour
             float pick = Random.Range(0f, totalArea);
             zoneIndex = 0;
             float accum = 0f;
-            for (int z = 0; z < ExteriorZones.Length; z++)
+            for (int z = 0; z < zones.Length; z++)
             {
-                accum += ExteriorZones[z].width * ExteriorZones[z].height;
+                accum += zones[z].width * zones[z].height;
                 if (pick <= accum)
                 {
                     zoneIndex = z;
@@ -800,7 +848,7 @@ public class WeatherManager : NetworkBehaviour
                 }
             }
 
-            Rect zone = ExteriorZones[zoneIndex];
+            Rect zone = zones[zoneIndex];
             Vector3 candidate = new Vector3(
                 Random.Range(zone.xMin, zone.xMax),
                 Random.Range(zone.yMin, zone.yMax),
@@ -810,6 +858,18 @@ public class WeatherManager : NetworkBehaviour
             {
                 return candidate;
             }
+        }
+
+        if (HasCustomExteriorZones)
+        {
+            zoneIndex = 0;
+            Rect first = zones[0];
+            Vector3 fallback = new Vector3(first.center.x, first.center.y, 0f);
+            if (exclusionMode == VehicleExclusionMode.Fog && IsFogBlockedPosition(fallback))
+            {
+                fallback = PushOutsideFogBlocked(fallback, fallback);
+            }
+            return fallback;
         }
 
         // Safe exterior fallbacks away from Jeepney and house walls
@@ -831,7 +891,8 @@ public class WeatherManager : NetworkBehaviour
 
     private Vector3 SampleExteriorOffsetInZone(Vector3 anchor, int zoneIndex, float radius, VehicleExclusionMode exclusionMode = VehicleExclusionMode.None)
     {
-        Rect zone = ExteriorZones[Mathf.Clamp(zoneIndex, 0, ExteriorZones.Length - 1)];
+        Rect[] zones = ActiveExteriorZones;
+        Rect zone = zones[Mathf.Clamp(zoneIndex, 0, zones.Length - 1)];
         int attempts = exclusionMode != VehicleExclusionMode.None ? 10 : 1;
         for (int attempt = 0; attempt < attempts; attempt++)
         {
@@ -868,11 +929,35 @@ public class WeatherManager : NetworkBehaviour
 
     public bool IsPositionIndoors(Vector3 worldPos)
     {
-        // Basement sits below y = -3.2f and is always indoors
-        if (worldPos.y < -3.2f) return true;
-
-        if (cachedRoofs.Count == 0)
+        if (FloorZone.HasAnyZones())
         {
+            if (FloorZone.IsPositionInsideInteriorFloor(worldPos))
+            {
+                return true;
+            }
+        }
+        else if (worldPos.y < -3.2f)
+        {
+            // Legacy BarangayMap basement sits below y = -3.2f and is always indoors
+            return true;
+        }
+
+        bool needsRoofRefresh = cachedRoofs.Count == 0;
+        if (!needsRoofRefresh)
+        {
+            for (int i = 0; i < cachedRoofs.Count; i++)
+            {
+                if (cachedRoofs[i] == null)
+                {
+                    needsRoofRefresh = true;
+                    break;
+                }
+            }
+        }
+
+        if (needsRoofRefresh)
+        {
+            cachedRoofs.Clear();
             cachedRoofs.AddRange(FindObjectsByType<RoofFader>(FindObjectsInactive.Include));
         }
 
@@ -1133,7 +1218,7 @@ public class WeatherManager : NetworkBehaviour
                 targetVol = 0f;
             }
         }
-        else if (hasPlayer && !GameAudioManager.IsBasementPosition(listenerPos))
+        else if (hasPlayer && (FloorZone.HasAnyZones() || !GameAudioManager.IsBasementPosition(listenerPos)))
         {
             float weatherBase = CurrentWeather == BarangayWeatherType.RainThunderstorm ? 0.34f : 0.22f;
             if (!localPlayerIndoors)
@@ -1141,6 +1226,25 @@ public class WeatherManager : NetworkBehaviour
                 weatherAudioEmitter.position = new Vector3(listenerPos.x, listenerPos.y, listenerZ);
                 GameAudioManager.ConfigureProximityAudioSource(weatherAudioSource, 1.0f, 4.0f, 1.0f);
                 targetVol = weatherBase * sfxScale;
+            }
+            else if (FloorZone.HasAnyZones())
+            {
+                int floor = FloorZone.GetFloorIndex(listenerPos);
+                if (floor <= FloorZone.FLOOR_FIRST)
+                {
+                    Vector3 extPos = GetNearestExteriorEdgePoint(listenerPos);
+                    weatherAudioEmitter.position = new Vector3(extPos.x, extPos.y, listenerZ);
+                    GameAudioManager.ConfigureProximityAudioSource(weatherAudioSource, 0.4f, 2.8f, 1.0f);
+                    targetVol = weatherBase * 0.42f * sfxScale;
+                }
+                else
+                {
+                    // Floor 2 is softly muffled between slabs; Floor 3 is directly under the roof.
+                    weatherAudioEmitter.position = new Vector3(listenerPos.x, listenerPos.y, listenerZ);
+                    GameAudioManager.ConfigureProximityAudioSource(weatherAudioSource, 1.0f, 4.0f, 1.0f);
+                    float roofScale = floor >= FloorZone.FLOOR_THIRD ? 0.34f : 0.14f;
+                    targetVol = weatherBase * roofScale * sfxScale;
+                }
             }
             else
             {
@@ -1191,18 +1295,32 @@ public class WeatherManager : NetworkBehaviour
         return found;
     }
 
-    private static Vector3 GetNearestExteriorEdgePoint(Vector3 pos)
+    private Vector3 GetNearestExteriorEdgePoint(Vector3 pos)
     {
-        // Main house spans approximately x=[0.00..4.48], y=[-1.85..+1.65]; push out to closest perimeter edge.
-        float dWest = Mathf.Abs(pos.x - (-0.08f));
-        float dEast = Mathf.Abs(4.55f - pos.x);
-        float dSouth = Mathf.Abs(pos.y - (-1.92f));
-        float dNorth = Mathf.Abs(1.72f - pos.y);
-        float min = Mathf.Min(Mathf.Min(dWest, dEast), Mathf.Min(dSouth, dNorth));
+        if (customBuildingPerimeter.width > 0.01f && customBuildingPerimeter.height > 0.01f)
+        {
+            float dWest = Mathf.Abs(pos.x - customBuildingPerimeter.xMin);
+            float dEast = Mathf.Abs(customBuildingPerimeter.xMax - pos.x);
+            float dSouth = Mathf.Abs(pos.y - customBuildingPerimeter.yMin);
+            float dNorth = Mathf.Abs(customBuildingPerimeter.yMax - pos.y);
+            float min = Mathf.Min(Mathf.Min(dWest, dEast), Mathf.Min(dSouth, dNorth));
 
-        if (min == dWest) return new Vector3(-0.08f, pos.y, 0f);
-        if (min == dEast) return new Vector3(4.55f, pos.y, 0f);
-        if (min == dSouth) return new Vector3(pos.x, -1.92f, 0f);
+            if (min == dWest) return new Vector3(customBuildingPerimeter.xMin, pos.y, 0f);
+            if (min == dEast) return new Vector3(customBuildingPerimeter.xMax, pos.y, 0f);
+            if (min == dSouth) return new Vector3(pos.x, customBuildingPerimeter.yMin, 0f);
+            return new Vector3(pos.x, customBuildingPerimeter.yMax, 0f);
+        }
+
+        // Main house spans approximately x=[0.00..4.48], y=[-1.85..+1.65]; push out to closest perimeter edge.
+        float bWest = Mathf.Abs(pos.x - (-0.08f));
+        float bEast = Mathf.Abs(4.55f - pos.x);
+        float bSouth = Mathf.Abs(pos.y - (-1.92f));
+        float bNorth = Mathf.Abs(1.72f - pos.y);
+        float bMin = Mathf.Min(Mathf.Min(bWest, bEast), Mathf.Min(bSouth, bNorth));
+
+        if (bMin == bWest) return new Vector3(-0.08f, pos.y, 0f);
+        if (bMin == bEast) return new Vector3(4.55f, pos.y, 0f);
+        if (bMin == bSouth) return new Vector3(pos.x, -1.92f, 0f);
         return new Vector3(pos.x, 1.72f, 0f);
     }
 
@@ -1261,9 +1379,21 @@ public class WeatherManager : NetworkBehaviour
                 lightningTimer = Random.Range(10f, 22f);
                 lightningFlashAlpha = 1f;
                 GameAudioManager.TryGetListenerWorldPosition(out Vector3 listenerPos);
-                Vector3 thunderPos = new Vector3(-1.2f, listenerPos.y, 0f);
-                float thunderVol = localPlayerIndoors ? (GameAudioManager.IsBasementPosition(listenerPos) ? 0.10f : 0.42f) : 0.85f;
-                GameAudioManager.PlayAt("weather_thunder_clap", thunderPos, thunderVol, 0.9f, Random.Range(0.92f, 1.08f), 1.5f, 12.0f, 0.15f);
+                if (FloorZone.HasAnyZones())
+                {
+                    int floor = FloorZone.GetFloorIndex(listenerPos);
+                    Vector3 thunderPos = new Vector3(listenerPos.x - 1.2f, listenerPos.y, 0f);
+                    float thunderVol = !localPlayerIndoors
+                        ? 0.85f
+                        : (floor >= FloorZone.FLOOR_THIRD ? 0.48f : (floor == FloorZone.FLOOR_SECOND ? 0.24f : 0.42f));
+                    GameAudioManager.PlayAt("weather_thunder_clap", thunderPos, thunderVol, 0.9f, Random.Range(0.92f, 1.08f), 1.5f, 12.0f, 1.0f);
+                }
+                else
+                {
+                    Vector3 thunderPos = new Vector3(-1.2f, listenerPos.y, 0f);
+                    float thunderVol = localPlayerIndoors ? (GameAudioManager.IsBasementPosition(listenerPos) ? 0.10f : 0.42f) : 0.85f;
+                    GameAudioManager.PlayAt("weather_thunder_clap", thunderPos, thunderVol, 0.9f, Random.Range(0.92f, 1.08f), 1.5f, 12.0f, 0.15f);
+                }
             }
         }
 

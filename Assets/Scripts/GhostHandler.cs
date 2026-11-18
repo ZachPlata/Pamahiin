@@ -681,9 +681,24 @@ public class GhostHandler : NetworkBehaviour
     {
         if (p == null || !p.IsAlive) return false;
         Vector3 pos = p.transform.position;
-        if (GameAudioManager.IsBasementPosition(pos)) return true;
 
-        if (cachedEnclosedRoofs == null || cachedEnclosedRoofs.Length == 0)
+        if (FloorZone.IsPositionInsideInteriorFloor(pos)) return true;
+        if (!FloorZone.HasAnyZones() && GameAudioManager.IsBasementPosition(pos)) return true;
+
+        bool needsRoofRefresh = cachedEnclosedRoofs == null || cachedEnclosedRoofs.Length == 0;
+        if (!needsRoofRefresh)
+        {
+            for (int i = 0; i < cachedEnclosedRoofs.Length; i++)
+            {
+                if (cachedEnclosedRoofs[i] == null)
+                {
+                    needsRoofRefresh = true;
+                    break;
+                }
+            }
+        }
+
+        if (needsRoofRefresh)
         {
             var all = FindObjectsByType<RoofFader>(FindObjectsInactive.Include);
             var enclosed = new System.Collections.Generic.List<RoofFader>();
