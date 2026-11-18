@@ -5,8 +5,8 @@ using UnityEngine.UIElements;
 /// <summary>
 /// Client-sided Spirit Box dialogue and frequency scanning interface.
 /// Overrides player movement and controls while conversing with the entity.
-/// Allows selecting 1 of 5 questions via scroll wheel or numeric keys 1-5,
-/// broadcasting via Right Click or Enter, and turning off / cancelling via Left Click.
+/// Allows selecting 1 of 5 questions via scroll wheel, numeric keys 1-5, or Left Click,
+/// broadcasting via Left Click on an option / Enter / Space, and turning off via clicking outside or Esc.
 /// </summary>
 [RequireComponent(typeof(UIDocument))]
 public class SpiritBoxDialogueUI : MonoBehaviour
@@ -112,11 +112,45 @@ public class SpiritBoxDialogueUI : MonoBehaviour
             }
         }
 
-        // Hide overlay initially
+        // Hide overlay initially and close only when clicking outside the panel
         if (overlay != null)
         {
+            overlay.UnregisterCallback<PointerDownEvent>(OnOverlayPointerDown);
+            overlay.RegisterCallback<PointerDownEvent>(OnOverlayPointerDown);
             overlay.style.display = DisplayStyle.None;
         }
+    }
+
+    private void OnOverlayPointerDown(PointerDownEvent evt)
+    {
+        if (evt == null) return;
+        if (TryHandleBackdropClick(evt.target as VisualElement, evt.position, evt.button))
+        {
+            evt.StopPropagation();
+        }
+    }
+
+    public bool TryHandleBackdropClick(VisualElement clickedTarget, Vector2 pointerPosition, int button = 0)
+    {
+        if (button != 0) return false;
+        if (!isDialogueOpen || activeSpiritBox == null) return false;
+        if (Time.frameCount == openedFrame || (Time.unscaledTime - openTime) < 0.25f) return false;
+
+        if (panel != null)
+        {
+            if (clickedTarget != null && (clickedTarget == panel || panel.Contains(clickedTarget)))
+            {
+                return false;
+            }
+            if (panel.worldBound.width > 0f && panel.worldBound.height > 0f && panel.worldBound.Contains(pointerPosition))
+            {
+                return false;
+            }
+        }
+
+        activeSpiritBox.TurnOffAndCancel();
+        CloseDialogue();
+        return true;
     }
 
     private void Update()
@@ -159,22 +193,7 @@ public class SpiritBoxDialogueUI : MonoBehaviour
             return;
         }
 
-        // 3. Left Click (Mouse 0) -> Turn off Spirit Box and cancel talking
-        if (Input.GetMouseButtonDown(0))
-        {
-            activeSpiritBox.TurnOffAndCancel();
-            CloseDialogue();
-            return;
-        }
-
-        // 4. Right Click (Mouse 1) -> Pick / Broadcast currently highlighted option
-        if (Input.GetMouseButtonDown(1))
-        {
-            SubmitHighlightedQuestion();
-            return;
-        }
-
-        // 5. Scroll Wheel -> Navigate through dialogue options
+        // 3. Scroll Wheel -> Navigate through dialogue options
         float scroll = Input.GetAxisRaw("Mouse ScrollWheel");
         if (scroll > 0.02f)
         {

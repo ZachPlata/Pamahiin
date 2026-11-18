@@ -133,14 +133,23 @@ public class EventGhostBehavior : NetworkBehaviour
         }
     }
 
+    private static float GetCombinedEventIntervalMultiplier()
+    {
+        float diffMult = ProgressionAndLoadoutManager.Instance != null
+            ? ProgressionAndLoadoutManager.GetDifficultyEventIntervalMultiplier(ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
+            : 1f;
+        return WeatherManager.GetEventIntervalMultiplier() * diffMult;
+    }
+
     public void InitializeOrigin(Vector3 origin)
     {
         initialSpawnLocation = origin;
         currentDestination = origin;
         rb.position = origin;
         isInitialized = true;
-        nextEventTime = Time.time + Random.Range(eventIntervalMin, eventIntervalMax);
-        nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin * 0.5f, propDisruptCooldownMax * 0.65f);
+        float mult = GetCombinedEventIntervalMultiplier();
+        nextEventTime = Time.time + Random.Range(eventIntervalMin, eventIntervalMax) * mult;
+        nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin * 0.5f, propDisruptCooldownMax * 0.65f) * mult;
     }
 
     private void Update()
@@ -151,10 +160,7 @@ public class EventGhostBehavior : NetworkBehaviour
         {
             if (!isManifesting && Time.time >= nextEventTime)
             {
-                float diffMult = ProgressionAndLoadoutManager.Instance != null
-                    ? ProgressionAndLoadoutManager.GetDifficultyEventIntervalMultiplier(ProgressionAndLoadoutManager.Instance.SelectedDifficulty)
-                    : 1f;
-                float interval = Random.Range(eventIntervalMin, eventIntervalMax) * WeatherManager.GetEventIntervalMultiplier() * diffMult;
+                float interval = Random.Range(eventIntervalMin, eventIntervalMax) * GetCombinedEventIntervalMultiplier();
                 nextEventTime = Time.time + interval;
                 ChooseAndExecuteEvent();
             }
@@ -545,7 +551,7 @@ public class EventGhostBehavior : NetworkBehaviour
             var chosen = nearbyProps[Random.Range(0, nearbyProps.Count)];
             if (chosen.TriggerGhostDisruption(false))
             {
-                nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin, propDisruptCooldownMax) * WeatherManager.GetEventIntervalMultiplier();
+                nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin, propDisruptCooldownMax) * GetCombinedEventIntervalMultiplier();
                 return;
             }
         }
@@ -566,7 +572,7 @@ public class EventGhostBehavior : NetworkBehaviour
             var chosen = nearbyProps[Random.Range(0, nearbyProps.Count)];
             if (chosen.TriggerGhostDisruption(false))
             {
-                nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin, propDisruptCooldownMax) * WeatherManager.GetEventIntervalMultiplier();
+                nextPropDisruptTime = Time.time + Random.Range(propDisruptCooldownMin, propDisruptCooldownMax) * GetCombinedEventIntervalMultiplier();
             }
         }
     }

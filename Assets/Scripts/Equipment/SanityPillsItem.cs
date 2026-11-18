@@ -20,44 +20,12 @@ public class SanityPillsItem : EquipmentItem
             gameObject.layer = interactLayer;
         }
 
-        // Ensure collider is sized appropriately so it can easily be hovered and picked up
-        EnsureProperCollider();
-
         audioSource = GetComponent<AudioSource>();
         if (audioSource != null)
         {
             GameAudioManager.ConfigureProximityAudioSource(audioSource, 0.45f, 2.6f, 1.0f);
         }
         if (consumeAudioClip == null) consumeAudioClip = GameAudioManager.GetClip("sanity_pills");
-    }
-
-    private void EnsureProperCollider()
-    {
-        var col = GetComponent<Collider2D>();
-        if (col == null)
-        {
-            var circle = gameObject.AddComponent<CircleCollider2D>();
-            circle.radius = 5.5f;
-            circle.isTrigger = true;
-            interactCollider = circle;
-        }
-        else
-        {
-            // If the collider bounds are microscopic (e.g. tiny 0.1 unit unscaled polygon),
-            // replace it with a properly sized CircleCollider2D matching the bottle sprite.
-            if (col is PolygonCollider2D poly && poly.points.Length > 0 && Mathf.Abs(poly.points[0].x) < 1f)
-            {
-                Destroy(col);
-                var circle = gameObject.AddComponent<CircleCollider2D>();
-                circle.radius = 5.5f;
-                circle.isTrigger = true;
-                interactCollider = circle;
-            }
-            else
-            {
-                interactCollider = col;
-            }
-        }
     }
 
     // Do not drag sanity pills with mouse; clicking LMB or pressing E directly picks them up!
@@ -84,6 +52,7 @@ public class SanityPillsItem : EquipmentItem
 
         // Play audio locally
         PlayConsumeAudio();
+        WarehouseTutorialManager.Instance?.NotifySanityPillsUsed();
 
         // Immediately remove from local inventory for responsive UI feedback
         var localPlayer = NetworkManager.Singleton.LocalClient?.PlayerObject;

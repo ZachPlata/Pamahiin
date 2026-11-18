@@ -23,6 +23,7 @@ public class ExorcismManager : NetworkBehaviour
     private VisualElement exorcismOverlay;
     private VisualElement circleDial;
     private VisualElement targetBarContainer;
+    private VisualElement targetHitLine;
     private VisualElement needleContainer;
     private Label promptKeyLabel;
     private Label lblChants;
@@ -50,7 +51,7 @@ public class ExorcismManager : NetworkBehaviour
     [SerializeField] private int maxLoops = 2;
     [SerializeField] private int maxMistakes = 3;
     [Tooltip("Angular tolerance in degrees for registering a successful overlap with the target bar.")]
-    [SerializeField] private float hitTolerance = 22f;
+    [SerializeField] private float hitTolerance = 8.5f;
 
     // Runtime state
     private Vector3 chalkDiagramPos = Vector3.zero;
@@ -185,6 +186,7 @@ public class ExorcismManager : NetworkBehaviour
                 exorcismOverlay = root.Q<VisualElement>("exorcism-overlay");
                 circleDial = root.Q<VisualElement>("circle-dial");
                 targetBarContainer = root.Q<VisualElement>("target-bar-container");
+                targetHitLine = root.Q<VisualElement>("target-hit-line");
                 needleContainer = root.Q<VisualElement>("needle-container");
                 promptKeyLabel = root.Q<Label>("prompt-key-label");
                 lblChants = root.Q<Label>("lbl-chants");
@@ -443,7 +445,7 @@ public class ExorcismManager : NetworkBehaviour
         currentLoops = 0;
         mistakesCount = 0;
         successfulChants = 0;
-        currentRotationSpeed = baseRotationSpeed;
+        ApplyDifficultyMinigameSettings();
         summonSequenceCoroutine = null;
 
         if (showMinigameForLocalPlayer)
@@ -452,8 +454,64 @@ public class ExorcismManager : NetworkBehaviour
             PickNewKeyAndTarget();
             UpdateMinigameUI();
 
-            if (lblFeedback != null) lblFeedback.text = "Press key when needle overlaps the target bar (Max 2 loops)!";
+            if (lblFeedback != null) lblFeedback.text = $"Press key when needle overlaps the target bar (Max {maxLoops} loops)!";
             if (exorcismOverlay != null) exorcismOverlay.RemoveFromClassList("hidden");
+        }
+    }
+
+    private void ApplyDifficultyMinigameSettings()
+    {
+        ContractDifficulty difficulty = ProgressionAndLoadoutManager.Instance != null
+            ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
+            : ContractDifficulty.Amateur;
+
+        float targetBarWidthPx;
+        float speedMultiplier;
+
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur:
+                targetBarWidthPx = 40f;
+                hitTolerance = 12f;
+                speedMultiplier = 1.0f;
+                maxMistakes = 5;
+                maxLoops = 3;
+                break;
+            case ContractDifficulty.Intermediate:
+                targetBarWidthPx = 28f;
+                hitTolerance = 8.5f;
+                speedMultiplier = 1.5f;
+                maxMistakes = 3;
+                maxLoops = 2;
+                break;
+            case ContractDifficulty.Professional:
+                targetBarWidthPx = 20f;
+                hitTolerance = 6f;
+                speedMultiplier = 1.75f;
+                maxMistakes = 2;
+                maxLoops = 2;
+                break;
+            case ContractDifficulty.Nightmare:
+                targetBarWidthPx = 14f;
+                hitTolerance = 4.2f;
+                speedMultiplier = 1.75f;
+                maxMistakes = 1;
+                maxLoops = 2;
+                break;
+            default:
+                targetBarWidthPx = 28f;
+                hitTolerance = 8.5f;
+                speedMultiplier = 1.0f;
+                maxMistakes = 3;
+                maxLoops = 2;
+                break;
+        }
+
+        currentRotationSpeed = baseRotationSpeed * speedMultiplier;
+
+        if (targetHitLine != null)
+        {
+            targetHitLine.style.width = targetBarWidthPx;
         }
     }
 
@@ -598,7 +656,6 @@ public class ExorcismManager : NetworkBehaviour
         successfulChants++;
         needleAngle = 0f;
         currentLoops = 0;
-        currentRotationSpeed += 15f; // Fast-paced acceleration
 
         if (lblFeedback != null) lblFeedback.text = "Target hit! Chant resonant!";
 
@@ -656,7 +713,8 @@ public class ExorcismManager : NetworkBehaviour
         }
 
         bool isGhostCorrect = !string.IsNullOrEmpty(selectedGhostGuess) &&
-                              selectedGhostGuess.Equals(actualGhostName, System.StringComparison.OrdinalIgnoreCase);
+                              (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene ||
+                               selectedGhostGuess.Equals(actualGhostName, System.StringComparison.OrdinalIgnoreCase));
 
         if (isGhostCorrect && isMinigameSuccess)
         {
@@ -701,8 +759,9 @@ public class ExorcismManager : NetworkBehaviour
         }
 
         bool isGhostCorrect = !string.IsNullOrEmpty(guessedGhostName) &&
-                              !string.IsNullOrEmpty(actualGhostName) &&
-                              guessedGhostName.Equals(actualGhostName, System.StringComparison.OrdinalIgnoreCase);
+                              (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene ||
+                               (!string.IsNullOrEmpty(actualGhostName) &&
+                                guessedGhostName.Equals(actualGhostName, System.StringComparison.OrdinalIgnoreCase)));
 
         if (isGhostCorrect && minigamePassed)
         {
@@ -812,6 +871,11 @@ public class ExorcismManager : NetworkBehaviour
         if (GameMatchManager.Instance != null)
         {
             GameMatchManager.Instance.RecordDeduction(selectedGhostGuess);
+        }
+
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene && WarehouseTutorialManager.Instance != null)
+        {
+            WarehouseTutorialManager.Instance.TriggerGuidedExorcismStep();
         }
 
         // 3. Show dialogue banner: "Ghost has been exorcised. Correct ghost identified."

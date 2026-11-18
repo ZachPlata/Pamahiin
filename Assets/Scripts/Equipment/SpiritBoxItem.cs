@@ -368,7 +368,7 @@ public class SpiritBoxItem : EquipmentItem
                 HunterGhostBehavior.Instance?.OnPlayerSpiritBoxPing(PlayerController.LocalInstance);
             }
             bool ghostResponded = CheckGhostResponse();
-            ReceiveGhostResponseRpc(questionIndex, ghostResponded);
+            ApplyGhostResponseLocal(questionIndex, ghostResponded);
         }
     }
 
@@ -415,6 +415,11 @@ public class SpiritBoxItem : EquipmentItem
 
     [Rpc(SendTo.ClientsAndHost)]
     private void ReceiveGhostResponseRpc(int questionIndex, bool hasEvidence)
+    {
+        ApplyGhostResponseLocal(questionIndex, hasEvidence);
+    }
+
+    private void ApplyGhostResponseLocal(int questionIndex, bool hasEvidence)
     {
         if (audioSource != null && hasEvidence)
         {

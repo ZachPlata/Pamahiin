@@ -167,7 +167,7 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
         }
 
         // Stage 2 gate: Mission departure requires the house front door to have been opened at least once
-        if (IsFrontDoorGateBlocked())
+        if (!ProgressionAndLoadoutManager.IsInWarehouseTutorialScene && IsFrontDoorGateBlocked())
         {
             Debug.Log("[TruckEndGameButton] Departure blocked: open the house front door first.");
             GameAudioManager.PlayDoorLocked(transform.position);
@@ -178,6 +178,12 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
 
         Debug.Log("[TruckEndGameButton] Stage 2 interacted: Ending mission and departing!");
         GameAudioManager.PlayUIClick();
+
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene && WarehouseTutorialManager.Instance != null)
+        {
+            WarehouseTutorialManager.Instance.CompleteTutorialContractStep();
+            return;
+        }
 
         var matchMgr = GameMatchManager.Instance != null
             ? GameMatchManager.Instance
@@ -282,8 +288,8 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
     public string GetInteractText()
     {
         if (!IsRampStageCompleted()) return "Open Jeepney Ramp";
-        if (IsFrontDoorGateBlocked()) return "Open Front Door First";
-        return "End Mission and Leave";
+        if (!ProgressionAndLoadoutManager.IsInWarehouseTutorialScene && IsFrontDoorGateBlocked()) return "Open Front Door First";
+        return ProgressionAndLoadoutManager.IsInWarehouseTutorialScene ? "Complete Tutorial Contract" : "End Mission and Leave";
     }
 
     public bool CanDrag() => false;

@@ -976,8 +976,9 @@ public class GhostHandler : NetworkBehaviour
 
     public void StartHunt(bool isFromFailedExorcism = false)
     {
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene) return;
         if (IsExorcised) return;
-        if (!IsServer || currentState.Value != GhostHandlerState.Dormant) return;
+        if (!IsServer || (!isFromFailedExorcism && currentState.Value != GhostHandlerState.Dormant)) return;
         if (!isFromFailedExorcism && IsInSetupGracePeriod)
         {
             Debug.Log($"[GhostHandler] Hunt blocked during setup grace period ({SetupGracePeriodRemaining:F1}s remaining).");
@@ -1046,9 +1047,20 @@ public class GhostHandler : NetworkBehaviour
         ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
             ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
             : ContractDifficulty.Amateur;
-        huntGraceRemaining = isFromFailedExorcism
-            ? 0f
-            : ProgressionAndLoadoutManager.GetDifficultyHuntGracePeriodSeconds(diff);
+        if (isFromFailedExorcism)
+        {
+            float failedPause = ProgressionAndLoadoutManager.GetFailedExorcismPauseSeconds(diff);
+            Vector3 ghostCheckPos = hunterGhost != null ? hunterGhost.transform.position : transform.position;
+            if (HasActiveCrucifixInVicinity(ghostCheckPos))
+            {
+                failedPause += 4f;
+            }
+            huntGraceRemaining = failedPause;
+        }
+        else
+        {
+            huntGraceRemaining = ProgressionAndLoadoutManager.GetDifficultyHuntGracePeriodSeconds(diff);
+        }
         syncedHuntGraceRemaining.Value = huntGraceRemaining;
         
         if (hunterGhost != null)
@@ -1068,6 +1080,21 @@ public class GhostHandler : NetworkBehaviour
         {
             TriggerRedEnvironmentClientRpc(true);
         }
+    }
+
+    private static bool HasActiveCrucifixInVicinity(Vector3 ghostPos)
+    {
+        var crucifixes = FindObjectsByType<CrucifixItem>(FindObjectsInactive.Exclude);
+        for (int i = 0; i < crucifixes.Length; i++)
+        {
+            var crucifix = crucifixes[i];
+            if (crucifix == null || crucifix.IsBurned || crucifix.IsHeldByDeadPlayer()) continue;
+            if (Vector2.Distance(crucifix.transform.position, ghostPos) <= crucifix.blockRadius)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void EndHunt()

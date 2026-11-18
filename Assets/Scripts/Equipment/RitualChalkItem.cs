@@ -282,7 +282,14 @@ public class RitualChalkItem : EquipmentItem
 
         if (placed && autoStartOnPlace)
         {
-            var exorcismManager = GetExorcismManager();
+            if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene &&
+            WarehouseTutorialManager.Instance != null &&
+            WarehouseTutorialManager.Instance.IsStepCompleted(WarehouseTutorialManager.STEP_B4_SURVIVE_HUNT))
+        {
+            WarehouseTutorialManager.Instance.TriggerGuidedExorcismStep();
+        }
+
+        var exorcismManager = GetExorcismManager();
             if (exorcismManager != null && !exorcismManager.IsExorcismActive && !exorcismManager.IsExorcismCompleted)
             {
                 TriggerRitualPopup();
@@ -383,7 +390,14 @@ public class RitualChalkItem : EquipmentItem
         if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
         if (IsPlaced)
         {
-            var exorcismManager = GetExorcismManager();
+            if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene &&
+            WarehouseTutorialManager.Instance != null &&
+            WarehouseTutorialManager.Instance.IsStepCompleted(WarehouseTutorialManager.STEP_B4_SURVIVE_HUNT))
+        {
+            WarehouseTutorialManager.Instance.TriggerGuidedExorcismStep();
+        }
+
+        var exorcismManager = GetExorcismManager();
             var nearbyCircle = SummoningCircle.FindClosest(transform.position, 0.75f);
             if ((exorcismManager != null && (exorcismManager.IsExorcismActive || exorcismManager.IsExorcismCompleted)) ||
                 (nearbyCircle != null && nearbyCircle.IsIgniting))
@@ -403,7 +417,14 @@ public class RitualChalkItem : EquipmentItem
     {
         if (IsPlaced)
         {
-            var exorcismManager = GetExorcismManager();
+            if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene &&
+            WarehouseTutorialManager.Instance != null &&
+            WarehouseTutorialManager.Instance.IsStepCompleted(WarehouseTutorialManager.STEP_B4_SURVIVE_HUNT))
+        {
+            WarehouseTutorialManager.Instance.TriggerGuidedExorcismStep();
+        }
+
+        var exorcismManager = GetExorcismManager();
             if (exorcismManager != null)
             {
                 if (exorcismManager.IsExorcismCompleted)
@@ -427,6 +448,7 @@ public class RitualChalkItem : EquipmentItem
     /// </summary>
     public bool IsInsideGhostRoom()
     {
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene) return true;
         return GhostRoomMarker.IsInsideGhostRoom(transform.position);
     }
 
@@ -435,6 +457,7 @@ public class RitualChalkItem : EquipmentItem
     /// </summary>
     public bool IsInsideGhostRoom(Vector3 position)
     {
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene) return true;
         return GhostRoomMarker.IsInsideGhostRoom(position);
     }
 
@@ -483,6 +506,13 @@ public class RitualChalkItem : EquipmentItem
 
     public void TriggerRitualPopup()
     {
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene &&
+            WarehouseTutorialManager.Instance != null &&
+            WarehouseTutorialManager.Instance.IsStepCompleted(WarehouseTutorialManager.STEP_B4_SURVIVE_HUNT))
+        {
+            WarehouseTutorialManager.Instance.TriggerGuidedExorcismStep();
+        }
+
         var exorcismManager = GetExorcismManager();
         if (exorcismManager != null)
         {

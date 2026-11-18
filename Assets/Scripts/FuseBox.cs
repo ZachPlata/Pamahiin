@@ -25,6 +25,7 @@ public class FuseBox : NetworkBehaviour, IInteractable
     private NetworkVariable<bool> isEnabled = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    private bool localIsEnabled = false;
     private AudioSource humAudioSource;
     private AudioClip fallbackHumClip;
 
@@ -32,7 +33,9 @@ public class FuseBox : NetworkBehaviour, IInteractable
     public static event System.Action<bool> OnPowerStateChanged;
 
     /// <summary>Whether the fuse box is currently supplying power to the house.</summary>
-    public bool IsEnabled => isEnabled.Value;
+    public bool IsEnabled => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
+        ? isEnabled.Value
+        : localIsEnabled;
 
     public static FuseBox Instance { get; private set; }
 
@@ -53,13 +56,20 @@ public class FuseBox : NetworkBehaviour, IInteractable
 
         if (IsServer)
         {
-            ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
-                ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
-                : ContractDifficulty.Amateur;
-            isEnabled.Value = ProgressionAndLoadoutManager.GetDifficultyFuseBoxStartsOn(diff);
+            if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene)
+            {
+                isEnabled.Value = false;
+            }
+            else
+            {
+                ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
+                    ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
+                    : ContractDifficulty.Amateur;
+                isEnabled.Value = ProgressionAndLoadoutManager.GetDifficultyFuseBoxStartsOn(diff);
+            }
         }
 
-        OnFuseStateChanged(isEnabled.Value);
+        OnFuseStateChanged(IsEnabled);
     }
 
     public override void OnNetworkDespawn()
@@ -99,12 +109,19 @@ public class FuseBox : NetworkBehaviour, IInteractable
     public void Interact()
     {
         if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || !IsSpawned)
+        {
+            localIsEnabled = !localIsEnabled;
+            GameAudioManager.PlayFuseBox(transform.position, localIsEnabled);
+            OnFuseStateChanged(localIsEnabled);
+            return;
+        }
         ToggleFuseBoxRpc();
     }
 
     public string GetInteractText()
     {
-        return isEnabled.Value ? "Turn Off Fuse Box" : "Turn On Fuse Box";
+        return IsEnabled ? "Turn Off Fuse Box" : "Turn On Fuse Box";
     }
 
     public bool CanDrag() => false;

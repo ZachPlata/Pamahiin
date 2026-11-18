@@ -141,9 +141,24 @@ public class LoadingScreenManager : MonoBehaviour
             return;
         }
 
-        if (isVisible && !isFadingOut)
+        if (mode == LoadSceneMode.Single)
         {
-            EnsureBackdropSceneActive();
+            isLoadingBackdropScene = false;
+            if (LoadingRoadBackdropController.ActiveInstance == null && loadingSceneBackdrop != null)
+            {
+                loadingSceneBackdrop.style.backgroundImage = StyleKeyword.None;
+            }
+            if (isVisible && !isFadingOut)
+            {
+                EnsureUIReady();
+                if (loadingOverlay != null)
+                {
+                    loadingOverlay.RemoveFromClassList("hidden");
+                    loadingOverlay.AddToClassList("loading-visible");
+                    loadingOverlay.style.opacity = 1f;
+                    loadingOverlay.pickingMode = PickingMode.Position;
+                }
+            }
         }
     }
 
@@ -216,6 +231,14 @@ public class LoadingScreenManager : MonoBehaviour
             loadingOverlay.RemoveFromClassList("loading-visible");
             loadingOverlay.style.opacity = 0f;
             loadingOverlay.pickingMode = PickingMode.Ignore;
+        }
+        else if (loadingOverlay != null && isVisible)
+        {
+            loadingOverlay.RemoveFromClassList("hidden");
+            loadingOverlay.AddToClassList("loading-visible");
+            loadingOverlay.style.opacity = 1f;
+            loadingOverlay.pickingMode = PickingMode.Position;
+            ApplyProgressVisuals(displayedProgress);
         }
 
         if (loadingBlackFade != null && blackFadeCoroutine == null)

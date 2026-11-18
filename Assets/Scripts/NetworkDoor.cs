@@ -55,14 +55,14 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     [Header("Legacy Settings (Fallback if no references assigned)")]
     [SerializeField] private float openAngle = 90f;
 
-    public bool IsOpen => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isOpen.Value : localIsOpen;
-    public bool IsLocked => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isLocked.Value : localIsLocked;
+    public bool IsOpen => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned) ? isOpen.Value : localIsOpen;
+    public bool IsLocked => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned) ? isLocked.Value : localIsLocked;
     public bool IsFrontDoor => isFrontDoor;
     public bool RequiresKey => requiresKey;
     public bool IsHidingSpot => isHidingSpot;
     public bool AllowPlayerInteract => allowPlayerInteract;
     public float CurrentProgress => currentProgress;
-    public bool IsKeyFound => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening) ? isKeyFound.Value : localIsKeyFound;
+    public bool IsKeyFound => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned) ? isKeyFound.Value : localIsKeyFound;
     public bool HasBeenOpened => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         ? (hasBeenOpened.Value || isOpen.Value || localHasBeenOpened)
         : (localHasBeenOpened || localIsOpen);
@@ -916,7 +916,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
             return;
         }
 
-        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || IsServer)
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || !IsSpawned || IsServer)
         {
             ToggleDoor();
         }
@@ -931,7 +931,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     /// </summary>
     public void SetDoorOpen(bool open, bool immediate = false)
     {
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
         {
             if (IsServer)
             {
@@ -960,7 +960,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     private void ToggleDoor()
     {
         Debug.Log($"Player toggled door: {gameObject.name}");
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
         {
             if (IsServer)
             {
@@ -1090,8 +1090,8 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     /// </summary>
     public void SetLocked(bool locked)
     {
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && !IsServer) return;
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned && !IsServer) return;
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
         {
             isLocked.Value = locked;
             if (locked)

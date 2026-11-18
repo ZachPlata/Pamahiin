@@ -710,6 +710,16 @@ public class JournalController : MonoBehaviour
         lobbyPlayerLegend = root.Q<VisualElement>("lobby-player-legend");
         loadoutShopList = root.Q<ScrollView>("loadout-shop-list");
 
+        var btnReplayTutorial = root.Q<Button>("btn-replay-tutorial");
+        if (btnReplayTutorial != null)
+        {
+            btnReplayTutorial.clicked += () =>
+            {
+                if (isJournalOpen) ToggleJournal();
+                NetworkController.Instance?.EnterWarehouseTutorial();
+            };
+        }
+
         if (btnMapPrev != null)
         {
             btnMapPrev.clicked += () =>

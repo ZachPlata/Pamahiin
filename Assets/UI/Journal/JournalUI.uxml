@@ -350,6 +350,7 @@
                         </ui:VisualElement>
 
                         <ui:Button name="btn-start-contract" text="▶ START INVESTIGATION" class="lobby-start-contract-btn" />
+                        <ui:Button name="btn-replay-tutorial" text="REPLAY WAREHOUSE TUTORIAL" class="lobby-action-btn" style="margin-top: 6px;" />
                     </ui:VisualElement>
 
                     <!-- Right Page: Van Ghost Equipment Loadout & Currency Shop -->

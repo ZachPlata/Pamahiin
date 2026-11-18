@@ -48,6 +48,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
   GlobalObjectIdHash: 2010521182
   InScenePlacedSourceGlobalObjectIdHash: 0
+  m_InScenePlacedDisabledByDefault: 0
   DeferredDespawnTick: 0
   Ownership: 1
   AlwaysReplicateAsRoot: 0
@@ -74,7 +75,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CrucifixItem
   ShowTopMostFoldoutHeaderGroup: 1
   itemName: Crucifix
-  blockRadius: 3
+  blockRadius: 0.5
   normalSprite: {fileID: 5943631175392605505, guid: 255647dcb85305e4c9e57858cff415b2, type: 3}
   burnedSprite: {fileID: 792701828351416493, guid: 373a0387bbc3d2343b0d45857d9a9946, type: 3}
 --- !u!212 &1357475140720177329

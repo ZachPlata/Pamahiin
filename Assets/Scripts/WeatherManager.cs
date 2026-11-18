@@ -39,6 +39,10 @@ public class WeatherManager : NetworkBehaviour
             Instance.hasAppliedGlobalLight = false;
             Instance.UpdateGlobalLighting();
             Instance.UpdateWeatherAudioProximity(immediate: true);
+            if (Instance.CurrentWeather == BarangayWeatherType.RainThunderstorm)
+            {
+                Instance.UpdateRainEntities(false, default);
+            }
         }
     }
 
@@ -63,6 +67,7 @@ public class WeatherManager : NetworkBehaviour
 
     public BarangayWeatherType CurrentWeather => (BarangayWeatherType)netWeatherType.Value;
     public bool IsRedMoon => netIsRedMoon.Value;
+    public bool IsWarmupReady { get; private set; }
 
     private struct FireflyEntity
     {
@@ -79,15 +84,10 @@ public class WeatherManager : NetworkBehaviour
         public float baseAlpha;
     }
 
-    private struct RainEntity
+    private struct RainClusterEntity
     {
-        public Transform transform;
         public SpriteRenderer renderer;
-        public Vector3 anchorPos;
-        public Vector3 localOffset;
-        public int zoneIndex;
-        public float proximityRadius;
-        public float fallSpeed;
+        public Vector3 worldPos;
         public float animTimer;
         public int currentFrame;
         public float fps;
@@ -127,10 +127,11 @@ public class WeatherManager : NetworkBehaviour
 
     private const int FIREFLY_COUNT = 64;
     private const int HERO_FIREFLY_LIGHTS = 12;
-    private const int RAIN_ENTITY_COUNT = 82; // Grouped RainClusters (~4 drops each = ~328 animated drops)
+    private const int ROAD_RAIN_ROWS = 12;
+    private const int PERIMETER_RAIN_CLUSTER_COUNT = 10;
     private const int FOG_WISP_COUNT = 30;
     private const float VEHICLE_FOG_EXCLUSION_PADDING = 0.18f;
-    private const float VEHICLE_RAIN_EXCLUSION_PADDING = 0.15f;
+    private const float VEHICLE_RAIN_EXCLUSION_PADDING = 0.03f;
     private const float FOG_HOUSE_WALL_CLEARANCE = 0.34f;
 
     private enum VehicleExclusionMode
@@ -153,7 +154,7 @@ public class WeatherManager : NetworkBehaviour
     private GameObject fogContainer;
 
     private readonly List<FireflyEntity> fireflyEntities = new List<FireflyEntity>();
-    private readonly List<RainEntity> rainEntities = new List<RainEntity>();
+    private readonly List<RainClusterEntity> rainEntities = new List<RainClusterEntity>();
     private readonly List<FogWispEntity> fogEntities = new List<FogWispEntity>();
     private readonly List<PuddleEntity> puddleEntities = new List<PuddleEntity>();
     private readonly List<RoofFader> cachedRoofs = new List<RoofFader>();
@@ -163,6 +164,9 @@ public class WeatherManager : NetworkBehaviour
     private readonly Dictionary<Light2D, float> baseLightOuterRadii = new Dictionary<Light2D, float>();
     private readonly List<Light2D> cachedFogAffectedLights = new List<Light2D>();
 
+    private Texture2D runtimeGroupedRainTex;
+    private float rainUpdateTimer;
+    private float puddleUpdateTimer;
     private Camera cachedMainCamera;
     private float lightningTimer;
     private float lightningFlashAlpha;
@@ -217,6 +221,7 @@ public class WeatherManager : NetworkBehaviour
         LoadWeatherSheets();
         CacheRoofsAndPuddles();
         BuildWorldWeatherEntities();
+        IsWarmupReady = true;
     }
 
     public override void OnDestroy()
@@ -227,6 +232,11 @@ public class WeatherManager : NetworkBehaviour
         {
             Destroy(fogUnlitMaterial);
             fogUnlitMaterial = null;
+        }
+        if (runtimeGroupedRainTex != null)
+        {
+            Destroy(runtimeGroupedRainTex);
+            runtimeGroupedRainTex = null;
         }
         if (Instance == this) Instance = null;
     }
@@ -290,8 +300,130 @@ public class WeatherManager : NetworkBehaviour
     {
         fireflyFrames = SliceSheet("Weather/fireflies_sheet", 8, 128f);
         fogFrames = SliceSheet("Weather/fog_clouds_sheet", 8, 48f);
-        rainFrames = SliceSheet("Weather/rain_streaks_sheet", 7, 128f);
+        rainFrames = LoadOrBuildGroupedRainFrames();
         puddleFrames = SliceSheet("Weather/puddle_ripples_sheet", 7, 64f);
+    }
+
+    private Sprite[] LoadOrBuildGroupedRainFrames()
+    {
+        const int frameCount = 7;
+        const int frameW = 64;
+        const int frameH = 48;
+        const int sheetW = frameW * frameCount;
+        const float ppu = 100f;
+
+        Texture2D existing = Resources.Load<Texture2D>("Sprites/BarangayMap/Weather/rain_streaks_sheet");
+        if (existing != null && existing.width >= sheetW && existing.height >= frameH)
+        {
+            return SliceSheet("Weather/rain_streaks_sheet", frameCount, ppu);
+        }
+
+        Color32[] pixels = new Color32[sheetW * frameH];
+        Color32 streakTail = new Color32(132, 168, 218, 150);
+        Color32 streakTip = new Color32(204, 228, 255, 225);
+        Color32 ringCol = new Color32(174, 208, 244, 185);
+        Color32 fadeCol = new Color32(148, 186, 228, 95);
+        int[] dropX = { 4, 10, 17, 23, 29, 35, 42, 48, 54, 60 };
+        int[] dropGroundY = { 5, 18, 9, 23, 4, 15, 21, 7, 13, 20 };
+        int[] dropPhase = { 0, 3, 5, 1, 4, 6, 2, 0, 3, 5 };
+
+        for (int f = 0; f < frameCount; f++)
+        {
+            int ox = f * frameW;
+            for (int d = 0; d < 10; d++)
+            {
+                int subF = (f + dropPhase[d]) % frameCount;
+                int cx = ox + dropX[d];
+                int gy = dropGroundY[d];
+                if (subF <= 3)
+                {
+                    int topY = gy + 22 - subF * 5;
+                    int botY = topY - 6;
+                    DrawLinePixels(pixels, sheetW, frameH, cx + 1, topY, cx, botY, streakTail);
+                    BlendPixel(pixels, sheetW, frameH, cx, botY, streakTip);
+                }
+                else if (subF == 4)
+                {
+                    DrawLinePixels(pixels, sheetW, frameH, cx + 1, gy + 4, cx, gy, streakTail);
+                    BlendPixel(pixels, sheetW, frameH, cx - 1, gy + 1, streakTip);
+                    BlendPixel(pixels, sheetW, frameH, cx + 1, gy + 1, streakTip);
+                }
+                else if (subF == 5)
+                {
+                    BlendPixel(pixels, sheetW, frameH, cx - 2, gy, ringCol);
+                    BlendPixel(pixels, sheetW, frameH, cx + 2, gy, ringCol);
+                    BlendPixel(pixels, sheetW, frameH, cx, gy - 1, ringCol);
+                    BlendPixel(pixels, sheetW, frameH, cx, gy + 1, ringCol);
+                    BlendPixel(pixels, sheetW, frameH, cx - 1, gy + 3, streakTip);
+                    BlendPixel(pixels, sheetW, frameH, cx + 1, gy + 3, streakTip);
+                }
+                else
+                {
+                    BlendPixel(pixels, sheetW, frameH, cx - 3, gy, fadeCol);
+                    BlendPixel(pixels, sheetW, frameH, cx + 3, gy, fadeCol);
+                    BlendPixel(pixels, sheetW, frameH, cx, gy - 1, fadeCol);
+                    BlendPixel(pixels, sheetW, frameH, cx, gy + 1, fadeCol);
+                }
+            }
+        }
+
+        runtimeGroupedRainTex = new Texture2D(sheetW, frameH, TextureFormat.RGBA32, false)
+        {
+            name = "RuntimeGroupedRainSheet",
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        runtimeGroupedRainTex.SetPixels32(pixels);
+        runtimeGroupedRainTex.Apply(false, true);
+
+        Sprite[] result = new Sprite[frameCount];
+        for (int i = 0; i < frameCount; i++)
+        {
+            result[i] = Sprite.Create(
+                runtimeGroupedRainTex,
+                new Rect(i * frameW, 0, frameW, frameH),
+                new Vector2(0.5f, 0.5f),
+                ppu,
+                0,
+                SpriteMeshType.FullRect);
+            result[i].name = $"rain_grouped_f{i}";
+        }
+        return result;
+    }
+
+    private static void BlendPixel(Color32[] pixels, int width, int height, int x, int y, Color32 c)
+    {
+        if (x < 0 || y < 0 || x >= width || y >= height || c.a == 0) return;
+        int idx = y * width + x;
+        if (c.a == 255)
+        {
+            pixels[idx] = c;
+            return;
+        }
+        Color32 dst = pixels[idx];
+        float a = c.a / 255f;
+        float inv = 1f - a;
+        pixels[idx] = new Color32(
+            (byte)Mathf.Clamp(Mathf.RoundToInt(c.r * a + dst.r * inv), 0, 255),
+            (byte)Mathf.Clamp(Mathf.RoundToInt(c.g * a + dst.g * inv), 0, 255),
+            (byte)Mathf.Clamp(Mathf.RoundToInt(c.b * a + dst.b * inv), 0, 255),
+            (byte)Mathf.Clamp(Mathf.Max(c.a, dst.a), 0, 255));
+    }
+
+    private static void DrawLinePixels(Color32[] pixels, int width, int height, int x0, int y0, int x1, int y1, Color32 c)
+    {
+        int dx = Mathf.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        int dy = -Mathf.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        int err = dx + dy;
+        while (true)
+        {
+            BlendPixel(pixels, width, height, x0, y0, c);
+            if (x0 == x1 && y0 == y1) break;
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; x0 += sx; }
+            if (e2 <= dx) { err += dx; y0 += sy; }
+        }
     }
 
     private static Sprite[] SliceSheet(string relPath, int count, float ppu)
@@ -498,38 +630,48 @@ public class WeatherManager : NetworkBehaviour
             });
         }
 
-        // 2. Grouped RainCluster Entities (each renders 4 fine 128-PPU raindrops & splashes strictly outdoors)
+        // 2. Static World-Space Grouped RainCluster Entities (10 drops/cluster covering the full Barangay road outside the Jeepney + perimeter alleys)
         rainContainer = new GameObject("Rain_WorldEntities");
         rainContainer.transform.SetParent(transform, false);
         rainEntities.Clear();
-        for (int i = 0; i < RAIN_ENTITY_COUNT; i++)
+
+        float[] roadColumnsX = { -1.50f, -1.08f, -0.64f, -0.22f };
+        int clusterIdx = 0;
+        for (int row = 0; row < ROAD_RAIN_ROWS; row++)
         {
-            Vector3 anchor = SampleExteriorAnchor(out int zoneIdx, VehicleExclusionMode.Rain);
-            float radius = Random.Range(0.10f, 0.22f);
-            Vector3 offset = SampleExteriorOffsetInZone(anchor, zoneIdx, radius, VehicleExclusionMode.Rain);
-            GameObject go = new GameObject($"RainCluster_{i}");
-            go.transform.SetParent(rainContainer.transform, false);
-            go.transform.position = SnapTo16BitGrid(anchor + offset);
-
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sortingLayerID = weatherSortingLayerId;
-            sr.sortingOrder = 10;
-            int startFrame = Random.Range(0, Mathf.Max(1, rainFrames.Length));
-            if (rainFrames.Length > 0) sr.sprite = rainFrames[startFrame];
-
-            rainEntities.Add(new RainEntity
+            float baseY = Mathf.Lerp(-2.60f, 2.60f, row / (float)(ROAD_RAIN_ROWS - 1));
+            for (int col = 0; col < roadColumnsX.Length; col++)
             {
-                transform = go.transform,
-                renderer = sr,
-                anchorPos = anchor,
-                localOffset = offset,
-                zoneIndex = zoneIdx,
-                proximityRadius = radius,
-                fallSpeed = Random.Range(0.32f, 0.58f),
-                animTimer = Random.Range(0f, 0.08f),
-                currentFrame = startFrame,
-                fps = Random.Range(13f, 17f)
-            });
+                float x = roadColumnsX[col] + Random.Range(-0.05f, 0.05f);
+                float y = baseY + Random.Range(-0.05f, 0.05f);
+                if (col == 3 && (y < -1.80f || y > 1.60f))
+                {
+                    continue;
+                }
+
+                Vector3 candidate = new Vector3(x, y, 0f);
+                if (IsRainBlockedPosition(candidate))
+                {
+                    float shiftedX = col <= 1 ? -1.48f : -0.20f;
+                    Vector3 shifted = new Vector3(shiftedX + Random.Range(-0.04f, 0.04f), y, 0f);
+                    if (IsRainBlockedPosition(shifted))
+                    {
+                        continue;
+                    }
+                    candidate = shifted;
+                }
+
+                AddRainCluster(candidate, weatherSortingLayerId, ref clusterIdx);
+            }
+        }
+
+        for (int i = 0; i < PERIMETER_RAIN_CLUSTER_COUNT; i++)
+        {
+            Vector3 alleyAnchor = SamplePerimeterAlleyRainAnchor(i);
+            if (!IsRainBlockedPosition(alleyAnchor))
+            {
+                AddRainCluster(alleyAnchor, weatherSortingLayerId, ref clusterIdx);
+            }
         }
 
         // 3. Fog Wisps (30 world-space entities on Floor +10, beneath Jeepney/props/walls/roofs)
@@ -589,6 +731,49 @@ public class WeatherManager : NetworkBehaviour
     {
         if (!IsPositionIndoors(candidate)) return candidate;
         return new Vector3(Mathf.Min(-0.18f, candidate.x), candidate.y, 0f);
+    }
+
+    private void AddRainCluster(Vector3 worldPos, int weatherSortingLayerId, ref int clusterIdx)
+    {
+        Vector3 snappedPos = SnapTo16BitGrid(worldPos);
+        GameObject go = new GameObject($"RainCluster_{clusterIdx++}");
+        go.transform.SetParent(rainContainer.transform, false);
+        go.transform.position = snappedPos;
+
+        var sr = go.AddComponent<SpriteRenderer>();
+        sr.sortingLayerID = weatherSortingLayerId;
+        sr.sortingOrder = 10;
+        if (fogUnlitMaterial != null) sr.sharedMaterial = fogUnlitMaterial;
+        int startFrame = Random.Range(0, Mathf.Max(1, rainFrames.Length));
+        if (rainFrames != null && rainFrames.Length > 0) sr.sprite = rainFrames[startFrame];
+
+        rainEntities.Add(new RainClusterEntity
+        {
+            renderer = sr,
+            worldPos = snappedPos,
+            animTimer = Random.Range(0f, 0.08f),
+            currentFrame = startFrame,
+            fps = Random.Range(12.5f, 15.5f)
+        });
+    }
+
+    private Vector3 SamplePerimeterAlleyRainAnchor(int index)
+    {
+        // Distribute across North (2), South (3), and East (4) exterior perimeter alleys
+        int zoneIdx = 2 + (index % 3);
+        Rect zone = ExteriorZones[zoneIdx];
+        for (int attempt = 0; attempt < 16; attempt++)
+        {
+            Vector3 candidate = new Vector3(
+                Random.Range(zone.xMin + 0.10f, zone.xMax - 0.10f),
+                Random.Range(zone.yMin + 0.08f, zone.yMax - 0.08f),
+                0f);
+            if (!IsRainBlockedPosition(candidate))
+            {
+                return candidate;
+            }
+        }
+        return SampleExteriorAnchor(out _, VehicleExclusionMode.Rain);
     }
 
     private Vector3 SampleExteriorAnchor(out int zoneIndex, VehicleExclusionMode exclusionMode = VehicleExclusionMode.None)
@@ -801,9 +986,20 @@ public class WeatherManager : NetworkBehaviour
         bool isFog = CurrentWeather == BarangayWeatherType.Foggy;
         bool isRain = CurrentWeather == BarangayWeatherType.RainThunderstorm;
 
+        if (PlayerController.LocalInstance != null)
+        {
+            localPlayerIndoors = IsPositionIndoors(PlayerController.LocalInstance.transform.position);
+        }
+
         if (firefliesContainer != null) firefliesContainer.SetActive(isFireflies);
         if (fogContainer != null) fogContainer.SetActive(isFog);
-        if (rainContainer != null) rainContainer.SetActive(isRain);
+        if (rainContainer != null) rainContainer.SetActive(isRain && !IsLocalInBurialMap);
+
+        if (isRain)
+        {
+            rainUpdateTimer = 0.05f;
+            UpdateRainEntities(false, default);
+        }
 
         for (int i = 0; i < puddleEntities.Count; i++)
         {
@@ -820,6 +1016,7 @@ public class WeatherManager : NetworkBehaviour
 
         UpdateGlobalLighting();
         UpdateAmbientAudio(forceClipReset: true);
+        IsWarmupReady = true;
     }
 
     private void UpdateGlobalLighting()
@@ -1203,53 +1400,54 @@ public class WeatherManager : NetworkBehaviour
 
     private void UpdateRainEntities(bool hasCamRect, in Rect camRect)
     {
+        if (rainContainer == null) return;
+
+        if (IsLocalInBurialMap)
+        {
+            if (rainContainer.activeSelf) rainContainer.SetActive(false);
+            return;
+        }
+
+        if (!rainContainer.activeSelf)
+        {
+            rainContainer.SetActive(true);
+        }
+
+        rainUpdateTimer += Time.deltaTime;
+        if (rainUpdateTimer < 0.05f) return;
+        float dt = rainUpdateTimer;
+        rainUpdateTimer = 0f;
+
         if (rainEntities.Count == 0) return;
 
-        float dt = Time.deltaTime;
         Color tint = IsRedMoon ? new Color(1.0f, 0.56f, 0.54f, 0.88f) : new Color(0.90f, 0.96f, 1.0f, 0.88f);
+        bool hasFrames = rainFrames != null && rainFrames.Length > 0;
 
         for (int i = 0; i < rainEntities.Count; i++)
         {
-            RainEntity e = rainEntities[i];
-            if (e.transform == null) continue;
+            RainClusterEntity e = rainEntities[i];
+            if (e.renderer == null) continue;
 
-            if (hasCamRect && !IsNearRect(in camRect, e.anchorPos, e.proximityRadius + 0.8f))
+            if (hasCamRect && !IsNearRect(in camRect, e.worldPos, 0.75f))
             {
-                if (e.renderer != null && e.renderer.enabled) e.renderer.enabled = false;
+                if (e.renderer.enabled) e.renderer.enabled = false;
                 continue;
             }
 
-            if (e.currentFrame <= 3)
-            {
-                e.localOffset.y -= e.fallSpeed * dt;
-                e.localOffset.x -= e.fallSpeed * 0.18f * dt;
-            }
+            if (!e.renderer.enabled) e.renderer.enabled = true;
+            if (!ColorsApproximatelyEqual(e.renderer.color, tint)) e.renderer.color = tint;
 
-            if (rainFrames != null && rainFrames.Length > 0 && e.renderer != null)
+            if (hasFrames)
             {
                 e.animTimer += dt;
                 float step = 1f / e.fps;
                 if (e.animTimer >= step)
                 {
                     e.animTimer -= step;
-                    int nextFrame = (e.currentFrame + 1) % rainFrames.Length;
-                    if (nextFrame == 0)
-                    {
-                        e.localOffset = SampleExteriorOffsetInZone(e.anchorPos, e.zoneIndex, e.proximityRadius, VehicleExclusionMode.Rain);
-                    }
-                    e.currentFrame = nextFrame;
+                    e.currentFrame = (e.currentFrame + 1) % rainFrames.Length;
                     e.renderer.sprite = rainFrames[e.currentFrame];
                 }
             }
-
-            Vector3 worldPos = e.anchorPos + e.localOffset;
-            if (e.renderer != null)
-            {
-                bool visible = !IsRainBlockedPosition(worldPos);
-                if (e.renderer.enabled != visible) e.renderer.enabled = visible;
-                if (visible && !ColorsApproximatelyEqual(e.renderer.color, tint)) e.renderer.color = tint;
-            }
-            e.transform.position = SnapTo16BitGrid(worldPos);
 
             rainEntities[i] = e;
         }
@@ -1315,7 +1513,11 @@ public class WeatherManager : NetworkBehaviour
     {
         if (puddleFrames == null || puddleFrames.Length == 0) return;
 
-        float dt = Time.deltaTime;
+        puddleUpdateTimer += Time.deltaTime;
+        if (puddleUpdateTimer < 0.10f) return;
+        float dt = puddleUpdateTimer;
+        puddleUpdateTimer = 0f;
+
         for (int i = 0; i < puddleEntities.Count; i++)
         {
             PuddleEntity p = puddleEntities[i];

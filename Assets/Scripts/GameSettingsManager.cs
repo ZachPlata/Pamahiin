@@ -40,6 +40,7 @@ public class GameSettingsManager : MonoBehaviour
     private const string KEY_QUALITY = "quality";
     private const string KEY_FPS     = "show_fps";
     private const string KEY_TUTORIAL_ENABLE = "tutorial_enabled";
+    private const string KEY_REACH_INDICATOR = "reach_indicator_enabled";
 
     // ── Inspector ───────────────────────────────────────────────────────────
     [Header("Audio Mixer (optional but recommended)")]
@@ -57,6 +58,7 @@ public class GameSettingsManager : MonoBehaviour
     public int   QualityLevel  { get; private set; }
     public bool  ShowFPS       { get; private set; }
     public bool  TutorialHintsEnabled { get; private set; } = true;
+    public bool  ReachIndicatorEnabled { get; private set; } = true;
     public bool  TutorialHintsRepeatAlways => true;
 
     // ── Unity Lifecycle ─────────────────────────────────────────────────────
@@ -76,7 +78,7 @@ public class GameSettingsManager : MonoBehaviour
             return;
         }
         Instance = this;
-        if (GetComponent<GameMatchManager>() == null)
+        if (GetComponent<GameMatchManager>() == null && Application.isPlaying)
         {
             DontDestroyOnLoad(gameObject);
         }
@@ -93,6 +95,7 @@ public class GameSettingsManager : MonoBehaviour
         SetQuality      (PlayerPrefs.GetInt  (KEY_QUALITY, QualitySettings.GetQualityLevel()));
         SetShowFPS      (PlayerPrefs.GetInt  (KEY_FPS,     0) == 1);
         SetTutorialHintsEnabled(PlayerPrefs.GetInt(KEY_TUTORIAL_ENABLE, 1) == 1);
+        SetReachIndicatorEnabled(PlayerPrefs.GetInt(KEY_REACH_INDICATOR, 1) == 1);
     }
 
     // ── Public Setters ──────────────────────────────────────────────────────
@@ -144,6 +147,12 @@ public class GameSettingsManager : MonoBehaviour
     {
         TutorialHintsEnabled = value;
         PlayerPrefs.SetInt(KEY_TUTORIAL_ENABLE, value ? 1 : 0);
+    }
+
+    public void SetReachIndicatorEnabled(bool value)
+    {
+        ReachIndicatorEnabled = value;
+        PlayerPrefs.SetInt(KEY_REACH_INDICATOR, value ? 1 : 0);
     }
 
     public void SetTutorialHintsRepeatAlways(bool value)

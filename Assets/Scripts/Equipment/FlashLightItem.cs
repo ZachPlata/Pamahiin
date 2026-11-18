@@ -66,7 +66,13 @@ public class FlashlightItem : EquipmentItem
     public override void UsePrimary()
     {
         if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
-        if (IsOwner || IsHeldByLocalPlayer) // Only the person holding it can toggle it
+        if (!IsSpawned || NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening)
+        {
+            isLightOn.Value = !isLightOn.Value;
+            UpdateVisuals();
+            return;
+        }
+        if (IsOwner || IsHeldByLocalPlayer || IsHeldByLivingInventory())
         {
             ToggleLightRpc();
         }
@@ -81,19 +87,17 @@ public class FlashlightItem : EquipmentItem
 
     /// <summary>
     /// Controls whether the light and the sprite itself are visible.
-    /// If the item is in your inventory but not currently held (isInHand = false), it goes invisible.
+    /// If the item is in your inventory but not currently held (isInHand = false), the sprite goes invisible while the shoulder beam can remain active.
     /// </summary>
     protected override void UpdateVisuals()
     {
         base.UpdateVisuals();
 
-        // Living beams must stay completely off while carried by a dead spectator
-        bool isVisible = (isInHand.Value || IsOnGround || IsPlaced) && !IsHeldByDeadPlayer();
-
         if (spotlight != null)
         {
-            // The light beam should ONLY be enabled if the flashlight is visible AND turned on
-            spotlight.enabled = isVisible && isLightOn.Value;
+            spotlight.enabled = isLightOn.Value &&
+                                !IsHeldByDeadPlayer() &&
+                                (isInHand.Value || IsOnGround || IsPlaced || IsHeldByLivingInventory());
         }
     }
 }

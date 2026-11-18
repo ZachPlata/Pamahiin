@@ -16,6 +16,8 @@
             <ui:Label text="PAUSED" class="title-label" />
             <ui:VisualElement class="button-container">
                 <ui:Button name="btn-resume"   text="▶  RESUME"          class="menu-button" />
+                <ui:Button name="btn-restart-tutorial" text="RESTART TUTORIAL" class="menu-button hidden" />
+                <ui:Button name="btn-skip-tutorial" text="SKIP TUTORIAL" class="menu-button hidden" />
                 <ui:Button name="btn-settings" text="SETTINGS"           class="menu-button" />
                 <ui:Button name="btn-controls" text="HELP &amp; CONTROLS" class="menu-button" />
                 <ui:Button name="btn-players"  text="PLAYERS"            class="menu-button" />
@@ -69,6 +71,11 @@
                 <ui:Toggle name="toggle-tutorial-hints" class="setting-toggle" tooltip="Display helpful on-screen tutorial tooltips once per match for equipment, controls, and house mechanics." />
             </ui:VisualElement>
 
+            <ui:VisualElement class="toggle-row" tooltip="Show a subtle gray circle around your character indicating maximum interaction and placement reach.">
+                <ui:Label text="Reach Circle" class="slider-label toggle-label" tooltip="Show a subtle gray circle around your character indicating maximum interaction and placement reach." />
+                <ui:Toggle name="toggle-reach-indicator" class="setting-toggle" tooltip="Show a subtle gray circle around your character indicating maximum interaction and placement reach." />
+            </ui:VisualElement>
+
             <ui:Button name="btn-settings-back" text="← Back" class="menu-button back-button" />
         </ui:VisualElement>
 
@@ -103,12 +110,20 @@
                     <ui:Label text="Crouch (Hide in Hide Spots)" class="control-desc" />
                 </ui:VisualElement>
                 <ui:VisualElement class="control-row">
-                    <ui:Label text="E / L-Click" class="control-key" />
-                    <ui:Label text="Interact / Pick Up / Drag" class="control-desc" />
+                    <ui:Label text="L-Click" class="control-key" />
+                    <ui:Label text="Use Held Item / Pick Up Equipment" class="control-desc" />
                 </ui:VisualElement>
                 <ui:VisualElement class="control-row">
-                    <ui:Label text="L-Click" class="control-key" />
-                    <ui:Label text="Use Held Item" class="control-desc" />
+                    <ui:Label text="Hold L-Click" class="control-key" />
+                    <ui:Label text="Drag Item" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="E" class="control-key" />
+                    <ui:Label text="Interact (Doors, Switches, etc.)" class="control-desc" />
+                </ui:VisualElement>
+                <ui:VisualElement class="control-row">
+                    <ui:Label text="F" class="control-key" />
+                    <ui:Label text="Toggle Flashlight" class="control-desc" />
                 </ui:VisualElement>
                 <ui:VisualElement class="control-row">
                     <ui:Label text="R-Click" class="control-key" />

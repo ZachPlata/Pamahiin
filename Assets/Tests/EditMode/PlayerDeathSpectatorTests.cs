@@ -513,8 +513,13 @@ public class PlayerDeathSpectatorTests
             Assert.IsTrue((bool)isEquipActive.Invoke(hunter, new object[] { player }),
                 "HunterGhostBehavior.IsPlayerEquipmentActive must detect remote held active flashlight.");
 
-            // Stowed item (isInHand = false) should NOT trigger dark protection or hunter detection.
+            // Stowed active flashlight (isInHand = false, isLightOn = true) still counts for dark protection and hunter detection.
             inHandVar.Value = false;
+            Assert.IsTrue((bool)hasActiveFlash.Invoke(null, new object[] { player }));
+            Assert.IsTrue((bool)isEquipActive.Invoke(hunter, new object[] { player }));
+
+            // Turning off the stowed flashlight stops dark protection and hunter detection.
+            lightOnVar.Value = false;
             Assert.IsFalse((bool)hasActiveFlash.Invoke(null, new object[] { player }));
             Assert.IsFalse((bool)isEquipActive.Invoke(hunter, new object[] { player }));
         }

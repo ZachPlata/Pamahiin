@@ -123,6 +123,7 @@ public class DeveloperConsoleManager : MonoBehaviour
         BindBtn(root, "AddCurrencyBtn", () => OnApplyCustomCurrency(1));
         BindBtn(root, "RemoveCurrencyBtn", () => OnApplyCustomCurrency(-1));
         BindBtn(root, "ResetProgressionBtn", OnResetProgression);
+        BindBtn(root, "ResetTutorialBtn", OnResetTutorial);
         BindBtn(root, "WeatherNightBtn", () => OnSetWeather(BarangayWeatherType.NightFireflies, false));
         BindBtn(root, "WeatherFogBtn", () => OnSetWeather(BarangayWeatherType.Foggy, false));
         BindBtn(root, "WeatherRainBtn", () => OnSetWeather(BarangayWeatherType.RainThunderstorm, false));
@@ -156,8 +157,6 @@ public class DeveloperConsoleManager : MonoBehaviour
 
     private void Update()
     {
-        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "MainMenuScene") return;
-
         // Press ~ or ` to toggle; press Esc to close if open
         if (Input.GetKeyDown(KeyCode.BackQuote) || Input.GetKeyDown(KeyCode.Tilde) || (isConsoleOpen && Input.GetKeyDown(KeyCode.Escape)))
         {
@@ -201,8 +200,12 @@ public class DeveloperConsoleManager : MonoBehaviour
         {
             UnityEngine.Cursor.lockState = CursorLockMode.None;
             UnityEngine.Cursor.visible = true;
+            ApplySceneButtonPermissions();
             RefreshCurrencyLabel();
-            SetStatus("Console opened.");
+            bool isMainMenu = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.MAIN_MENU_SCENE_NAME;
+            SetStatus(isMainMenu
+                ? "Main Menu Mode — Only Tutorial Reset is enabled."
+                : "Console opened.");
         }
         else
         {
@@ -516,6 +519,30 @@ public class DeveloperConsoleManager : MonoBehaviour
             if (ch >= '0' && ch <= '9') sb.Append(ch);
         }
         return sb.ToString();
+    }
+
+    private void ApplySceneButtonPermissions()
+    {
+        if (container == null) return;
+        bool isMainMenu = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.MAIN_MENU_SCENE_NAME;
+
+        container.Query<Button>().ForEach(btn =>
+        {
+            if (btn == null) return;
+            bool allowInMainMenu = btn.name == "CloseConsoleBtn" || btn.name == "ResetTutorialBtn";
+            btn.SetEnabled(!isMainMenu || allowInMainMenu);
+        });
+
+        if (currencyAmountInput != null)
+        {
+            currencyAmountInput.SetEnabled(!isMainMenu);
+        }
+    }
+
+    private void OnResetTutorial()
+    {
+        ProgressionAndLoadoutManager.ResetTutorialCompletion();
+        SetStatus("Tutorial state reset! Play / Multiplayer will prompt for the Warehouse Tutorial again.");
     }
 
     private void OnResetProgression()

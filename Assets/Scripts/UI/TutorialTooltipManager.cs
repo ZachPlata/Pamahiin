@@ -50,8 +50,8 @@ public class TutorialTooltipManager : MonoBehaviour
             new TutorialHintData(
                 "ItemPickup",
                 "PICKING UP ITEMS",
-                "[E]",
-                "Stand near an item, aim your cursor at it, and press [E] to pick it up into your inventory.",
+                "[L-CLICK]",
+                "Aim your cursor at equipment and Left-Click to pick it up, or Hold Left-Click to drag it.",
                 5.5f
             )
         },
@@ -70,8 +70,8 @@ public class TutorialTooltipManager : MonoBehaviour
             new TutorialHintData(
                 "Flashlight",
                 "EQUIPMENT: FLASHLIGHT",
-                "[L-CLICK] / [R-CLICK]",
-                "Left-Click to turn on or toggle light. Right-Click to place it down on the floor.",
+                "[F] / [L-CLICK]",
+                "Press [F] anytime (or [L-Click] while holding) to toggle your Flashlight. Right-Click to place it down on the floor.",
                 5.5f
             )
         },

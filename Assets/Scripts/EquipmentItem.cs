@@ -825,6 +825,26 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         return PlayerController.TryGetByClientId(holder, out var p) && !p.IsAlive;
     }
 
+    public bool IsHeldByLivingInventory()
+    {
+        if (IsHeldByDeadPlayer()) return false;
+        if (ownerClientId.Value != ulong.MaxValue && !isPlaced.Value) return true;
+
+        var players = PlayerController.AllPlayers;
+        for (int i = 0; i < players.Count; i++)
+        {
+            var p = players[i];
+            if (p == null || !p.IsAlive) continue;
+            var inv = p.GetComponent<PlayerInventory>();
+            if (inv == null || inv.slots == null) continue;
+            for (int s = 0; s < inv.slots.Length; s++)
+            {
+                if (ReferenceEquals(inv.slots[s], this)) return true;
+            }
+        }
+        return false;
+    }
+
     public void RefreshVisualsForHolderState()
     {
         UpdateVisuals();

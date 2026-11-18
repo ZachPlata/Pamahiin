@@ -511,6 +511,44 @@ public class NetworkController : MonoBehaviour
         EnterLobbyMap();
     }
 
+    /// <summary>
+    /// Starts a local solo host session and loads the Warehouse Tutorial scene.
+    /// </summary>
+    public void EnterWarehouseTutorial()
+    {
+        ProgressionAndLoadoutManager.EnsureInstance();
+
+        if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsServer || NetworkManager.Singleton.IsClient))
+        {
+            if (NetworkManager.Singleton.IsServer)
+            {
+                LoadWarehouseTutorialScene();
+                return;
+            }
+            isVoluntaryClientDisconnect = true;
+            isConnectedAsRemoteClient = false;
+            NetworkManager.Singleton.Shutdown();
+        }
+
+        isVoluntaryClientDisconnect = false;
+        isConnectedAsRemoteClient = false;
+        CurrentPartyCode = string.Empty;
+        IsMultiplayerPartyOpen = false;
+        IsOnlineRelayParty = false;
+        IsCreatingParty = false;
+        IsConnectingToParty = false;
+        LastStatusMessage = "Warehouse Tutorial Active";
+
+        activeHostPort = FindAvailableUdpPort(defaultPort, 20);
+        SetConnectionAddress("0.0.0.0", activeHostPort);
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.StartHost();
+        }
+        LoadWarehouseTutorialScene();
+        OnPartyStateChanged?.Invoke();
+    }
+
     public void HostGame()
     {
         if (IsCreatingParty || IsConnectingToParty) return;
@@ -994,6 +1032,32 @@ public class NetworkController : MonoBehaviour
         }
     }
 
+    public void LoadWarehouseTutorialScene()
+    {
+        isTransitioningToGameScene = false;
+        if (activeMatchIntermissionRoutine != null)
+        {
+            StopCoroutine(activeMatchIntermissionRoutine);
+            activeMatchIntermissionRoutine = null;
+        }
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        {
+            PlayerCorpse.DespawnAllServer();
+            TruckGearSpawner.CleanupAllGhostOrbs();
+        }
+        TruckGearSpawner.CleanupAllEquipmentBeforeSceneChange();
+
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        {
+            NetworkManager.Singleton.SceneManager.LoadScene(ProgressionAndLoadoutManager.WAREHOUSE_TUTORIAL_SCENE_NAME, LoadSceneMode.Single);
+        }
+        else
+        {
+            SceneManager.LoadScene(ProgressionAndLoadoutManager.WAREHOUSE_TUTORIAL_SCENE_NAME);
+        }
+    }
+
     public void LoadGameScene()
     {
         if (isTransitioningToGameScene) return;
@@ -1077,7 +1141,25 @@ public class NetworkController : MonoBehaviour
         }
         else
         {
-            SceneManager.LoadScene(targetScene);
+            AsyncOperation asyncLoad = SceneManager.LoadSceneAsync(targetScene, LoadSceneMode.Single);
+            if (asyncLoad != null)
+            {
+                while (!asyncLoad.isDone)
+                {
+                    if (LoadingScreenManager.Instance != null)
+                    {
+                        float p = Mathf.Clamp01(asyncLoad.progress / 0.9f);
+                        LoadingScreenManager.Instance.SetProgress(
+                            Mathf.Lerp(0.55f, 0.72f, p),
+                            "Entering investigation sector...");
+                    }
+                    yield return null;
+                }
+            }
+            else
+            {
+                SceneManager.LoadScene(targetScene);
+            }
             StartCoroutine(OfflineWaitForEquipmentThenHideRoutine());
         }
 
@@ -1090,10 +1172,48 @@ public class NetworkController : MonoBehaviour
         yield return null;
         yield return null;
 
-        float elapsed = 0f;
-        while (elapsed < 3.0f)
+        yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: true);
+
+        if (LoadingScreenManager.IsLoadingVisible)
         {
-            if (TruckGearSpawner.Instance != null && TruckGearSpawner.Instance.HasSpawnedLoadout)
+            LoadingScreenManager.Instance.SetProgress(1f, "Equipment manifest ready.");
+            yield return new WaitForSecondsRealtime(0.18f);
+            FinishLoadingIntermission("Equipment manifest ready.");
+        }
+    }
+
+    private IEnumerator WaitForGameplayMapWarmupRoutine(bool requireServerLoadoutSpawn)
+    {
+        string activeScene = SceneManager.GetActiveScene().name;
+        if (!ProgressionAndLoadoutManager.IsGameplayMapScene(activeScene))
+        {
+            yield break;
+        }
+
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            LoadingScreenManager.Instance.SetProgress(0.78f, "Deploying van equipment...");
+        }
+
+        float elapsed = 0f;
+        while (elapsed < 2.5f)
+        {
+            bool gearReady = TruckGearSpawner.Instance != null &&
+                             (!requireServerLoadoutSpawn || TruckGearSpawner.Instance.HasSpawnedLoadout);
+            if (gearReady) break;
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        if (LoadingScreenManager.IsLoadingVisible)
+        {
+            LoadingScreenManager.Instance.SetProgress(0.88f, "Stabilizing Barangay weather & lighting...");
+        }
+
+        elapsed = 0f;
+        while (elapsed < 1.5f)
+        {
+            if (WeatherManager.Instance != null && WeatherManager.Instance.IsWarmupReady)
             {
                 break;
             }
@@ -1103,10 +1223,23 @@ public class NetworkController : MonoBehaviour
 
         if (LoadingScreenManager.IsLoadingVisible)
         {
-            LoadingScreenManager.Instance.SetProgress(1f, "Equipment manifest ready.");
-            yield return new WaitForSecondsRealtime(0.18f);
-            FinishLoadingIntermission("Equipment manifest ready.");
+            LoadingScreenManager.Instance.SetProgress(0.95f, "Initializing investigation sector...");
         }
+
+        elapsed = 0f;
+        while (elapsed < 1.5f)
+        {
+            if (GameMatchManager.Instance != null)
+            {
+                break;
+            }
+            elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        // Allow 2 unscaled frames for 2D lighting, shaders, and UI layout to settle behind the overlay
+        yield return null;
+        yield return null;
     }
 
     private void ResetPartyState()
@@ -1402,6 +1535,8 @@ public class NetworkController : MonoBehaviour
             BroadcastVanGearManifest();
         }
 
+        yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: true);
+
         if (LoadingScreenManager.IsLoadingVisible)
         {
             LoadingScreenManager.Instance.SetProgress(1f, "Van equipment ready.");
@@ -1574,6 +1709,7 @@ public class NetworkController : MonoBehaviour
         {
             if (activeClientGearVerifyRoutine == null)
             {
+                yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: false);
                 FinishLoadingIntermission("Van equipment ready.");
             }
             yield break;
@@ -1592,6 +1728,7 @@ public class NetworkController : MonoBehaviour
         if (LoadingScreenManager.IsLoadingVisible &&
             (ProgressionAndLoadoutManager.IsGameplayMapScene(finalScene) || finalScene == ProgressionAndLoadoutManager.LOBBY_SCENE_NAME))
         {
+            yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: false);
             FinishLoadingIntermission("Arrival complete.");
         }
     }
@@ -1770,6 +1907,7 @@ public class NetworkController : MonoBehaviour
     {
         if (expectedIds == null || expectedIds.Length == 0)
         {
+            yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: false);
             activeClientGearVerifyRoutine = null;
             if (activeClientIntermissionFailsafeRoutine != null)
             {
@@ -1795,6 +1933,7 @@ public class NetworkController : MonoBehaviour
             List<ulong> missing = CollectMissingNetworkObjectIds(nm, expectedIds);
             if (missing.Count == 0)
             {
+                yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: false);
                 activeClientGearVerifyRoutine = null;
                 if (activeClientIntermissionFailsafeRoutine != null)
                 {
@@ -1808,6 +1947,7 @@ public class NetworkController : MonoBehaviour
             SendVanGearResyncRequest(missing.ToArray());
         }
 
+        yield return WaitForGameplayMapWarmupRoutine(requireServerLoadoutSpawn: false);
         activeClientGearVerifyRoutine = null;
         if (activeClientIntermissionFailsafeRoutine != null)
         {

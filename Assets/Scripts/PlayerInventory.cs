@@ -36,15 +36,29 @@ public class PlayerInventory : NetworkBehaviour
         if (player == null || !player.IsAlive) return false;
 
         var inv = player.GetComponent<PlayerInventory>();
-        if (inv != null && inv.CurrentItem != null)
+        if (inv != null)
         {
-            if (flashlightOnly)
+            if (inv.CurrentItem != null)
             {
-                if (inv.CurrentItem is FlashlightItem fl && fl.IsLightOn) return true;
+                if (flashlightOnly)
+                {
+                    if (inv.CurrentItem is FlashlightItem fl && fl.IsLightOn) return true;
+                }
+                else if (inv.CurrentItem.IsPoweredOn)
+                {
+                    return true;
+                }
             }
-            else if (inv.CurrentItem.IsPoweredOn)
+
+            if (inv.slots != null)
             {
-                return true;
+                for (int i = 0; i < inv.slots.Length; i++)
+                {
+                    if (inv.slots[i] is FlashlightItem slotFl && slotFl.IsLightOn)
+                    {
+                        return true;
+                    }
+                }
             }
         }
 
@@ -60,17 +74,20 @@ public class PlayerInventory : NetworkBehaviour
             if (netListening && !eq.IsSpawned) continue;
             if (eq.IsOnGround || eq.IsPlaced ||
                 eq.CurrentHolderClientId == ulong.MaxValue ||
-                eq.CurrentHolderClientId != clientId ||
-                !eq.IsInHand)
+                eq.CurrentHolderClientId != clientId)
             {
                 continue;
             }
 
-            if (flashlightOnly)
+            if (eq is FlashlightItem fl)
             {
-                if (eq is FlashlightItem fl && fl.IsLightOn) return true;
+                if (fl.IsLightOn) return true;
+                continue;
             }
-            else if (eq.IsPoweredOn)
+
+            if (!eq.IsInHand) continue;
+
+            if (!flashlightOnly && eq.IsPoweredOn)
             {
                 return true;
             }
@@ -258,6 +275,28 @@ public class PlayerInventory : NetworkBehaviour
         if (CurrentItem != null) CurrentItem.UsePrimary();
     }
 
+    public bool ToggleFlashlight()
+    {
+        if (!CanOperateInventoryAsAlive()) return false;
+
+        if (CurrentItem is FlashlightItem activeFlashlight)
+        {
+            activeFlashlight.UsePrimary();
+            return true;
+        }
+
+        for (int i = 0; i < MaxSlots; i++)
+        {
+            if (slots[i] is FlashlightItem stowedFlashlight)
+            {
+                stowedFlashlight.UsePrimary();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void UseSecondary()
     {
         if (!CanOperateInventoryAsAlive()) return;
@@ -269,8 +308,16 @@ public class PlayerInventory : NetworkBehaviour
         if (!CanOperateGroundGearSlots()) return;
         if (CurrentItem != null)
         {
-            Vector3 safeDrop = ComputeTightDropPosition(dropPosition, currentSlotIndex, LayerMask.GetMask("Walls"));
-            CurrentItem.DropItemRpc(safeDrop);
+            var itemToDrop = CurrentItem;
+            Vector3 underPlayerDrop = new Vector3(dropPosition.x, dropPosition.y, 0f);
+            if (IsNetworkListening && itemToDrop.IsSpawned)
+            {
+                itemToDrop.DropItemRpc(underPlayerDrop);
+            }
+            else
+            {
+                itemToDrop.ServerDropAtPosition(underPlayerDrop);
+            }
             slots[currentSlotIndex] = null;
             OnInventoryUpdated?.Invoke();
         }

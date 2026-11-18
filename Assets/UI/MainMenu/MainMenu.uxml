@@ -14,6 +14,7 @@
             
             <ui:VisualElement class="button-container">
                 <ui:Button name="btn-play" text="Play" class="menu-button" />
+                <ui:Button name="btn-tutorial" text="Tutorial" class="menu-button" />
                 <ui:Button name="btn-settings" text="Settings" class="menu-button" />
                 <ui:Button name="btn-help" text="Help &amp; Controls" class="menu-button" />
                 <ui:Button name="btn-quit" text="Quit Game" class="menu-button" />
@@ -99,6 +100,11 @@
                     <ui:Toggle name="toggle-tutorial-hints" class="setting-toggle" tooltip="Display helpful on-screen tutorial tooltips once per match for equipment, controls, and house mechanics." />
                 </ui:VisualElement>
 
+                <ui:VisualElement class="toggle-row" tooltip="Show a subtle gray circle around your character indicating maximum interaction and placement reach.">
+                    <ui:Label text="Reach Circle" class="slider-label toggle-label" tooltip="Show a subtle gray circle around your character indicating maximum interaction and placement reach." />
+                    <ui:Toggle name="toggle-reach-indicator" class="setting-toggle" tooltip="Show a subtle gray circle around your character indicating maximum interaction and placement reach." />
+                </ui:VisualElement>
+
                 <ui:Button name="btn-back-from-settings" text="Back to Menu" class="menu-button back-button" />
             </ui:VisualElement>
         </ui:VisualElement>
@@ -128,12 +134,20 @@
                         <ui:Label text="Crouch (Hide in Hide Spots)" class="control-desc" />
                     </ui:VisualElement>
                     <ui:VisualElement class="control-row">
-                        <ui:Label text="E / L-Click" class="control-key" />
-                        <ui:Label text="Interact / Pick Up / Drag" class="control-desc" />
+                        <ui:Label text="L-Click" class="control-key" />
+                        <ui:Label text="Use Held Item / Pick Up Equipment" class="control-desc" />
                     </ui:VisualElement>
                     <ui:VisualElement class="control-row">
-                        <ui:Label text="L-Click" class="control-key" />
-                        <ui:Label text="Use Held Item" class="control-desc" />
+                        <ui:Label text="Hold L-Click" class="control-key" />
+                        <ui:Label text="Drag Item" class="control-desc" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="control-row">
+                        <ui:Label text="E" class="control-key" />
+                        <ui:Label text="Interact (Doors, Switches, etc.)" class="control-desc" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="control-row">
+                        <ui:Label text="F" class="control-key" />
+                        <ui:Label text="Toggle Flashlight" class="control-desc" />
                     </ui:VisualElement>
                     <ui:VisualElement class="control-row">
                         <ui:Label text="R-Click" class="control-key" />
@@ -164,6 +178,19 @@
                 </ui:ScrollView>
 
                 <ui:Button name="btn-back-from-help" text="Back to Menu" class="menu-button back-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- First-Time Tutorial Gate Modal -->
+        <ui:VisualElement name="tutorial-gate-view" class="view hidden-view" style="background-color: rgba(8, 10, 14, 0.92);">
+            <ui:VisualElement class="settings-container" style="max-width: 560px; align-items: center;">
+                <ui:Label text="WAREHOUSE TRAINING" class="title-label settings-title" />
+                <ui:Label text="New investigators are recommended to complete the 3–5 minute Warehouse Tutorial before entering contracts." class="subtitle-label" style="white-space: normal; -unity-text-align: middle-center; margin-bottom: 18px;" />
+                <ui:VisualElement class="button-container" style="width: 100%; align-items: center;">
+                    <ui:Button name="btn-gate-start-tutorial" text="Start Tutorial (Recommended)" class="menu-button start-button" />
+                    <ui:Button name="btn-gate-skip-tutorial" text="Skip Tutorial" class="menu-button" />
+                    <ui:Button name="btn-gate-cancel" text="Cancel" class="menu-button back-button" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
         

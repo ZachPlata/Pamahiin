@@ -13,6 +13,8 @@ public class ItemHoverIndicator : MonoBehaviour
     [SerializeField] private Color borderColor = new Color(0.12f, 1f, 0.35f, 1f);
     [SerializeField] private float borderWidth = 0.005f;
 
+    public const string DefaultCannotReachMessage = "I can't reach this!";
+
     private LineRenderer lineRenderer;
     private TextMeshPro nameText;
     private GameObject bgObject;
@@ -34,6 +36,26 @@ public class ItemHoverIndicator : MonoBehaviour
     private string cachedGuiContentText = "";
     private Vector2 cachedLabelSize;
 
+    // Floating player speech bubble state
+    private Transform speechBubbleTarget;
+    private string speechBubbleText = "";
+    private float speechBubbleStartTime = -10f;
+    private float speechBubbleDuration = 1.35f;
+    private bool isSpeechBubbleActive = false;
+    private GUIStyle speechBubbleStyle;
+    private GUIContent cachedSpeechContent;
+    private string cachedSpeechContentText = "";
+    private Vector2 cachedSpeechSize;
+
+    public bool IsSpeechBubbleVisible =>
+        isSpeechBubbleActive &&
+        speechBubbleTarget != null &&
+        (Time.unscaledTime - speechBubbleStartTime) < speechBubbleDuration &&
+        !string.IsNullOrEmpty(speechBubbleText);
+
+    public string CurrentSpeechBubbleText => IsSpeechBubbleVisible ? speechBubbleText : "";
+    public Transform CurrentSpeechBubbleTarget => IsSpeechBubbleVisible ? speechBubbleTarget : null;
+
     // Reusable buffers & transform dirty state to prevent per-frame PolygonCollider allocations
     private readonly System.Collections.Generic.List<Vector2> reusableLocalPts = new System.Collections.Generic.List<Vector2>(32);
     private Vector3[] reusableWorldPts = System.Array.Empty<Vector3>();
@@ -49,15 +71,27 @@ public class ItemHoverIndicator : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Destroy(gameObject);
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
             return;
         }
         Instance = this;
-        DontDestroyOnLoad(gameObject);
+        if (Application.isPlaying)
+        {
+            DontDestroyOnLoad(gameObject);
+        }
 
         SetupLineRenderer();
         SetupNameText();
         Hide();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 
     private void SetupLineRenderer()
@@ -222,6 +256,38 @@ public class ItemHoverIndicator : MonoBehaviour
         if (lineRenderer != null && lineRenderer.enabled) lineRenderer.enabled = false;
         if (nameText != null && nameText.enabled) nameText.enabled = false;
         if (bgObject != null && bgObject.activeSelf) bgObject.SetActive(false);
+    }
+
+    public static void TriggerSpeechBubble(Transform playerTransform, string message = DefaultCannotReachMessage, float duration = 1.35f)
+    {
+        if (playerTransform == null) return;
+        if (Instance == null)
+        {
+            var go = new GameObject("ItemHoverIndicator");
+            var indicator = go.AddComponent<ItemHoverIndicator>();
+            if (Instance == null)
+            {
+                Instance = indicator;
+            }
+        }
+        Instance?.ShowPlayerSpeechBubble(playerTransform, message, duration);
+    }
+
+    public void ShowPlayerSpeechBubble(Transform playerTransform, string message = DefaultCannotReachMessage, float duration = 1.35f)
+    {
+        if (playerTransform == null || string.IsNullOrEmpty(message)) return;
+        speechBubbleTarget = playerTransform;
+        speechBubbleText = message;
+        speechBubbleDuration = Mathf.Max(0.25f, duration);
+        speechBubbleStartTime = Time.unscaledTime;
+        isSpeechBubbleActive = true;
+    }
+
+    public void HideSpeechBubble()
+    {
+        isSpeechBubbleActive = false;
+        speechBubbleTarget = null;
+        speechBubbleText = "";
     }
 
     private Camera ResolveMainCamera()
@@ -392,11 +458,17 @@ public class ItemHoverIndicator : MonoBehaviour
 
     private void OnGUI()
     {
-        if (!isShowing || currentTarget == null || !currentTarget.activeInHierarchy || string.IsNullOrEmpty(currentDisplayName))
-            return;
-
         Camera cam = ResolveMainCamera();
         if (cam == null) return;
+
+        DrawHoveredItemLabelGUI(cam);
+        DrawPlayerSpeechBubbleGUI(cam);
+    }
+
+    private void DrawHoveredItemLabelGUI(Camera cam)
+    {
+        if (!isShowing || currentTarget == null || !currentTarget.activeInHierarchy || string.IsNullOrEmpty(currentDisplayName))
+            return;
 
         Vector3 screenPos = cam.WorldToScreenPoint(topCenterWorldPos);
         if (screenPos.z < 0f) return;
@@ -460,6 +532,93 @@ public class ItemHoverIndicator : MonoBehaviour
 
         GUI.color = Color.white;
         GUI.Label(innerRect, cachedGuiContent, labelTextStyle);
+
+        GUI.color = prevColor;
+    }
+
+    private void DrawPlayerSpeechBubbleGUI(Camera cam)
+    {
+        if (!IsSpeechBubbleVisible)
+        {
+            isSpeechBubbleActive = false;
+            return;
+        }
+
+        float elapsed = Mathf.Max(0f, Time.unscaledTime - speechBubbleStartTime);
+        float normalized = Mathf.Clamp01(elapsed / speechBubbleDuration);
+        float fadeWindow = Mathf.Min(0.35f, speechBubbleDuration * 0.4f);
+        float remaining = speechBubbleDuration - elapsed;
+        float alpha = (fadeWindow > 0.001f && remaining < fadeWindow)
+            ? Mathf.Clamp01(remaining / fadeWindow)
+            : 1f;
+        if (alpha <= 0.01f) return;
+
+        Vector3 bubbleWorldPos = speechBubbleTarget.position + new Vector3(0f, 0.065f + normalized * 0.015f, 0f);
+        Vector3 screenPos = cam.WorldToScreenPoint(bubbleWorldPos);
+        if (screenPos.z < 0f) return;
+
+        if (speechBubbleStyle == null)
+        {
+            Font pixelFont = PamahiinUIThemeUtility.ResolvePixelFont();
+            speechBubbleStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                font = pixelFont,
+                fontStyle = FontStyle.Normal,
+                fontSize = 11,
+                wordWrap = false
+            };
+            speechBubbleStyle.normal.textColor = new Color(0.96f, 0.93f, 0.88f, 1f);
+        }
+        else if (speechBubbleStyle.font == null)
+        {
+            Font resolved = PamahiinUIThemeUtility.ResolvePixelFont();
+            if (resolved != null)
+            {
+                speechBubbleStyle.font = resolved;
+                cachedSpeechContentText = null;
+            }
+        }
+
+        if (cachedSpeechContent == null || cachedSpeechContentText != speechBubbleText)
+        {
+            cachedSpeechContentText = speechBubbleText;
+            cachedSpeechContent = new GUIContent(speechBubbleText);
+            cachedSpeechSize = speechBubbleStyle.CalcSize(cachedSpeechContent);
+        }
+
+        float boxWidth = Mathf.Max(92f, cachedSpeechSize.x + 18f);
+        float boxHeight = Mathf.Max(22f, cachedSpeechSize.y + 8f);
+
+        float guiX = Mathf.Clamp(screenPos.x - boxWidth * 0.5f, 4f, Screen.width - boxWidth - 4f);
+        float guiY = Mathf.Clamp((Screen.height - screenPos.y) - boxHeight - 6f, 4f, Screen.height - boxHeight - 8f);
+
+        Rect outerRect = new Rect(guiX - 2f, guiY - 2f, boxWidth + 4f, boxHeight + 4f);
+        Rect innerRect = new Rect(guiX, guiY, boxWidth, boxHeight);
+
+        float tailCenterX = Mathf.Clamp(screenPos.x, guiX + 6f, guiX + boxWidth - 6f);
+        Rect tailOuterRect = new Rect(tailCenterX - 3f, guiY + boxHeight + 1f, 6f, 4f);
+        Rect tailInnerRect = new Rect(tailCenterX - 2f, guiY + boxHeight, 4f, 3f);
+
+        Texture2D tex = GetGuiWhiteTex();
+        Color prevColor = GUI.color;
+
+        // Subtle aged-ivory/gray border with pointer tick underneath
+        GUI.color = new Color(0.75f, 0.72f, 0.65f, 0.92f * alpha);
+        GUI.DrawTexture(outerRect, tex);
+        GUI.DrawTexture(tailOuterRect, tex);
+
+        // Dark obsidian inner fill
+        GUI.color = new Color(0.06f, 0.05f, 0.07f, 0.94f * alpha);
+        GUI.DrawTexture(innerRect, tex);
+        GUI.DrawTexture(tailInnerRect, tex);
+
+        GUI.color = new Color(0f, 0f, 0f, alpha);
+        Rect shadowRect = new Rect(innerRect.x + 1f, innerRect.y + 1f, innerRect.width, innerRect.height);
+        GUI.Label(shadowRect, cachedSpeechContent, speechBubbleStyle);
+
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        GUI.Label(innerRect, cachedSpeechContent, speechBubbleStyle);
 
         GUI.color = prevColor;
     }

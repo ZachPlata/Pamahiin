@@ -1196,27 +1196,27 @@ public static class BarangayAssetGenerator
         }
         fog.SavePng("Weather/fog_clouds_sheet.png");
 
-        // Grouped RainCluster sheet (7 frames @ 32x28 -> 224x28, sliced at 128f PPU)
-        // Each cluster renders 4 independent crisp ~12x20-scale falling drops & splash crowns.
-        PixelCanvas rain = new PixelCanvas(224, 28);
-        Color32 streakTail = new Color32(132, 168, 218, 145);
-        Color32 streakTip = new Color32(204, 228, 255, 220);
-        int[] dropX = { 6, 13, 21, 27 };
-        int[] dropGroundY = { 4, 8, 3, 7 };
-        int[] dropPhase = { 0, 2, 4, 5 };
+        // Grouped RainCluster sheet (7 frames @ 64x48 -> 448x48, sliced at 100f PPU)
+        // Each cluster renders 10 independent crisp falling raindrops & road splash crowns in world space.
+        PixelCanvas rain = new PixelCanvas(448, 48);
+        Color32 streakTail = new Color32(132, 168, 218, 150);
+        Color32 streakTip = new Color32(204, 228, 255, 225);
+        int[] dropX = { 4, 10, 17, 23, 29, 35, 42, 48, 54, 60 };
+        int[] dropGroundY = { 5, 18, 9, 23, 4, 15, 21, 7, 13, 20 };
+        int[] dropPhase = { 0, 3, 5, 1, 4, 6, 2, 0, 3, 5 };
 
         for (int f = 0; f < 7; f++)
         {
-            int ox = f * 32;
-            for (int d = 0; d < 4; d++)
+            int ox = f * 64;
+            for (int d = 0; d < 10; d++)
             {
                 int subF = (f + dropPhase[d]) % 7;
                 int cx = ox + dropX[d];
                 int gy = dropGroundY[d];
                 if (subF <= 3)
                 {
-                    int topY = gy + 16 - subF * 4;
-                    int botY = topY - 5;
+                    int topY = gy + 22 - subF * 5;
+                    int botY = topY - 6;
                     rain.DrawLine(cx + 1, topY, cx, botY, streakTail, true);
                     rain.Blend(cx, botY, streakTip);
                 }

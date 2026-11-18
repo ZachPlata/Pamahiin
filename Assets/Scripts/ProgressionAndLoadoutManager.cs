@@ -75,6 +75,9 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     public const string BARANGAY_MAP_SCENE_NAME = "BarangayMap";
     public const string GAME_MAP_SCENE_NAME = "GameMapScene"; // Legacy prototype scene (index 1)
     public const string MAIN_MENU_SCENE_NAME = "MainMenuScene";
+    public const string WAREHOUSE_TUTORIAL_SCENE_NAME = "WarehouseTutorialScene";
+
+    public const string PREF_TUTORIAL_COMPLETED = "Pamahiin_TutorialCompleted_v1";
 
     private const string PREF_CURRENCY_INIT_LEGACY = "Pamahiin_Currency_Initialized_v1";
     private const string PREF_CURRENCY_LEGACY = "Pamahiin_Currency_v1";
@@ -182,6 +185,32 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public static bool IsInLobbyScene =>
         SceneManager.GetActiveScene().name == LOBBY_SCENE_NAME;
+
+    public static bool IsInWarehouseTutorialScene =>
+        SceneManager.GetActiveScene().name == WAREHOUSE_TUTORIAL_SCENE_NAME;
+
+    public static bool HasCompletedOrSkippedTutorial()
+    {
+        return PlayerPrefs.GetInt(PREF_TUTORIAL_COMPLETED, 0) == 1;
+    }
+
+    public static void MarkTutorialCompleted()
+    {
+        PlayerPrefs.SetInt(PREF_TUTORIAL_COMPLETED, 1);
+        PlayerPrefs.Save();
+    }
+
+    public static void MarkTutorialSkipped()
+    {
+        PlayerPrefs.SetInt(PREF_TUTORIAL_COMPLETED, 1);
+        PlayerPrefs.Save();
+    }
+
+    public static void ResetTutorialCompletion()
+    {
+        PlayerPrefs.DeleteKey(PREF_TUTORIAL_COMPLETED);
+        PlayerPrefs.Save();
+    }
 
     public static ProgressionAndLoadoutManager EnsureInstance()
     {
@@ -1078,6 +1107,18 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         }
     }
 
+    public static float GetFailedExorcismPauseSeconds(ContractDifficulty difficulty)
+    {
+        switch (difficulty)
+        {
+            case ContractDifficulty.Amateur: return 8f;
+            case ContractDifficulty.Intermediate: return 5f;
+            case ContractDifficulty.Professional: return 3f;
+            case ContractDifficulty.Nightmare: return 1f;
+            default: return 8f;
+        }
+    }
+
     public static float GetDifficultySanityDrainMultiplier(ContractDifficulty difficulty)
     {
         switch (difficulty)
@@ -1131,10 +1172,10 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     {
         switch (difficulty)
         {
-            case ContractDifficulty.Amateur: return 1.0f;
-            case ContractDifficulty.Intermediate: return 0.9f;
-            case ContractDifficulty.Professional: return 0.8f;
-            case ContractDifficulty.Nightmare: return 0.6f;
+            case ContractDifficulty.Amateur: return 0.85f;
+            case ContractDifficulty.Intermediate: return 1.15f;
+            case ContractDifficulty.Professional: return 1.45f;
+            case ContractDifficulty.Nightmare: return 1.75f;
             default: return 1.0f;
         }
     }

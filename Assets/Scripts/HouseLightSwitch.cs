@@ -24,8 +24,11 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     private NetworkVariable<bool> isLightOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
-    public bool IsOn => isLightOn.Value;
-    public bool IsEffectivelyOn => isLightOn.Value && HasFusePower();
+    private bool localIsLightOn = false;
+    public bool IsOn => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
+        ? isLightOn.Value
+        : localIsLightOn;
+    public bool IsEffectivelyOn => IsOn && HasFusePower();
 
     private static bool HasFusePower()
     {
@@ -70,7 +73,7 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
 
     private void HandleFusePowerChanged(bool hasPower)
     {
-        ApplyLightState(isLightOn.Value && hasPower);
+        ApplyLightState(IsOn && hasPower);
     }
 
     /// <summary>
@@ -187,16 +190,24 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     public void Interact()
     {
         if (PlayerController.LocalInstance != null && !PlayerController.LocalInstance.IsAlive) return;
+        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsListening || !IsSpawned)
+        {
+            if (!localIsLightOn && !HasFusePower()) return;
+            localIsLightOn = !localIsLightOn;
+            GameAudioManager.PlayLightSwitch(transform.position);
+            ApplyLightState(IsEffectivelyOn);
+            return;
+        }
         ToggleLightServerRpc();
     }
 
     public string GetInteractText()
     {
-        if (!isLightOn.Value && FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
+        if (!IsOn && FuseBox.Instance != null && !FuseBox.Instance.IsEnabled)
         {
             return "Turn on fuse box first!";
         }
-        return isLightOn.Value ? "Turn Off Light" : "Turn On Light";
+        return IsOn ? "Turn Off Light" : "Turn On Light";
     }
 
     public bool CanDrag() => false;

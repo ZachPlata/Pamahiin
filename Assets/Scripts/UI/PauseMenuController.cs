@@ -24,6 +24,10 @@ public class PauseMenuController : MonoBehaviour
     private VisualElement panelControls;
     private VisualElement panelPlayers;
 
+    // Main panel tutorial buttons
+    private Button btnRestartTutorial;
+    private Button btnSkipTutorial;
+
     // Host Disconnect modal
     private VisualElement hostDisconnectOverlay;
     private Label lblHostDisconnectMsg;
@@ -34,6 +38,7 @@ public class PauseMenuController : MonoBehaviour
     private Label  lblMaster, lblMusic, lblSFX;
     private Toggle toggleFullscreen, toggleFPS;
     private Toggle toggleTutorialHints;
+    private Toggle toggleReachIndicator;
 
     // Players panel
     private ScrollView playerListScroll;
@@ -85,6 +90,10 @@ public class PauseMenuController : MonoBehaviour
 
         // ── Main panel buttons ─────────────────────────────────────────
         root.Q<Button>("btn-resume")  .clicked += TogglePause;
+        btnRestartTutorial = root.Q<Button>("btn-restart-tutorial");
+        if (btnRestartTutorial != null) btnRestartTutorial.clicked += OnRestartTutorialClicked;
+        btnSkipTutorial = root.Q<Button>("btn-skip-tutorial");
+        if (btnSkipTutorial != null) btnSkipTutorial.clicked += OnSkipTutorialClicked;
         root.Q<Button>("btn-settings").clicked += ShowSettings;
         var btnControls = root.Q<Button>("btn-controls");
         if (btnControls != null) btnControls.clicked += ShowControls;
@@ -103,6 +112,7 @@ public class PauseMenuController : MonoBehaviour
         toggleFullscreen = root.Q<Toggle>("toggle-fullscreen");
         toggleFPS        = root.Q<Toggle>("toggle-fps");
         toggleTutorialHints  = root.Q<Toggle>("toggle-tutorial-hints");
+        toggleReachIndicator = root.Q<Toggle>("toggle-reach-indicator");
 
         // Wire sliders → GameSettingsManager
         sliderMaster .RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMasterVolume(e.newValue); UpdateVolLabel(lblMaster,  e.newValue); });
@@ -113,6 +123,8 @@ public class PauseMenuController : MonoBehaviour
         toggleFPS       .RegisterValueChangedCallback(e => OnToggleFPS(e.newValue));
         if (toggleTutorialHints != null)
             toggleTutorialHints.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetTutorialHintsEnabled(e.newValue));
+        if (toggleReachIndicator != null)
+            toggleReachIndicator.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetReachIndicatorEnabled(e.newValue));
 
         root.Q<Button>("btn-settings-back").clicked += ShowMain;
 
@@ -279,7 +291,45 @@ public class PauseMenuController : MonoBehaviour
 
     private void ShowMain()
     {
+        bool inTutorial = ProgressionAndLoadoutManager.IsInWarehouseTutorialScene;
+        if (btnRestartTutorial != null)
+        {
+            if (inTutorial) btnRestartTutorial.RemoveFromClassList("hidden");
+            else btnRestartTutorial.AddToClassList("hidden");
+        }
+        if (btnSkipTutorial != null)
+        {
+            if (inTutorial) btnSkipTutorial.RemoveFromClassList("hidden");
+            else btnSkipTutorial.AddToClassList("hidden");
+        }
         SetPanel(panelMain);
+    }
+
+    private void OnRestartTutorialClicked()
+    {
+        if (isPaused) TogglePause();
+        if (NetworkController.Instance != null)
+        {
+            NetworkController.Instance.EnterWarehouseTutorial();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(ProgressionAndLoadoutManager.WAREHOUSE_TUTORIAL_SCENE_NAME);
+        }
+    }
+
+    private void OnSkipTutorialClicked()
+    {
+        if (isPaused) TogglePause();
+        ProgressionAndLoadoutManager.MarkTutorialSkipped();
+        if (WarehouseTutorialManager.Instance != null)
+        {
+            WarehouseTutorialManager.Instance.SkipTutorial();
+        }
+        else
+        {
+            OnQuitClicked();
+        }
     }
 
     private void ShowSettings()
@@ -322,6 +372,7 @@ public class PauseMenuController : MonoBehaviour
         toggleFullscreen.value = s.IsFullscreen;
         toggleFPS       .value = s.ShowFPS;
         if (toggleTutorialHints != null)  toggleTutorialHints.value = s.TutorialHintsEnabled;
+        if (toggleReachIndicator != null) toggleReachIndicator.value = s.ReachIndicatorEnabled;
 
         UpdateVolLabel(lblMaster,  s.MasterVolume);
         UpdateVolLabel(lblMusic,   s.MusicVolume);

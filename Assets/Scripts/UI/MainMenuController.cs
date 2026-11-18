@@ -14,6 +14,8 @@ public class MainMenuController : MonoBehaviour
     private VisualElement lobbyView;
     private VisualElement helpView;
     private VisualElement settingsView;
+    private VisualElement tutorialGateView;
+    private bool pendingMultiplayerAfterGate = false;
     
     private TextField ipInput;
     private ScrollView playerListContainer;
@@ -23,6 +25,7 @@ public class MainMenuController : MonoBehaviour
     private Label  lblMaster, lblMusic, lblSFX;
     private Toggle toggleFullscreen, toggleFPS;
     private Toggle toggleTutorialHints;
+    private Toggle toggleReachIndicator;
 
     [Header("Atmospheric VFX")]
     private Label titleLabel;
@@ -45,6 +48,7 @@ public class MainMenuController : MonoBehaviour
         lobbyView = root.Q<VisualElement>("lobby-view");
         helpView = root.Q<VisualElement>("help-view");
         settingsView = root.Q<VisualElement>("settings-view");
+        tutorialGateView = root.Q<VisualElement>("tutorial-gate-view");
 
         // VFX Elements
         titleLabel = root.Q<Label>(className: "title-label");
@@ -63,6 +67,18 @@ public class MainMenuController : MonoBehaviour
 
         var singleplayerBtn = root.Q<Button>("btn-singleplayer");
         if (singleplayerBtn != null) singleplayerBtn.clicked += OnPlayClicked;
+
+        var tutorialBtn = root.Q<Button>("btn-tutorial");
+        if (tutorialBtn != null) tutorialBtn.clicked += OnTutorialClicked;
+
+        var gateStartBtn = root.Q<Button>("btn-gate-start-tutorial");
+        if (gateStartBtn != null) gateStartBtn.clicked += OnGateStartTutorialClicked;
+
+        var gateSkipBtn = root.Q<Button>("btn-gate-skip-tutorial");
+        if (gateSkipBtn != null) gateSkipBtn.clicked += OnGateSkipTutorialClicked;
+
+        var gateCancelBtn = root.Q<Button>("btn-gate-cancel");
+        if (gateCancelBtn != null) gateCancelBtn.clicked += ShowMainMenu;
 
         var multiplayerBtn = root.Q<Button>("btn-multiplayer");
         if (multiplayerBtn != null) multiplayerBtn.clicked += OnMultiplayerClicked;
@@ -85,6 +101,7 @@ public class MainMenuController : MonoBehaviour
         toggleFullscreen = root.Q<Toggle>("toggle-fullscreen");
         toggleFPS        = root.Q<Toggle>("toggle-fps");
         toggleTutorialHints = root.Q<Toggle>("toggle-tutorial-hints");
+        toggleReachIndicator = root.Q<Toggle>("toggle-reach-indicator");
 
         if (sliderMaster != null)
             sliderMaster.RegisterValueChangedCallback(e => { GameSettingsManager.Instance?.SetMasterVolume(e.newValue); UpdateVolLabel(lblMaster, e.newValue); });
@@ -99,6 +116,8 @@ public class MainMenuController : MonoBehaviour
             toggleFPS.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetShowFPS(e.newValue));
         if (toggleTutorialHints != null)
             toggleTutorialHints.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetTutorialHintsEnabled(e.newValue));
+        if (toggleReachIndicator != null)
+            toggleReachIndicator.RegisterValueChangedCallback(e => GameSettingsManager.Instance?.SetReachIndicatorEnabled(e.newValue));
 
         SyncSettingsFromManager();
 
@@ -224,6 +243,7 @@ public class MainMenuController : MonoBehaviour
         if (toggleFullscreen != null) toggleFullscreen.value = s.IsFullscreen;
         if (toggleFPS != null)        toggleFPS.value = s.ShowFPS;
         if (toggleTutorialHints != null)  toggleTutorialHints.value = s.TutorialHintsEnabled;
+        if (toggleReachIndicator != null) toggleReachIndicator.value = s.ReachIndicatorEnabled;
 
         UpdateVolLabel(lblMaster, s.MasterVolume);
         UpdateVolLabel(lblMusic,  s.MusicVolume);
@@ -289,9 +309,37 @@ public class MainMenuController : MonoBehaviour
             settingsView.RemoveFromClassList("active-view");
             settingsView.AddToClassList("hidden-view");
         }
+
+        if (tutorialGateView != null)
+        {
+            tutorialGateView.RemoveFromClassList("active-view");
+            tutorialGateView.AddToClassList("hidden-view");
+        }
+    }
+
+    private void ShowTutorialGate(bool forMultiplayer)
+    {
+        pendingMultiplayerAfterGate = forMultiplayer;
+        HideAllViews();
+        if (tutorialGateView != null)
+        {
+            tutorialGateView.RemoveFromClassList("hidden-view");
+            tutorialGateView.AddToClassList("active-view");
+        }
     }
 
     private void OnPlayClicked()
+    {
+        if (!ProgressionAndLoadoutManager.HasCompletedOrSkippedTutorial() && tutorialGateView != null)
+        {
+            ShowTutorialGate(false);
+            return;
+        }
+
+        ProceedToPlay();
+    }
+
+    private void ProceedToPlay()
     {
         if (NetworkController.Instance != null)
         {
@@ -306,7 +354,43 @@ public class MainMenuController : MonoBehaviour
 
     private void OnMultiplayerClicked()
     {
+        if (!ProgressionAndLoadoutManager.HasCompletedOrSkippedTutorial() && tutorialGateView != null)
+        {
+            ShowTutorialGate(true);
+            return;
+        }
+
         ShowMultiplayerMenu();
+    }
+
+    private void OnTutorialClicked()
+    {
+        if (NetworkController.Instance != null)
+        {
+            NetworkController.Instance.EnterWarehouseTutorial();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(ProgressionAndLoadoutManager.WAREHOUSE_TUTORIAL_SCENE_NAME);
+        }
+    }
+
+    private void OnGateStartTutorialClicked()
+    {
+        OnTutorialClicked();
+    }
+
+    private void OnGateSkipTutorialClicked()
+    {
+        ProgressionAndLoadoutManager.MarkTutorialSkipped();
+        if (pendingMultiplayerAfterGate)
+        {
+            ShowMultiplayerMenu();
+        }
+        else
+        {
+            ProceedToPlay();
+        }
     }
 
     private void OnHostClicked()

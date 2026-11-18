@@ -58,7 +58,7 @@
 
             <!-- Footer: Controls instruction reminder -->
             <ui:VisualElement class="sb-footer">
-                <ui:Label text="[SCROLL / 1-5] Choose Question   •   [RMB / ENTER] Broadcast   •   [LMB] Turn Off &amp; Cancel" class="sb-footer-text" />
+                <ui:Label text="[1-5 / LMB] Ask Question   •   [CLICK OUTSIDE / ESC] Turn Off &amp; Close" class="sb-footer-text" />
             </ui:VisualElement>
 
         </ui:VisualElement>

@@ -15,7 +15,7 @@ public class HunterGhostBehavior : NetworkBehaviour
     public float chaseSpeed = 0.6f;
     public int maxNodesBeforeReturn = 8; // Kept for inspector compatibility
     [SerializeField] private float agentAcceleration = 6.0f;
-    [SerializeField] private float agentStoppingDistance = 0.15f;
+    [SerializeField] private float agentStoppingDistance = 0.05f;
 
     [Header("LOS Settings")]
     public float lineOfSightDistance = 8f;
@@ -40,8 +40,8 @@ public class HunterGhostBehavior : NetworkBehaviour
     [SerializeField] private float electronicResidualGraceDuration = 1.5f;
 
     [Header("Combat & Kill")]
-    [Tooltip("Range within which the ghost can kill the player (sufficient to reach players inside cabinets/cover).")]
-    [SerializeField] private float killDistance = 0.3f;
+    [Tooltip("Range within which the ghost can kill the player in open chases (cabinet threshold fallback handled at runtime).")]
+    [SerializeField] private float killDistance = 0.15f;
 
     public enum PursuitMode
     {
@@ -102,6 +102,7 @@ public class HunterGhostBehavior : NetworkBehaviour
     private float repelTimer = 0f;
     public bool IsAngeredState => isAngeredState;
     public bool IsRepelled => isRepelled;
+    public bool IsInHuntGracePeriod => ghostHandler != null && ghostHandler.IsInHuntGracePeriod;
 
     [Header("Exorcism Death Visuals & Audio")]
     [Tooltip("Optional custom horizontal death sprite sheet overriding Resources/Sprites/ghost_death_sheet.")]
@@ -169,12 +170,15 @@ public class HunterGhostBehavior : NetworkBehaviour
         breadcrumbLine = gameObject.AddComponent<LineRenderer>();
         breadcrumbLine.enabled = false;
 
-        // Clamp stale scene/prefab serialized door interaction distances to BarangayMap world scale
+        // Clamp stale scene/prefab serialized door & kill interaction distances to BarangayMap world scale
         if (doorOpenReach > 0.45f) doorOpenReach = 0.32f;
         if (interiorDoorOpenReach > 0.45f) interiorDoorOpenReach = 0.30f;
         if (cabinetPlayerInsideRadius > 0.40f) cabinetPlayerInsideRadius = 0.28f;
         if (openedDoorHideCheckRadius > 0.35f) openedDoorHideCheckRadius = 0.25f;
         if (hidingDoorStandOffDistance > 0.30f) hidingDoorStandOffDistance = 0.18f;
+        if (killDistance > 0.15f) killDistance = 0.15f;
+        if (agentStoppingDistance > 0.08f) agentStoppingDistance = 0.05f;
+        if (agent != null) agent.stoppingDistance = agentStoppingDistance;
 
         EnsureGhostLight();
     }
@@ -1037,8 +1041,11 @@ public class HunterGhostBehavior : NetworkBehaviour
                 return;
             }
 
-            // Kill check
-            if (!isRepelled && chaseTarget != null && currentTargetDist <= killDistance && hasVisualLoS && !isExecutingKill)
+            // Kill check (0.15f in open chases; 0.24f threshold fallback when target is inside an opened cabinet)
+            float effectiveKillDistance = (chaseTarget != null && chaseTarget.IsInHideZone)
+                ? Mathf.Max(killDistance, 0.24f)
+                : killDistance;
+            if (!isRepelled && chaseTarget != null && currentTargetDist <= effectiveKillDistance && hasVisualLoS && !isExecutingKill)
             {
                 if (chaseTarget.KillPlayer())
                 {
@@ -1768,7 +1775,12 @@ public class HunterGhostBehavior : NetworkBehaviour
 
         if (agent != null && agent.enabled && agent.isOnNavMesh)
         {
-            agent.isStopped = false;
+            bool pausedInGrace = ghostHandler != null && ghostHandler.IsInHuntGracePeriod;
+            agent.isStopped = pausedInGrace;
+            if (pausedInGrace)
+            {
+                agent.velocity = Vector3.zero;
+            }
             agent.speed = chaseSpeed * 2.2f;
         }
 

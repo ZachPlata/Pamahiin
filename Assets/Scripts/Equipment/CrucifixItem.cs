@@ -40,11 +40,11 @@ public class CrucifixItem : EquipmentItem
             spriteRenderer.color = new Color(1f, ember * 0.65f, ember * 0.45f, 1f);
         }
 
-        // Check if an Angered ghost is nearby to repel it (never triggered while carried by dead spectator)
+        // Check if an Angered ghost is nearby to repel it (never triggered while carried by dead spectator or while ghost is paused in grace period)
         if (!isBurned.Value && !IsHeldByDeadPlayer())
         {
             var hunterGhost = HunterGhostBehavior.Instance;
-            if (hunterGhost != null && hunterGhost.IsAngeredState && !hunterGhost.IsRepelled)
+            if (hunterGhost != null && hunterGhost.IsAngeredState && !hunterGhost.IsRepelled && !hunterGhost.IsInHuntGracePeriod)
             {
                 float dist = Vector2.Distance(transform.position, hunterGhost.transform.position);
                 if (dist <= blockRadius)
