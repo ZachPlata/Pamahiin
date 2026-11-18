@@ -18,30 +18,30 @@ public class HunterGhostBehavior : NetworkBehaviour
     [SerializeField] private float agentStoppingDistance = 0.05f;
 
     [Header("LOS Settings")]
-    public float lineOfSightDistance = 8f;
+    public float lineOfSightDistance = 5.33f;
     public float lineOfSightAngle = 90f;
     public LayerMask obstacleLayer; // Kept for inspector compatibility
 
     [Header("Door & Cabinet Interaction")]
     [Tooltip("Distance at which the ghost reaches and forces open a target cabinet door.")]
-    [SerializeField] private float doorOpenReach = 0.32f;
+    [SerializeField] private float doorOpenReach = 0.21f;
     [Tooltip("Distance at which the ghost pushes open a closed interior room door in its path.")]
-    [SerializeField] private float interiorDoorOpenReach = 0.30f;
+    [SerializeField] private float interiorDoorOpenReach = 0.20f;
     [Tooltip("Maximum distance from a cabinet door for a player to count as hiding inside that cabinet.")]
-    [SerializeField] private float cabinetPlayerInsideRadius = 0.28f;
+    [SerializeField] private float cabinetPlayerInsideRadius = 0.19f;
 
     [Header("Phasmophobia Detection & Pursuit Calibration")]
-    [SerializeField] private float electronicDetectionRadius = 9.0f;
-    [SerializeField] private float doorNoiseHearRadius = 5.5f;
-    [SerializeField] private float closeLoSOverrideDistance = 2.0f;
-    [SerializeField] private float openedDoorHideCheckRadius = 0.25f;
-    [SerializeField] private float hidingDoorStandOffDistance = 0.18f;
+    [SerializeField] private float electronicDetectionRadius = 6.0f;
+    [SerializeField] private float doorNoiseHearRadius = 3.67f;
+    [SerializeField] private float closeLoSOverrideDistance = 1.33f;
+    [SerializeField] private float openedDoorHideCheckRadius = 0.17f;
+    [SerializeField] private float hidingDoorStandOffDistance = 0.12f;
     [SerializeField] private float postKillDistanceCheckDelay = 3.0f;
     [SerializeField] private float electronicResidualGraceDuration = 1.5f;
 
     [Header("Combat & Kill")]
     [Tooltip("Range within which the ghost can kill the player in open chases (cabinet threshold fallback handled at runtime).")]
-    [SerializeField] private float killDistance = 0.15f;
+    [SerializeField] private float killDistance = 0.10f;
 
     public enum PursuitMode
     {
@@ -170,13 +170,17 @@ public class HunterGhostBehavior : NetworkBehaviour
         breadcrumbLine = gameObject.AddComponent<LineRenderer>();
         breadcrumbLine.enabled = false;
 
-        // Clamp stale scene/prefab serialized door & kill interaction distances to BarangayMap world scale
-        if (doorOpenReach > 0.45f) doorOpenReach = 0.32f;
-        if (interiorDoorOpenReach > 0.45f) interiorDoorOpenReach = 0.30f;
-        if (cabinetPlayerInsideRadius > 0.40f) cabinetPlayerInsideRadius = 0.28f;
-        if (openedDoorHideCheckRadius > 0.35f) openedDoorHideCheckRadius = 0.25f;
-        if (hidingDoorStandOffDistance > 0.30f) hidingDoorStandOffDistance = 0.18f;
-        if (killDistance > 0.15f) killDistance = 0.15f;
+        // Clamp stale scene/prefab serialized interaction, detection & kill distances (1.5x tighter across all maps)
+        if (lineOfSightDistance > 5.4f) lineOfSightDistance = 5.33f;
+        if (electronicDetectionRadius > 6.1f) electronicDetectionRadius = 6.0f;
+        if (doorNoiseHearRadius > 3.7f) doorNoiseHearRadius = 3.67f;
+        if (closeLoSOverrideDistance > 1.4f) closeLoSOverrideDistance = 1.33f;
+        if (doorOpenReach > 0.22f) doorOpenReach = 0.21f;
+        if (interiorDoorOpenReach > 0.21f) interiorDoorOpenReach = 0.20f;
+        if (cabinetPlayerInsideRadius > 0.20f) cabinetPlayerInsideRadius = 0.19f;
+        if (openedDoorHideCheckRadius > 0.18f) openedDoorHideCheckRadius = 0.17f;
+        if (hidingDoorStandOffDistance > 0.13f) hidingDoorStandOffDistance = 0.12f;
+        if (killDistance > 0.10f) killDistance = 0.10f;
         if (agentStoppingDistance > 0.08f) agentStoppingDistance = 0.05f;
         if (agent != null) agent.stoppingDistance = agentStoppingDistance;
 
@@ -1041,9 +1045,9 @@ public class HunterGhostBehavior : NetworkBehaviour
                 return;
             }
 
-            // Kill check (0.15f in open chases; 0.24f threshold fallback when target is inside an opened cabinet)
+            // Kill check (0.10f in open chases; 0.16f threshold fallback when target is inside an opened cabinet)
             float effectiveKillDistance = (chaseTarget != null && chaseTarget.IsInHideZone)
-                ? Mathf.Max(killDistance, 0.24f)
+                ? Mathf.Max(killDistance, 0.16f)
                 : killDistance;
             if (!isRepelled && chaseTarget != null && currentTargetDist <= effectiveKillDistance && hasVisualLoS && !isExecutingKill)
             {

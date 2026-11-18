@@ -578,14 +578,14 @@ namespace Pamahiin.EditModeTests
             FieldInfo stopDistField = hunterType.GetField("agentStoppingDistance", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(killDistField);
             Assert.IsNotNull(stopDistField);
-            Assert.AreEqual(0.15f, (float)killDistField.GetValue(ghost), 0.001f);
+            Assert.AreEqual(0.10f, (float)killDistField.GetValue(ghost), 0.001f);
             Assert.AreEqual(0.05f, (float)stopDistField.GetValue(ghost), 0.001f);
 
             // Simulate stale larger serialized scene values before Awake() clamps them
             killDistField.SetValue(ghost, 0.3f);
             stopDistField.SetValue(ghost, 0.15f);
             hunterType.GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance)?.Invoke(ghost, null);
-            Assert.AreEqual(0.15f, (float)killDistField.GetValue(ghost), 0.001f);
+            Assert.AreEqual(0.10f, (float)killDistField.GetValue(ghost), 0.001f);
             Assert.AreEqual(0.05f, (float)stopDistField.GetValue(ghost), 0.001f);
 
             // 2. ExorcismManager hitTolerance matches yellow bar angular half-width per difficulty

@@ -17,6 +17,10 @@ public class FlashlightItem : EquipmentItem
     private NetworkVariable<bool> isLightOn = new NetworkVariable<bool>(
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+    private bool isHuntFlickering = false;
+    private bool huntFlickerVisible = true;
+    private float huntFlickerTimer = 0f;
+
     public bool IsLightOn => isLightOn.Value;
     public override bool IsPoweredOn => isLightOn.Value;
 
@@ -58,6 +62,41 @@ public class FlashlightItem : EquipmentItem
     protected override void Update()
     {
         base.Update(); // Calls EquipmentItem.Update() which handles the movement and anchoring
+
+        if (spotlight == null) return;
+
+        bool baseActive = ShouldSpotlightBeActive();
+        bool shouldHuntFlicker = GhostHandler.IsAnyHuntActive && baseActive;
+        if (shouldHuntFlicker)
+        {
+            if (!isHuntFlickering)
+            {
+                isHuntFlickering = true;
+                huntFlickerVisible = Random.value > 0.5f;
+                huntFlickerTimer = Random.Range(0.02f, 0.08f);
+            }
+
+            huntFlickerTimer -= Time.deltaTime;
+            if (huntFlickerTimer <= 0f)
+            {
+                huntFlickerVisible = !huntFlickerVisible;
+                huntFlickerTimer = Random.Range(0.05f, 0.18f);
+            }
+
+            spotlight.enabled = huntFlickerVisible;
+        }
+        else if (isHuntFlickering)
+        {
+            isHuntFlickering = false;
+            spotlight.enabled = baseActive;
+        }
+    }
+
+    private bool ShouldSpotlightBeActive()
+    {
+        return isLightOn.Value &&
+               !IsHeldByDeadPlayer() &&
+               (isInHand.Value || IsOnGround || IsPlaced || IsHeldByLivingInventory());
     }
 
     /// <summary>
@@ -95,9 +134,11 @@ public class FlashlightItem : EquipmentItem
 
         if (spotlight != null)
         {
-            spotlight.enabled = isLightOn.Value &&
-                                !IsHeldByDeadPlayer() &&
-                                (isInHand.Value || IsOnGround || IsPlaced || IsHeldByLivingInventory());
+            bool baseActive = ShouldSpotlightBeActive();
+            if (!baseActive) isHuntFlickering = false;
+            spotlight.enabled = (isHuntFlickering && GhostHandler.IsAnyHuntActive)
+                ? huntFlickerVisible
+                : baseActive;
         }
     }
 }

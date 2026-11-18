@@ -25,6 +25,9 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
         false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     private bool localIsLightOn = false;
+    private bool isHuntFlickering = false;
+    private bool huntFlickerVisible = true;
+    private float huntFlickerTimer = 0f;
     public bool IsOn => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned)
         ? isLightOn.Value
         : localIsLightOn;
@@ -50,6 +53,44 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
     private void OnDisable()
     {
         FuseBox.OnPowerStateChanged -= HandleFusePowerChanged;
+        if (isHuntFlickering)
+        {
+            isHuntFlickering = false;
+            ApplyLightState(IsEffectivelyOn);
+        }
+    }
+
+    private void Update()
+    {
+        bool shouldHuntFlicker = GhostHandler.IsAnyHuntActive && IsEffectivelyOn;
+        if (shouldHuntFlicker)
+        {
+            if (!isHuntFlickering)
+            {
+                isHuntFlickering = true;
+                if (currentFlickerRoutine != null)
+                {
+                    StopCoroutine(currentFlickerRoutine);
+                    currentFlickerRoutine = null;
+                }
+                huntFlickerVisible = Random.value > 0.5f;
+                huntFlickerTimer = Random.Range(0.02f, 0.10f);
+                SetControlledLightsEnabled(huntFlickerVisible);
+            }
+
+            huntFlickerTimer -= Time.deltaTime;
+            if (huntFlickerTimer <= 0f)
+            {
+                huntFlickerVisible = !huntFlickerVisible;
+                huntFlickerTimer = Random.Range(0.06f, 0.22f);
+                SetControlledLightsEnabled(huntFlickerVisible);
+            }
+        }
+        else if (isHuntFlickering)
+        {
+            isHuntFlickering = false;
+            ApplyLightState(IsEffectivelyOn);
+        }
     }
 
     public override void OnNetworkSpawn()
@@ -289,7 +330,7 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
         }
     }
 
-    private void ApplyLightState(bool state)
+    private void SetControlledLightsEnabled(bool state)
     {
         foreach (var light in controlledLights)
         {
@@ -298,6 +339,11 @@ public class HouseLightSwitch : NetworkBehaviour, IInteractable
                 light.enabled = state;
             }
         }
+    }
+
+    private void ApplyLightState(bool state)
+    {
+        SetControlledLightsEnabled((isHuntFlickering && state) ? huntFlickerVisible : state);
 
         foreach (var safeZone in litSafeZones)
         {

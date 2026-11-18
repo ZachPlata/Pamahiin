@@ -105,7 +105,20 @@ public class GhostHandler : NetworkBehaviour
 
     private bool hasSubscribedSyncCallbacks = false;
 
+    public static GhostHandler Instance { get; private set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        Instance = null;
+        cachedEnclosedRoofs = null;
+        lastInteriorDoorInteractionTime = -999f;
+    }
+
     public GhostHandlerState CurrentState => currentState.Value;
+    public bool IsHunting => currentState.Value != GhostHandlerState.Dormant;
+    public static bool IsAnyHuntActive =>
+        (Instance != null && Instance.IsHunting) || TutorialGhostController.IsAnyTutorialHuntActive;
     public bool IsExorcismFailedHunt => isExorcismFailedHunt.Value;
     public bool IsInSetupGracePeriod => IsServer
         ? (setupGraceDuration > 0f && (!setupGraceStarted || Time.time < setupGracePeriodEndTime))
@@ -153,8 +166,23 @@ public class GhostHandler : NetworkBehaviour
     private bool devVisibilityForced = false;
 
     // Hunt environment effects
-    private float huntLightFlickerTimer = 0f;
     private float huntFuseTripTimer = 0f;
+
+    private void OnEnable()
+    {
+        if (Instance == null || Instance == this)
+        {
+            Instance = this;
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
 
     public override void OnNetworkDespawn()
     {
@@ -165,6 +193,10 @@ public class GhostHandler : NetworkBehaviour
 
     public override void OnDestroy()
     {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
         UnsubscribeSyncCallbacks();
         DespawnActiveOrb();
         base.OnDestroy();
@@ -1067,7 +1099,6 @@ public class GhostHandler : NetworkBehaviour
         currentHuntDuration = (isFromFailedExorcism ? (huntDurationMax * 1.5f) : Random.Range(huntDurationMin, huntDurationMax))
             * WeatherManager.GetHuntDurationMultiplier();
         huntTimer = 0f;
-        huntLightFlickerTimer = 0f;
         huntFuseTripTimer = 0f;
 
         ContractDifficulty diff = ProgressionAndLoadoutManager.Instance != null
@@ -1099,6 +1130,8 @@ public class GhostHandler : NetworkBehaviour
             }
         }
         
+        isHunterFlickerVisible = true;
+        flickerTimer = 0.35f;
         SetDoorsLocked(true);
         SetState(GhostHandlerState.Searching);
 
@@ -1256,18 +1289,6 @@ public class GhostHandler : NetworkBehaviour
                     }
                 }
 
-                // Flicker all active lights every 2 seconds during a hunt
-                huntLightFlickerTimer += Time.deltaTime;
-                if (huntLightFlickerTimer >= 2f)
-                {
-                    huntLightFlickerTimer = 0f;
-                    var switches = Object.FindObjectsByType<HouseLightSwitch>(FindObjectsInactive.Exclude);
-                    foreach (var sw in switches)
-                    {
-                        sw.HuntFlicker();
-                    }
-                }
-
                 // 15% chance to trip the fuse box, checked every 3 seconds
                 huntFuseTripTimer += Time.deltaTime;
                 if (huntFuseTripTimer >= 3f)
@@ -1280,12 +1301,20 @@ public class GhostHandler : NetworkBehaviour
                 }
             }
             
-            // Flickering logic during hunt (runs for everyone)
+            // Flickering logic during hunt (runs for everyone); keep ghost clearly visible most of the time, especially while chasing
             flickerTimer -= Time.deltaTime;
             if (flickerTimer <= 0f)
             {
                 isHunterFlickerVisible = !isHunterFlickerVisible;
-                flickerTimer = Random.Range(0.1f, 0.4f);
+                bool isChasing = currentState.Value == GhostHandlerState.Chasing;
+                if (isHunterFlickerVisible)
+                {
+                    flickerTimer = isChasing ? Random.Range(0.35f, 0.55f) : Random.Range(0.25f, 0.42f);
+                }
+                else
+                {
+                    flickerTimer = isChasing ? Random.Range(0.05f, 0.10f) : Random.Range(0.08f, 0.16f);
+                }
                 UpdateVisibility(currentState.Value);
             }
         }

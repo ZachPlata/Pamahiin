@@ -390,7 +390,7 @@ MonoBehaviour:
   moveSpeed: 0.5
   chaseSpeed: 0.6
   maxNodesBeforeReturn: 5
-  lineOfSightDistance: 8
+  lineOfSightDistance: 5.33
   lineOfSightAngle: 90
   obstacleLayer:
     serializedVersion: 2

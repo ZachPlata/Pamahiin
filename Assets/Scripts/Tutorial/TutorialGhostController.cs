@@ -24,6 +24,14 @@ public class TutorialGhostController : MonoBehaviour
     [SerializeField] private float huntGracePeriod = 4f;
     [SerializeField] private float resetGracePeriod = 3f;
 
+    public static bool IsAnyTutorialHuntActive { get; private set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticHuntFlag()
+    {
+        IsAnyTutorialHuntActive = false;
+    }
+
     public bool CrucifixBlocked { get; private set; }
     public bool IsHunting { get; private set; }
     public bool IsHuntCompleted { get; private set; }
@@ -61,6 +69,14 @@ public class TutorialGhostController : MonoBehaviour
         ResolveFallbackSprites();
         ApplySprite(idleSprite);
         SetGhostVisible(true, 0.65f);
+    }
+
+    private void OnDisable()
+    {
+        if (IsHunting)
+        {
+            IsAnyTutorialHuntActive = false;
+        }
     }
 
     private void Update()
@@ -213,6 +229,7 @@ public class TutorialGhostController : MonoBehaviour
             activeHuntRoutine = null;
         }
         IsHunting = false;
+        IsAnyTutorialHuntActive = false;
         IsBanished = true;
         isPinnedToRitualCircle = false;
 
@@ -360,6 +377,7 @@ public class TutorialGhostController : MonoBehaviour
     private IEnumerator NonLethalHuntRoutine(Transform playerTransform, Transform resetPoint, HideZone hideZone)
     {
         IsHunting = true;
+        IsAnyTutorialHuntActive = true;
         transform.position = initialPosition;
         ApplySprite(huntSprite);
 
@@ -402,6 +420,7 @@ public class TutorialGhostController : MonoBehaviour
         }
 
         IsHunting = false;
+        IsAnyTutorialHuntActive = false;
         IsHuntCompleted = true;
         ApplySprite(idleSprite);
         SetGhostVisible(true, 0.55f);

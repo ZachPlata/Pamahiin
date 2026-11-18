@@ -23,7 +23,7 @@ public class EventGhostBehavior : NetworkBehaviour
     public float wanderSpeed = 1.5f;
 
     [Header("Evidence Mechanics")]
-    public float interactionScanRadius = 5f;
+    public float interactionScanRadius = 3.33f;
     public LayerMask interactionLayer;
     [HideInInspector]
     public float dotsDashSpeed = 1.5f;
@@ -33,7 +33,7 @@ public class EventGhostBehavior : NetworkBehaviour
     public float eventIntervalMax = 15f;
 
     [Header("Prop Disruption Frequency")]
-    [SerializeField] private float propScanRadius = 2.6f;
+    [SerializeField] private float propScanRadius = 1.73f;
     [SerializeField] private float propDisruptCooldownMin = 28f;
     [SerializeField] private float propDisruptCooldownMax = 48f;
     private float nextPropDisruptTime = 0f;
@@ -113,6 +113,9 @@ public class EventGhostBehavior : NetworkBehaviour
         }
 
         ghostSprite = GetComponentInChildren<SpriteRenderer>();
+
+        if (interactionScanRadius > 3.4f) interactionScanRadius = 3.33f;
+        if (propScanRadius > 1.8f) propScanRadius = 1.73f;
     }
 
     public override void OnNetworkSpawn()
