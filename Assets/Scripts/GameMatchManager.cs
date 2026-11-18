@@ -49,18 +49,18 @@ public class GameMatchManager : NetworkBehaviour
         "Tolentino", "Salazar", "Alcantara", "Vergara"
     };
 
-    // Completely spoiler-free Barangay San Nicolas haunting records (zero entity species clues)
+    // Completely spoiler-free San Nicolas haunting records (map-agnostic, zero entity species clues)
     private static readonly GhostBackgroundTemplate[] BackgroundTemplates =
     {
         new GhostBackgroundTemplate(
             "Former Property Owner",
-            "Barangay deed records list {name} as the last owner of 6 Tanglewood Drive. After {subj} passed quietly inside the house, neighbors reported porch lights flickering at midnight and footsteps pacing behind locked curtains."),
+            "Barangay deed records list {name} as the last registered custodian of the property. After {subj} passed quietly on the premises, neighbors reported exterior lights flickering at midnight and footsteps pacing behind locked doors."),
         new GhostBackgroundTemplate(
             "Retired Watchmaker",
-            "Known across Barangay San Nicolas for repairing clocks until dawn, {name} died alone during a brownout. Subsequent tenants fled after cold drafts, stopped timepieces, and whispered numbers echoed through the hall."),
+            "Known across Barangay San Nicolas for repairing clocks until dawn, {name} died alone during a brownout. Subsequent occupants fled after cold drafts, stopped timepieces, and whispered numbers echoed through the hall."),
         new GhostBackgroundTemplate(
             "Longtime Caretaker",
-            "{name} tended this residence for nearly two decades while the original family lived abroad. Following {poss} sudden disappearance in 1998, barangay tanods refused night patrols past the front gate."),
+            "{name} tended this property for nearly two decades after its former keepers left the district. Following {poss} sudden disappearance in 1998, barangay tanods refused night patrols past the front gate."),
         new GhostBackgroundTemplate(
             "Parish Choir Member",
             "A longtime volunteer at San Nicolas Chapel, {name} vanished after an evening storm knocked out the streetlamps. Residents still hear faint humming and interior doors clicking shut long after curfew."),
@@ -69,19 +69,19 @@ public class GameMatchManager : NetworkBehaviour
             "Neighbors remember {name} working beside the front window well past midnight. Weeks after {poss} burial, passersby swore they saw someone peering from the hallway whenever heavy rain lashed the street."),
         new GhostBackgroundTemplate(
             "Night-Shift Nurse",
-            "Returning home in the early hours after hospital duty, {name} suffered a fatal collapse inside the house. Delivery riders and neighbors now refuse to step onto the porch after dusk."),
+            "Stopping by in the early hours after hospital duty, {name} suffered a fatal collapse on the premises. Delivery riders and passersby now refuse to step past the entrance after dusk."),
         new GhostBackgroundTemplate(
             "Barangay Archivist",
-            "{name} kept decades of Barangay San Nicolas civil ledgers locked inside the residence. Families who rented the property afterward left within three days, citing restless knocking from empty rooms."),
+            "{name} kept decades of Barangay San Nicolas civil ledgers locked inside the building. Those who entered the property afterward left within three days, citing restless knocking from empty rooms."),
         new GhostBackgroundTemplate(
             "Missing Fisherman",
-            "After {name}'s boat returned empty to the riverbend, {poss} belongings were stored at 6 Tanglewood Drive. Relatives sealed the house when damp footprints kept reappearing along the floorboards."),
+            "After {name}'s boat returned empty to the riverbend, {poss} belongings were stored on the property. Officials sealed the building when damp footprints kept reappearing along the floors."),
         new GhostBackgroundTemplate(
             "Reclusive Councilor",
             "Once respected across the district, {name} grew reclusive in {poss} final years. Neighbors reported heavy doors latching by themselves and sudden chills spilling out from under the threshold."),
         new GhostBackgroundTemplate(
             "Unclaimed Boarder",
-            "{name} rented a room here during the late eighties before vanishing without collecting {poss} luggage. Every caretaker hired since has abandoned the property before the first month ended.")
+            "{name} stayed on the premises during the late eighties before vanishing without collecting {poss} belongings. Every caretaker hired since has abandoned the property before the first month ended.")
     };
 
     // Completely spoiler-free Kampo Santo ng San Nicolas cemetery haunting records (zero entity species clues)

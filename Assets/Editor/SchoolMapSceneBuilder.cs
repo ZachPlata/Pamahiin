@@ -27,6 +27,106 @@ public static class SchoolMapSceneBuilder
         public Transform UpperArrival;
     }
 
+    [MenuItem("Pamahiin/Patch SchoolMap Stalls & Stairs (Non-Destructive)")]
+    public static void PatchSchoolMapStallsAndStairs()
+    {
+        Scene scene = EditorSceneManager.GetActiveScene();
+        if (scene.path != SCHOOL_SCENE_PATH)
+        {
+            scene = EditorSceneManager.OpenScene(SCHOOL_SCENE_PATH, OpenSceneMode.Single);
+        }
+
+        int wallLayer = LayerMask.NameToLayer("Walls");
+        if (wallLayer < 0) wallLayer = 7;
+
+        int patchedStalls = 0;
+        int patchedStairs = 0;
+        int fixedArrivals = 0;
+
+        foreach (var sr in Object.FindObjectsByType<SpriteRenderer>(FindObjectsInactive.Include))
+        {
+            if (sr == null || sr.sprite == null) continue;
+            string n = sr.gameObject.name;
+            if ((n.EndsWith("_Stall1") || n.EndsWith("_Stall2")) && n.Contains("_Restroom_"))
+            {
+                GameObject go = sr.gameObject;
+                go.layer = wallLayer;
+
+                foreach (var existing in go.GetComponents<BoxCollider2D>())
+                {
+                    Object.DestroyImmediate(existing);
+                }
+
+                Vector2 sz = sr.sprite.bounds.size;
+                var leftWall = go.AddComponent<BoxCollider2D>();
+                leftWall.size = new Vector2(sz.x * (3f / 22f), sz.y);
+                leftWall.offset = new Vector2(sz.x * (-0.5f + 1.5f / 22f), 0f);
+
+                var rightWall = go.AddComponent<BoxCollider2D>();
+                rightWall.size = new Vector2(sz.x * (3f / 22f), sz.y);
+                rightWall.offset = new Vector2(sz.x * (0.5f - 1.5f / 22f), 0f);
+
+                var toiletCol = go.AddComponent<BoxCollider2D>();
+                toiletCol.size = new Vector2(sz.x * (10f / 22f), sz.y * (16f / 26f));
+                toiletCol.offset = new Vector2(0f, sz.y * (14f / 26f - 0.5f));
+
+                patchedStalls++;
+            }
+        }
+
+        var allStairs = Object.FindObjectsByType<StairTeleporter>(FindObjectsInactive.Include);
+        foreach (var tp in allStairs)
+        {
+            if (tp == null || tp.gameObject.name == "MidStairTeleporterNode") continue;
+            var box = tp.GetComponent<BoxCollider2D>();
+            var sr = tp.GetComponent<SpriteRenderer>();
+            if (box != null && sr != null && sr.sprite != null)
+            {
+                box.isTrigger = true;
+                box.size = sr.sprite.bounds.size;
+                box.offset = Vector2.zero;
+                patchedStairs++;
+            }
+
+            Transform mid = tp.transform.Find("MidStairTeleporterNode");
+            if (mid != null && mid.TryGetComponent<BoxCollider2D>(out var midBox))
+            {
+                midBox.offset = Vector2.zero;
+            }
+
+            // Fix swapped arrivalSpawnPoints (each StairTeleporter must hold its OWN floor's arrivalSpawnPoint)
+            StairTeleporter dest = tp.Destination;
+            if (dest != null)
+            {
+                var soA = new SerializedObject(tp);
+                var soB = new SerializedObject(dest);
+                var arrPropA = soA.FindProperty("arrivalSpawnPoint");
+                var arrPropB = soB.FindProperty("arrivalSpawnPoint");
+                var trA = arrPropA?.objectReferenceValue as Transform;
+                var trB = arrPropB?.objectReferenceValue as Transform;
+                if (trA != null && trB != null)
+                {
+                    float distAToTp = Vector2.Distance(trA.position, tp.transform.position);
+                    float distAToDest = Vector2.Distance(trA.position, dest.transform.position);
+                    if (distAToTp > distAToDest)
+                    {
+                        string labelA = soA.FindProperty("destinationFloorLabel").stringValue;
+                        string labelB = soB.FindProperty("destinationFloorLabel").stringValue;
+                        tp.Configure(dest, trB, labelA);
+                        dest.Configure(tp, trA, labelB);
+                        EditorUtility.SetDirty(tp);
+                        EditorUtility.SetDirty(dest);
+                        fixedArrivals += 2;
+                    }
+                }
+            }
+        }
+
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        Debug.Log($"[SchoolMapSceneBuilder] Non-destructive patch complete: {patchedStalls} CR stalls, {patchedStairs} stairs updated, {fixedArrivals} arrival points fixed.");
+    }
+
     [MenuItem("Pamahiin/Build SchoolMap Scene")]
     public static void BuildSchoolMapScene()
     {
@@ -850,8 +950,8 @@ public static class SchoolMapSceneBuilder
                 float stallX1 = westSide ? r.xMin + 0.36f : r.xMin + 0.62f;
                 float stallX2 = stallX1 + 0.50f;
 
-                CreateNonBlockingProp(furnRoot, $"{room.Id}_Stall1", toiletSpr, new Rect(stallX1, toiletY, 0.34f, 0.38f), "Item", 0, northTip ? 0f : 180f);
-                CreateNonBlockingProp(furnRoot, $"{room.Id}_Stall2", toiletSpr, new Rect(stallX2, toiletY, 0.34f, 0.38f), "Item", 0, northTip ? 0f : 180f);
+                CreateRestroomStall(furnRoot, $"{room.Id}_Stall1", toiletSpr, new Rect(stallX1, toiletY, 0.34f, 0.38f), wallLayer, northTip ? 0f : 180f);
+                CreateRestroomStall(furnRoot, $"{room.Id}_Stall2", toiletSpr, new Rect(stallX2, toiletY, 0.34f, 0.38f), wallLayer, northTip ? 0f : 180f);
 
                 float sinkY = northTip ? r.yMin + 0.14f : r.yMax - 0.34f;
                 float sinkX = westSide ? r.xMin + 0.28f : r.xMax - 0.56f;
@@ -1078,11 +1178,11 @@ public static class SchoolMapSceneBuilder
                 $"Arrival_{sc.CornerName}_F3_From_F2", new Vector2(singleArrX, y3),
                 out StairTeleporter tp3To2, out Transform arr3From2);
 
-            // Wire bidirectional links & Floor labels
-            tp1To2.Configure(tp2To1, arr2From1, "2nd Floor");
-            tp2To1.Configure(tp1To2, arr1From2, "1st Floor");
-            tp2To3.Configure(tp3To2, arr3From2, "3rd Floor");
-            tp3To2.Configure(tp2To3, arr2From3, "2nd Floor");
+            // Wire bidirectional links & Floor labels (each StairTeleporter stores its OWN floor's arrivalSpawnPoint)
+            tp1To2.Configure(tp2To1, arr1From2, "2nd Floor");
+            tp2To1.Configure(tp1To2, arr2From1, "1st Floor");
+            tp2To3.Configure(tp3To2, arr2From3, "3rd Floor");
+            tp3To2.Configure(tp2To3, arr3From2, "2nd Floor");
 
             tp1To2.EnsureMidSpriteBackupNode();
             tp2To1.EnsureMidSpriteBackupNode();
@@ -1147,14 +1247,13 @@ public static class SchoolMapSceneBuilder
         }
         stairGo.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
 
-        // Recessed trigger collider covering the outer half of treads (>= 0.70u clear of arrival)
+        // Full-tread trigger collider matching BarangayMap so stepping onto any stair tread triggers teleport + fade
         var box = stairGo.AddComponent<BoxCollider2D>();
         box.isTrigger = true;
         if (sprite != null)
         {
-            float offsetSign = isStairUp ? -1f : 1f;
-            box.size = new Vector2(sprite.bounds.size.x * 0.48f, sprite.bounds.size.y * 0.90f);
-            box.offset = new Vector2(offsetSign * sprite.bounds.size.x * 0.24f, 0f);
+            box.size = sprite.bounds.size;
+            box.offset = Vector2.zero;
         }
 
         teleporter = stairGo.AddComponent<StairTeleporter>();
@@ -1719,6 +1818,33 @@ public static class SchoolMapSceneBuilder
         Transform parent, string name, Sprite sprite, Rect rect, string sortingLayer, int sortOrder, float rotZ = 0f)
     {
         GameObject go = CreateSpriteRect(parent, name, sprite, rect, sortingLayer, sortOrder, 0, rotZ);
+        go.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
+        return go;
+    }
+
+    private static GameObject CreateRestroomStall(
+        Transform parent, string name, Sprite sprite, Rect rect, int wallLayer, float rotZ)
+    {
+        GameObject go = CreateSpriteRect(parent, name, sprite, rect, "Item", 0, wallLayer, rotZ);
+        if (sprite != null)
+        {
+            Vector2 sz = sprite.bounds.size;
+
+            // Left CR stall partition wall (pixels 0..3 of 22)
+            var leftWall = go.AddComponent<BoxCollider2D>();
+            leftWall.size = new Vector2(sz.x * (3f / 22f), sz.y);
+            leftWall.offset = new Vector2(sz.x * (-0.5f + 1.5f / 22f), 0f);
+
+            // Right CR stall partition wall (pixels 19..22 of 22)
+            var rightWall = go.AddComponent<BoxCollider2D>();
+            rightWall.size = new Vector2(sz.x * (3f / 22f), sz.y);
+            rightWall.offset = new Vector2(sz.x * (0.5f - 1.5f / 22f), 0f);
+
+            // Toilet cistern + bowl (pixels 6..16 of 22, 6..22 of 26, leaving front 0..6 open for HideZone entry)
+            var toiletCol = go.AddComponent<BoxCollider2D>();
+            toiletCol.size = new Vector2(sz.x * (10f / 22f), sz.y * (16f / 26f));
+            toiletCol.offset = new Vector2(0f, sz.y * (14f / 26f - 0.5f));
+        }
         go.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
         return go;
     }

@@ -402,14 +402,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
         if (IsOnGround || IsPlaced)
         {
             var localCtrl = PlayerController.LocalInstance;
-            if (localCtrl != null)
-            {
-                if (localCtrl.IsDyingSequence) return;
-                if (localCtrl.IsGhostSpectator)
-                {
-                    if (!IsOnGround || !PlayerController.IsEquipmentAllowedForGhostSpectator(this)) return;
-                }
-            }
+            if (localCtrl != null && !localCtrl.IsAlive) return;
 
             var localPlayer = NetworkManager.Singleton?.LocalClient?.PlayerObject;
             if (localPlayer != null)
@@ -455,11 +448,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
     {
         if (ownerClientId.Value != ulong.MaxValue) return;
 
-        // Dead spectators can ONLY pick up IsOnGround non-consumable equipment (never IsPlaced gear, pills, or chalk)
-        bool allowed = isPlaced.Value
-            ? IsPlayerAliveAndPresent(clientId)
-            : IsPlayerAllowedGroundEquip(clientId);
-        if (!allowed) return;
+        if (!IsPlayerAliveAndPresent(clientId)) return;
 
         var holderInventory = ResolvePlayerInventory(clientId);
         if (holderInventory != null && !holderInventory.CanAssignItem(this))
@@ -1120,12 +1109,7 @@ public abstract class EquipmentItem : NetworkBehaviour, IInteractable
 
         var playerCtrl = playerTr.GetComponent<PlayerController>();
         if (playerCtrl == null) return true;
-        if (playerCtrl.IsAlive) return true;
-        if (playerCtrl.IsGhostSpectator)
-        {
-            return !(this is SanityPillsItem) && !(this is RitualChalkItem);
-        }
-        return false;
+        return playerCtrl.IsAlive;
     }
 
     private Vector2 ClampDragTargetToSender(ulong senderClientId, Vector2 targetPos)

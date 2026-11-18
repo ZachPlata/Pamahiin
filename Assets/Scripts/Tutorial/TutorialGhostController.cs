@@ -13,6 +13,8 @@ public class TutorialGhostController : MonoBehaviour
     [SerializeField] private SpriteRenderer ghostRenderer;
     [SerializeField] private Sprite idleSprite;
     [SerializeField] private Sprite huntSprite;
+    [SerializeField] private int deathFrameCount = 8;
+    [SerializeField] private float deathAnimationDuration = 2.8f;
 
     [Header("Hunt Settings")]
     [SerializeField] private Transform[] patrolWaypoints;
@@ -35,8 +37,14 @@ public class TutorialGhostController : MonoBehaviour
     public event Action OnHuntCompleted;
 
     private Coroutine activeHuntRoutine;
+    private Coroutine banishRoutine;
     private Vector3 initialPosition;
+    private Vector3 ritualCirclePos;
+    private bool isPinnedToRitualCircle;
     private Transform containmentSpot;
+    private Sprite[] cachedDeathFrames;
+    private string origSortingLayerName = "Default";
+    private int origSortingOrder = 10;
 
     private void Awake()
     {
@@ -44,6 +52,11 @@ public class TutorialGhostController : MonoBehaviour
         if (ghostRenderer == null)
         {
             ghostRenderer = GetComponentInChildren<SpriteRenderer>();
+        }
+        if (ghostRenderer != null)
+        {
+            origSortingLayerName = ghostRenderer.sortingLayerName;
+            origSortingOrder = ghostRenderer.sortingOrder;
         }
         ResolveFallbackSprites();
         ApplySprite(idleSprite);
@@ -53,6 +66,12 @@ public class TutorialGhostController : MonoBehaviour
     private void Update()
     {
         if (IsBanished || IsHunting || ghostRenderer == null || !ghostRenderer.enabled) return;
+
+        if (isPinnedToRitualCircle)
+        {
+            transform.position = ritualCirclePos;
+            return;
+        }
 
         // Subtle spectral hover bob when idle in Bay 3 containment
         Vector3 anchor = containmentSpot != null ? containmentSpot.position : initialPosition;
@@ -138,29 +157,168 @@ public class TutorialGhostController : MonoBehaviour
         activeHuntRoutine = StartCoroutine(NonLethalHuntRoutine(playerTransform, resetPoint, hideZone));
     }
 
-    public void PlayBanishEffect()
+    /// <summary>
+    /// Pins the tutorial ghost cleanly at the center of the exorcism ritual circle while chanting.
+    /// </summary>
+    public void PinToRitualCircle(Vector3 centerPos)
     {
-        StopHunt();
-        IsBanished = true;
-        StartCoroutine(BanishFadeRoutine());
+        if (IsBanished) return;
+
+        if (activeHuntRoutine != null)
+        {
+            StopCoroutine(activeHuntRoutine);
+            activeHuntRoutine = null;
+        }
+        IsHunting = false;
+        isPinnedToRitualCircle = true;
+        ritualCirclePos = new Vector3(centerPos.x, centerPos.y, 0f);
+        transform.position = ritualCirclePos;
+
+        ApplySprite(huntSprite);
+        if (ghostRenderer != null)
+        {
+            ghostRenderer.enabled = true;
+            ghostRenderer.color = Color.white;
+            ghostRenderer.sortingLayerName = "Item";
+            ghostRenderer.sortingOrder = 50;
+        }
     }
 
-    private IEnumerator BanishFadeRoutine()
+    /// <summary>
+    /// Releases the tutorial ghost from the ritual circle if the ritual was aborted or failed.
+    /// </summary>
+    public void ReleaseFromRitualCircle()
     {
-        ApplySprite(huntSprite);
-        SetGhostVisible(true, 0.9f);
+        if (IsBanished) return;
+
+        isPinnedToRitualCircle = false;
+        ritualCirclePos = Vector3.zero;
+        ApplySprite(idleSprite);
+        if (ghostRenderer != null)
+        {
+            ghostRenderer.sortingLayerName = origSortingLayerName;
+            ghostRenderer.sortingOrder = origSortingOrder;
+        }
+        SetGhostVisible(true, 0.65f);
+        transform.position = containmentSpot != null ? containmentSpot.position : initialPosition;
+    }
+
+    public void PlayBanishEffect(Vector3? manifestPos = null, AudioClip dyingClip = null)
+    {
+        if (IsBanished && banishRoutine != null) return;
+
+        if (activeHuntRoutine != null)
+        {
+            StopCoroutine(activeHuntRoutine);
+            activeHuntRoutine = null;
+        }
+        IsHunting = false;
+        IsBanished = true;
+        isPinnedToRitualCircle = false;
+
+        Vector3 targetPos = ResolveBanishManifestPosition(manifestPos);
+        banishRoutine = StartCoroutine(BanishFadeRoutine(targetPos, dyingClip));
+    }
+
+    private Vector3 ResolveBanishManifestPosition(Vector3? manifestPos)
+    {
+        if (manifestPos.HasValue && manifestPos.Value != Vector3.zero)
+        {
+            return new Vector3(manifestPos.Value.x, manifestPos.Value.y, 0f);
+        }
+        if (ritualCirclePos != Vector3.zero)
+        {
+            return ritualCirclePos;
+        }
+
+        SummoningCircle circle = SummoningCircle.FindClosest(transform.position, 25f);
+        if (circle != null)
+        {
+            return new Vector3(circle.transform.position.x, circle.transform.position.y, 0f);
+        }
+
+        var spot = FindAnyObjectByType<TutorialExorcismSpotInteractable>();
+        if (spot != null)
+        {
+            return new Vector3(spot.transform.position.x, spot.transform.position.y, 0f);
+        }
+
+        return transform.position;
+    }
+
+    private Sprite[] ResolveDeathFrames()
+    {
+        if (cachedDeathFrames != null && cachedDeathFrames.Length > 0)
+        {
+            return cachedDeathFrames;
+        }
+
+        Texture2D sheet = Resources.Load<Texture2D>("Sprites/ghost_death_sheet");
+        if (sheet == null) return Array.Empty<Sprite>();
+
+        cachedDeathFrames = HunterGhostBehavior.SliceHorizontalSheet(sheet, deathFrameCount, "tutorial_ghost_death_f");
+        return cachedDeathFrames;
+    }
+
+    private IEnumerator BanishFadeRoutine(Vector3 targetPos, AudioClip dyingClip)
+    {
+        transform.position = targetPos;
+
+        if (ghostRenderer != null)
+        {
+            ghostRenderer.enabled = true;
+            ghostRenderer.color = Color.white;
+            ghostRenderer.sortingLayerName = "Item";
+            ghostRenderer.sortingOrder = 50;
+        }
+
+        AudioClip clip = dyingClip != null ? dyingClip : GameAudioManager.GetClip("ghost_dying_shriek");
+        if (clip != null)
+        {
+            GameAudioManager.PlayClipAt(clip, targetPos, 1.0f, 0.85f, 1f, 0.9f, 7.0f, 0.45f);
+        }
+
+        Sprite[] deathFrames = ResolveDeathFrames();
+        if (ghostRenderer != null && deathFrames.Length > 0 && deathFrames[0] != null)
+        {
+            ghostRenderer.sprite = deathFrames[0];
+        }
+        else
+        {
+            ApplySprite(huntSprite);
+        }
+
+        float duration = Mathf.Max(0.8f, deathAnimationDuration);
         float t = 0f;
         Vector3 startScale = transform.localScale;
-        while (t < 0.8f)
+        while (t < duration)
         {
             t += Time.deltaTime;
-            float p = t / 0.8f;
-            SetGhostVisible(true, Mathf.Lerp(0.9f, 0f, p));
-            transform.localScale = startScale * (1f + p * 0.4f);
+            float progress = Mathf.Clamp01(t / duration);
+
+            if (ghostRenderer != null && deathFrames.Length > 0)
+            {
+                int frameIdx = Mathf.Clamp(Mathf.FloorToInt(progress * deathFrames.Length), 0, deathFrames.Length - 1);
+                if (deathFrames[frameIdx] != null)
+                {
+                    ghostRenderer.sprite = deathFrames[frameIdx];
+                }
+            }
+
+            float alpha = progress > 0.85f ? Mathf.Lerp(1f, 0f, (progress - 0.85f) / 0.15f) : 1f;
+            SetGhostVisible(true, alpha);
             yield return null;
         }
+
         SetGhostVisible(false, 0f);
+        if (ghostRenderer != null)
+        {
+            ghostRenderer.color = Color.white;
+            ghostRenderer.sortingLayerName = origSortingLayerName;
+            ghostRenderer.sortingOrder = origSortingOrder;
+        }
         transform.localScale = startScale;
+        banishRoutine = null;
     }
 
     public void StopHunt()

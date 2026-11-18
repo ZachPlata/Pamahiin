@@ -1416,16 +1416,111 @@
 /* Crisp compact scrollbars inside journal */
 .journal-container .unity-scroller--vertical {
     width: 12px;
+    min-width: 12px;
+    max-width: 12px;
+    margin: 0;
+    padding: 0;
+    background-color: rgb(36, 26, 18);
+    border-width: 0;
 }
 
-.journal-container .unity-scroller__low-button,
-.journal-container .unity-scroller__high-button {
+.journal-container .unity-scroller--vertical > .unity-scroller__low-button,
+.journal-container .unity-scroller--vertical > .unity-scroller__high-button {
+    position: absolute;
+    left: 0;
+    right: 0;
     width: 12px;
+    min-width: 12px;
+    max-width: 12px;
     height: 12px;
+    min-height: 12px;
+    max-height: 12px;
     padding: 0;
     margin: 0;
+    background-color: rgb(72, 54, 36);
+    border-width: 1px;
+    border-color: rgb(140, 108, 66);
+    border-radius: 0px;
+    -unity-background-image-tint-color: rgb(232, 208, 165);
 }
 
-.journal-container .unity-scroller__slider .unity-base-slider__dragger {
+.journal-container .unity-scroller--vertical > .unity-scroller__low-button {
+    top: 0;
+}
+
+.journal-container .unity-scroller--vertical > .unity-scroller__high-button {
+    bottom: 0;
+}
+
+.journal-container .unity-scroller--vertical > .unity-scroller__low-button:hover,
+.journal-container .unity-scroller--vertical > .unity-scroller__high-button:hover {
+    background-color: rgb(105, 78, 50);
+}
+
+.journal-container .unity-scroller--vertical > .unity-scroller__slider {
+    width: 12px;
+    min-width: 12px;
+    max-width: 12px;
+    min-height: 0;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0;
+    background-color: transparent;
+    border-width: 0;
+}
+
+.journal-container .unity-scroller--vertical .unity-base-slider__input,
+.journal-container .unity-scroller--vertical .unity-base-slider__drag-container {
+    width: 12px;
+    min-width: 12px;
+    max-width: 12px;
+    margin: 0;
+    padding: 0;
+    background-color: transparent;
+    border-width: 0;
+}
+
+.journal-container .unity-scroller--vertical .unity-base-slider__tracker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 12px;
+    min-width: 12px;
+    max-width: 12px;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background-color: rgb(36, 26, 18);
+    border-width: 1px;
+    border-color: rgb(110, 84, 52);
+    border-radius: 0px;
+}
+
+.journal-container .unity-scroller--vertical .unity-base-slider__dragger {
+    left: 1px;
+    right: 1px;
     width: 10px;
+    min-width: 10px;
+    max-width: 10px;
+    margin: 0;
+    padding: 0;
+    background-color: rgb(156, 118, 62);
+    border-width: 1px;
+    border-top-color: rgb(215, 175, 92);
+    border-left-color: rgb(215, 175, 92);
+    border-right-color: rgb(92, 66, 36);
+    border-bottom-color: rgb(92, 66, 36);
+    border-radius: 0px;
+}
+
+.journal-container .unity-scroller--vertical .unity-base-slider__dragger:hover {
+    background-color: rgb(186, 142, 76);
+}
+
+.journal-container .unity-scroller--vertical .unity-base-slider__dragger-border {
+    display: none;
 }

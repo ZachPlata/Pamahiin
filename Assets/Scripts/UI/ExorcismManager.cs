@@ -461,9 +461,11 @@ public class ExorcismManager : NetworkBehaviour
 
     private void ApplyDifficultyMinigameSettings()
     {
-        ContractDifficulty difficulty = ProgressionAndLoadoutManager.Instance != null
-            ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
-            : ContractDifficulty.Amateur;
+        ContractDifficulty difficulty = ProgressionAndLoadoutManager.IsInWarehouseTutorialScene
+            ? ContractDifficulty.Amateur
+            : (ProgressionAndLoadoutManager.Instance != null
+                ? ProgressionAndLoadoutManager.Instance.SelectedDifficulty
+                : ContractDifficulty.Amateur);
 
         float targetBarWidthPx;
         float speedMultiplier;
@@ -543,6 +545,13 @@ public class ExorcismManager : NetworkBehaviour
                 sr.sortingLayerName = "Item";
                 sr.sortingOrder = 50;
             }
+            return;
+        }
+
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene)
+        {
+            var tutorialGhost = Object.FindAnyObjectByType<TutorialGhostController>();
+            tutorialGhost?.PinToRitualCircle(centerPos);
         }
     }
 
@@ -815,6 +824,10 @@ public class ExorcismManager : NetworkBehaviour
                 }
             }
         }
+        else if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene)
+        {
+            Object.FindAnyObjectByType<TutorialGhostController>()?.ReleaseFromRitualCircle();
+        }
     }
 
     [Rpc(SendTo.ClientsAndHost)]
@@ -835,6 +848,11 @@ public class ExorcismManager : NetworkBehaviour
         Debug.Log("[ExorcismManager] SUCCESS! Correct ghost identified and minigame passed.");
 
         // 1. Ghost shakes, plays dying shriek, and slowly disappears (GhostHandler is kept intact)
+        Vector3 manifestPos = (chalkDiagramPos != Vector3.zero) ? chalkDiagramPos : transform.position;
+        AudioClip shriekClip = dyingShriekClip != null
+            ? dyingShriekClip
+            : GameAudioManager.GetClip("ghost_dying_shriek");
+
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
         if (ghostHandler != null)
         {
@@ -845,14 +863,14 @@ public class ExorcismManager : NetworkBehaviour
             if (ghostHandler.hunterGhost != null)
             {
                 // Manifest the dying ghost directly at the ritual chalk position so players clearly witness the dying sequence
-                Vector3 manifestPos = (chalkDiagramPos != Vector3.zero) ? chalkDiagramPos : transform.position;
-                AudioClip shriekClip = dyingShriekClip != null
-                    ? dyingShriekClip
-                    : GameAudioManager.GetClip("ghost_dying_shriek");
                 ghostHandler.hunterGhost.StartDyingSequence(shriekClip, manifestPos);
             }
             else
             {
+                if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene)
+                {
+                    Object.FindAnyObjectByType<TutorialGhostController>()?.PlayBanishEffect(manifestPos, shriekClip);
+                }
                 ghostHandler.OnGhostExorcised();
             }
 
@@ -905,6 +923,10 @@ public class ExorcismManager : NetworkBehaviour
         }
 
         // Reusing the standard hunt process on GhostHandler with isFromFailedExorcism = true
+        if (ProgressionAndLoadoutManager.IsInWarehouseTutorialScene)
+        {
+            Object.FindAnyObjectByType<TutorialGhostController>()?.ReleaseFromRitualCircle();
+        }
         var ghostHandler = Object.FindAnyObjectByType<GhostHandler>();
         if (ghostHandler != null)
         {

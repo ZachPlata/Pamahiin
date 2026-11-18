@@ -1869,6 +1869,33 @@ public class HunterGhostBehavior : NetworkBehaviour
         StartCoroutine(DyingRoutine(dyingClip, manifestPosition));
     }
 
+    /// <summary>
+    /// Slices a single-row horizontal sprite sheet into evenly sized frames with point filtering.
+    /// </summary>
+    public static Sprite[] SliceHorizontalSheet(Texture2D sheet, int frameCount, string namePrefix = "ghost_death_f")
+    {
+        if (sheet == null) return System.Array.Empty<Sprite>();
+
+        sheet.filterMode = FilterMode.Point;
+        int count = Mathf.Max(1, frameCount);
+        int fw = Mathf.Max(1, sheet.width / count);
+        int fh = sheet.height;
+
+        Sprite[] frames = new Sprite[count];
+        for (int i = 0; i < count; i++)
+        {
+            frames[i] = Sprite.Create(
+                sheet,
+                new Rect(i * fw, 0, fw, fh),
+                new Vector2(0.5f, 0.5f),
+                100f,
+                0,
+                SpriteMeshType.FullRect);
+            frames[i].name = $"{namePrefix}{i}";
+        }
+        return frames;
+    }
+
     private Sprite[] ResolveDeathFrames()
     {
         if (customDeathFrames != null && customDeathFrames.Length > 0)
@@ -1886,23 +1913,7 @@ public class HunterGhostBehavior : NetworkBehaviour
             return cachedDeathFrames;
         }
 
-        sheet.filterMode = FilterMode.Point;
-        int frameCount = Mathf.Max(1, deathFrameCount);
-        int fw = Mathf.Max(1, sheet.width / frameCount);
-        int fh = sheet.height;
-
-        cachedDeathFrames = new Sprite[frameCount];
-        for (int i = 0; i < frameCount; i++)
-        {
-            cachedDeathFrames[i] = Sprite.Create(
-                sheet,
-                new Rect(i * fw, 0, fw, fh),
-                new Vector2(0.5f, 0.5f),
-                100f,
-                0,
-                SpriteMeshType.FullRect);
-            cachedDeathFrames[i].name = $"ghost_death_f{i}";
-        }
+        cachedDeathFrames = SliceHorizontalSheet(sheet, deathFrameCount);
         cachedDeathSheetSource = sheet;
         return cachedDeathFrames;
     }

@@ -245,7 +245,7 @@ public class PlayerInventory : NetworkBehaviour
     }
 
     private bool CanOperateInventoryAsAlive() => playerController == null || playerController.IsAlive;
-    private bool CanOperateGroundGearSlots() => playerController == null || playerController.IsAlive || playerController.IsGhostSpectator;
+    private bool CanOperateGroundGearSlots() => playerController == null || playerController.IsAlive;
 
     private void Update()
     {

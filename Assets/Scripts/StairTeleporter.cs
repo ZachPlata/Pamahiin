@@ -23,12 +23,23 @@ public class StairTeleporter : MonoBehaviour
     [SerializeField, HideInInspector] private bool isBackupNode = false;
 
     private static readonly Dictionary<ulong, float> playerCooldowns = new Dictionary<ulong, float>();
+    private static readonly HashSet<ulong> activeTeleportPlayers = new HashSet<ulong>();
     private static float screenFadeAlpha = 0f;
     private static Texture2D fadeTexture;
     private static int activeFadeRequests = 0;
 
     public static readonly List<StairTeleporter> All = new List<StairTeleporter>();
     public StairTeleporter Destination => destinationTeleporter;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetStaticState()
+    {
+        playerCooldowns.Clear();
+        activeTeleportPlayers.Clear();
+        screenFadeAlpha = 0f;
+        activeFadeRequests = 0;
+        All.Clear();
+    }
 
     private void OnEnable()
     {
@@ -158,6 +169,11 @@ public class StairTeleporter : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        TryTriggerTeleport(other);
+    }
+
+    private void TryTriggerTeleport(Collider2D other)
+    {
         if (destinationTeleporter == null) return;
 
         PlayerController player = other.GetComponentInParent<PlayerController>();
@@ -170,17 +186,19 @@ public class StairTeleporter : MonoBehaviour
         if (networked && !player.IsOwner) return;
 
         ulong id = player.OwnerClientId;
+        if (activeTeleportPlayers.Contains(id)) return;
         if (playerCooldowns.TryGetValue(id, out float blockedUntil) && Time.unscaledTime < blockedUntil)
         {
             return;
         }
 
         // Prevent immediate ping-pong at either end
+        activeTeleportPlayers.Add(id);
         playerCooldowns[id] = Time.unscaledTime + arrivalCooldownSeconds;
-        StartCoroutine(TeleportRoutine(player));
+        StartCoroutine(TeleportRoutine(player, id));
     }
 
-    private IEnumerator TeleportRoutine(PlayerController player)
+    private IEnumerator TeleportRoutine(PlayerController player, ulong playerId)
     {
         activeFadeRequests++;
         if (player != null && player.IsAlive)
@@ -202,6 +220,7 @@ public class StairTeleporter : MonoBehaviour
         {
             Vector3 destPos = destinationTeleporter.GetArrivalPosition();
             destPos.z = player.transform.position.z;
+            playerCooldowns[playerId] = Time.unscaledTime + arrivalCooldownSeconds;
             player.TeleportTo(destPos);
 
             TutorialTooltipManager.TriggerCustomHint(
@@ -223,6 +242,7 @@ public class StairTeleporter : MonoBehaviour
             yield return null;
         }
 
+        activeTeleportPlayers.Remove(playerId);
         activeFadeRequests = Mathf.Max(0, activeFadeRequests - 1);
         if (activeFadeRequests == 0)
         {

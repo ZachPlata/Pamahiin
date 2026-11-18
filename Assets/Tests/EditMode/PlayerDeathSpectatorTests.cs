@@ -119,21 +119,16 @@ public class PlayerDeathSpectatorTests
     }
 
     [Test]
-    public void SpectatorEquipmentWhitelist_PermitsOnGroundGearAndBlocksPillsChalkAndPlaced()
+    public void SpectatorEquipment_BlocksAllItemsForDeadSpectators()
     {
         Type playerType = ResolveRuntimeType("PlayerController");
         MethodInfo allowMethod = playerType.GetMethod("IsEquipmentAllowedForGhostSpectator", BindingFlags.Public | BindingFlags.Static);
         Assert.IsNotNull(allowMethod);
 
-        Type equipBaseType = ResolveRuntimeType("EquipmentItem");
-        PropertyInfo isOnGroundProp = equipBaseType.GetProperty("IsOnGround", BindingFlags.Public | BindingFlags.Instance);
-        Assert.IsNotNull(isOnGroundProp);
-
         GameObject flashGo = Track(new GameObject("TestFlashlight"));
         Component flashlight = flashGo.AddComponent(ResolveRuntimeType("FlashlightItem"));
-        Assert.IsTrue((bool)isOnGroundProp.GetValue(flashlight), "Unplaced, unowned FlashlightItem should be IsOnGround.");
-        Assert.IsTrue((bool)allowMethod.Invoke(null, new object[] { flashlight }),
-            "Dead spectators can pick up/drop ground non-consumable equipment like FlashlightItem.");
+        Assert.IsFalse((bool)allowMethod.Invoke(null, new object[] { flashlight }),
+            "Dead spectators must NOT pick up FlashlightItem.");
 
         GameObject pillsGo = Track(new GameObject("TestPills"));
         Component pills = pillsGo.AddComponent(ResolveRuntimeType("SanityPillsItem"));

@@ -211,7 +211,7 @@ public class PlayerController : NetworkBehaviour
 
     public static bool IsEquipmentAllowedForGhostSpectator(EquipmentItem eq)
     {
-        return eq != null && eq.IsOnGround && !(eq is SanityPillsItem) && !(eq is RitualChalkItem);
+        return false;
     }
 
     private void Awake()
@@ -1442,7 +1442,7 @@ public class PlayerController : NetworkBehaviour
 
     private IInteractable FindEquipmentInteractableAtCursor(bool requireReachable)
     {
-        if (IsDyingSequence) return null;
+        if (IsDyingSequence || !IsAlive) return null;
 
         s_OverlapBuffer.Clear();
         int hitCount = Physics2D.OverlapCircle(mousePosition, EquipmentHoverCursorRadius, s_NoFilter, s_OverlapBuffer);
