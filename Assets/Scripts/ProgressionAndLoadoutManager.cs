@@ -152,8 +152,9 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     private bool isMultiplayerClientSession = false;
     private int pendingPurchaseCost = 0;
+    private bool hasLoadedFromPrefs = false;
 
-    public int Currency { get; private set; }
+    public int Currency { get; private set; } = STARTER_CURRENCY;
     public ContractDifficulty SelectedDifficulty { get; private set; } = ContractDifficulty.Amateur;
     public int SelectedMapIndex { get; private set; } = 0;
     public bool IsMultiplayerClientSession => isMultiplayerClientSession;
@@ -200,19 +201,46 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
     public static void MarkTutorialCompleted()
     {
         PlayerPrefs.SetInt(PREF_TUTORIAL_COMPLETED, 1);
-        PlayerPrefs.Save();
+        EnsureStarterCurrencyAfterTutorial();
     }
 
     public static void MarkTutorialSkipped()
     {
         PlayerPrefs.SetInt(PREF_TUTORIAL_COMPLETED, 1);
-        PlayerPrefs.Save();
+        EnsureStarterCurrencyAfterTutorial();
     }
 
     public static void ResetTutorialCompletion()
     {
         PlayerPrefs.DeleteKey(PREF_TUTORIAL_COMPLETED);
+        EnsureStarterCurrencyAfterTutorial();
+    }
+
+    /// <summary>
+    /// Ensures the player always has the starter $250 currency (and at least 1 starter Flashlight)
+    /// after completing, skipping, or resetting the tutorial.
+    /// </summary>
+    public static void EnsureStarterCurrencyAfterTutorial()
+    {
+        PlayerPrefs.SetInt(PREF_CURRENCY, STARTER_CURRENCY);
+        PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
+        if (PlayerPrefs.GetInt(PREF_LOADOUT_PREFIX + "Flashlight", 0) <= 0)
+        {
+            PlayerPrefs.SetInt(PREF_LOADOUT_PREFIX + "Flashlight", 1);
+        }
         PlayerPrefs.Save();
+
+        if (Instance != null)
+        {
+            Instance.Currency = STARTER_CURRENCY;
+            if (Instance.GetLoadoutCount("Flashlight") <= 0)
+            {
+                Instance.loadoutCounts["Flashlight"] = 1;
+            }
+            Instance.hasLoadedFromPrefs = true;
+            Instance.SaveStateToPrefs();
+            Instance.OnCurrencyOrLoadoutChanged?.Invoke();
+        }
     }
 
     public static ProgressionAndLoadoutManager EnsureInstance()
@@ -264,11 +292,14 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
             int savedCount = Mathf.Clamp(PlayerPrefs.GetInt(PREF_LOADOUT_PREFIX + entry.id, 0), 0, entry.maxCount);
             loadoutCounts[entry.id] = savedCount;
         }
+
+        hasLoadedFromPrefs = true;
     }
 
     private void InitializeDefaultProgressionPrefs()
     {
         Currency = STARTER_CURRENCY;
+        hasLoadedFromPrefs = true;
         PlayerPrefs.SetInt(PREF_CURRENCY, Currency);
         PlayerPrefs.SetInt(PREF_CURRENCY_INIT, 1);
 
@@ -340,6 +371,11 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
         {
             SaveCurrencyOnlyToPrefs();
             return;
+        }
+
+        if (!hasLoadedFromPrefs && Currency <= 0 && PlayerPrefs.GetInt(PREF_CURRENCY_INIT, 0) == 1)
+        {
+            Currency = Mathf.Max(0, PlayerPrefs.GetInt(PREF_CURRENCY, STARTER_CURRENCY));
         }
 
         PlayerPrefs.SetInt(PREF_CURRENCY, Currency);

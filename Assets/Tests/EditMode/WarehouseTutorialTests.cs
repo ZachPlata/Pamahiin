@@ -47,18 +47,27 @@ public class WarehouseTutorialTests
     {
         var progType = ResolveRuntimeType("ProgressionAndLoadoutManager");
         string prefKey = (string)progType.GetField("PREF_TUTORIAL_COMPLETED", BindingFlags.Public | BindingFlags.Static).GetRawConstantValue();
+        int starterCurrency = (int)progType.GetField("STARTER_CURRENCY", BindingFlags.Public | BindingFlags.Static).GetRawConstantValue();
 
         Assert.IsFalse(InvokeStatic<bool>(progType, "HasCompletedOrSkippedTutorial"));
+        Assert.AreEqual(starterCurrency, PlayerPrefs.GetInt("Pamahiin_Currency_v2", 0));
 
+        PlayerPrefs.SetInt("Pamahiin_Currency_v2", 0);
+        PlayerPrefs.SetInt("Pamahiin_Currency_Initialized_v2", 1);
         InvokeStatic(progType, "MarkTutorialSkipped");
         Assert.IsTrue(InvokeStatic<bool>(progType, "HasCompletedOrSkippedTutorial"));
         Assert.AreEqual(1, PlayerPrefs.GetInt(prefKey, 0));
+        Assert.AreEqual(starterCurrency, PlayerPrefs.GetInt("Pamahiin_Currency_v2", 0));
 
+        PlayerPrefs.SetInt("Pamahiin_Currency_v2", 0);
         InvokeStatic(progType, "ResetTutorialCompletion");
         Assert.IsFalse(InvokeStatic<bool>(progType, "HasCompletedOrSkippedTutorial"));
+        Assert.AreEqual(starterCurrency, PlayerPrefs.GetInt("Pamahiin_Currency_v2", 0));
 
+        PlayerPrefs.SetInt("Pamahiin_Currency_v2", 0);
         InvokeStatic(progType, "MarkTutorialCompleted");
         Assert.IsTrue(InvokeStatic<bool>(progType, "HasCompletedOrSkippedTutorial"));
+        Assert.AreEqual(starterCurrency, PlayerPrefs.GetInt("Pamahiin_Currency_v2", 0));
     }
 
     [Test]
@@ -128,6 +137,8 @@ public class WarehouseTutorialTests
             completeStepMethod.Invoke(mgr, new object[] { GetStep("STEP_B5_EXIT_CONSOLE") });
             Assert.AreEqual(6, GetBayInt());
             Assert.IsTrue(InvokeStatic<bool>(progType, "HasCompletedOrSkippedTutorial"));
+            int starterCurrency = (int)progType.GetField("STARTER_CURRENCY", BindingFlags.Public | BindingFlags.Static).GetRawConstantValue();
+            Assert.AreEqual(starterCurrency, PlayerPrefs.GetInt("Pamahiin_Currency_v2", 0));
         }
         finally
         {

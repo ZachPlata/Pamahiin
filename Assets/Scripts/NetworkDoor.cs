@@ -62,6 +62,7 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
     public bool IsHidingSpot => isHidingSpot;
     public bool AllowPlayerInteract => allowPlayerInteract;
     public float CurrentProgress => currentProgress;
+    public bool HasValidDoorVisual => (closedDoorRef != null && closedDoorRef.sprite != null) || (openDoorRef != null && openDoorRef.sprite != null);
     public bool IsKeyFound => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening && IsSpawned) ? isKeyFound.Value : localIsKeyFound;
     public bool HasBeenOpened => (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         ? (hasBeenOpened.Value || isOpen.Value || localHasBeenOpened)
@@ -228,6 +229,13 @@ public class NetworkDoor : NetworkBehaviour, IInteractable
 
     private void Awake()
     {
+        // Prevent Netcode from reparenting/disabling in-scene doors parented under a non-NetworkObject (e.g., Jeepney)
+        var netObj = GetComponent<NetworkObject>();
+        if (netObj != null && transform.parent != null && transform.parent.GetComponentInParent<NetworkObject>() == null)
+        {
+            netObj.AutoObjectParentSync = false;
+        }
+
         if (!isHidingSpot && gameObject.name.ToLowerInvariant().Contains("cabinet"))
         {
             isHidingSpot = true;

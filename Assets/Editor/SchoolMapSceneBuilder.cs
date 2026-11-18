@@ -652,10 +652,11 @@ public static class SchoolMapSceneBuilder
         };
         foreach (var s in specs)
         {
+            float stallSwingDeg = s.yLocal > 0f ? -90f : 90f;
             CreateNetworkDoor(doorsRoot, $"Stall_F{floor}_{s.corner}_1", new Vector2(s.x1, baseY + s.yLocal), false,
-                stallSpr, stallSpr, false, false, true, wallLayer, interactLayer, 90f);
+                stallSpr, stallSpr, false, false, true, wallLayer, interactLayer, stallSwingDeg);
             CreateNetworkDoor(doorsRoot, $"Stall_F{floor}_{s.corner}_2", new Vector2(s.x2, baseY + s.yLocal), false,
-                stallSpr, stallSpr, false, false, true, wallLayer, interactLayer, 90f);
+                stallSpr, stallSpr, false, false, true, wallLayer, interactLayer, stallSwingDeg);
         }
     }
 
@@ -716,8 +717,8 @@ public static class SchoolMapSceneBuilder
         AddWallSegment(fw, "F1_LockerAlcove_Top", new Rect(3.50f, baseY + 2.90f - wt * 0.5f, 0.48f, wt), wallLayer, wallSpr);
         AddWallSegment(fw, "F1_LockerAlcove_Mid", new Rect(3.50f, baseY + 2.54f - wt * 0.5f, 0.44f, wt), wallLayer, wallSpr);
         AddWallSegment(fw, "F1_LockerAlcove_Bot", new Rect(3.50f, baseY + 2.25f - wt * 0.5f, 0.48f, wt), wallLayer, wallSpr);
-        CreateNetworkDoor(dr, "Locker_F1_HideA", new Vector2(3.94f, baseY + 2.72f), true, lockerSpr, lockerSpr, false, false, true, wallLayer, interactLayer, 0f);
-        CreateNetworkDoor(dr, "Locker_F1_HideB", new Vector2(3.94f, baseY + 2.39f), true, lockerSpr, lockerSpr, false, false, true, wallLayer, interactLayer, 0f);
+        CreateNetworkDoor(dr, "Locker_F1_HideA", new Vector2(3.94f, baseY + 2.72f), true, lockerSpr, lockerSpr, false, false, true, wallLayer, interactLayer, -90f);
+        CreateNetworkDoor(dr, "Locker_F1_HideB", new Vector2(3.94f, baseY + 2.39f), true, lockerSpr, lockerSpr, false, false, true, wallLayer, interactLayer, -90f);
     }
 
     private static void BuildFloor2InteriorWallsAndDoors(
@@ -1043,7 +1044,8 @@ public static class SchoolMapSceneBuilder
             float stairCenterX = sc.IsWestWing ? -6.00f : 6.00f;
             float singleArrX = sc.IsWestWing ? -5.25f : 5.25f;
             float splitArrX = sc.IsWestWing ? -5.18f : 5.18f;
-            float stairRotZ = sc.IsWestWing ? 180f : 0f; // tread visual oriented toward center landing
+            float stairUpRotZ = sc.IsWestWing ? 0f : 180f;   // green arrow points into stairs (-X local -> West on WestWing, East on EastWing)
+            float stairDownRotZ = sc.IsWestWing ? 180f : 0f; // yellow arrow points into stairs (+X local -> West on WestWing, East on EastWing)
 
             float y1 = SchoolMapLayout.FLOOR_1_Y + sc.LocalCenterY;
             float y2 = SchoolMapLayout.FLOOR_2_Y + sc.LocalCenterY;
@@ -1051,7 +1053,7 @@ public static class SchoolMapSceneBuilder
 
             // --- Floor 1 Stair Up (F1 -> F2) ---
             CreateStairNode(floorRoots[1], $"Stair_{sc.CornerName}_F1_To_F2", stairUpSpr,
-                stairCenterX, y1, 0.76f, 0.44f, stairRotZ, sc.IsWestWing, interactLayer,
+                stairCenterX, y1, 0.76f, 0.44f, stairUpRotZ, isStairUp: true, interactLayer,
                 $"Arrival_{sc.CornerName}_F1_From_F2", new Vector2(singleArrX, y1),
                 out StairTeleporter tp1To2, out Transform arr1From2);
 
@@ -1061,18 +1063,18 @@ public static class SchoolMapSceneBuilder
                 new Rect(balXMin, y2 - 0.05f, 1.04f, 0.10f), wallLayer, capWallSpr, castShadows: true);
 
             CreateStairNode(floorRoots[2], $"Stair_{sc.CornerName}_F2_To_F1", stairDownSpr,
-                stairCenterX, y2 + 0.31f, 0.74f, 0.38f, stairRotZ, sc.IsWestWing, interactLayer,
+                stairCenterX, y2 + 0.31f, 0.74f, 0.38f, stairDownRotZ, isStairUp: false, interactLayer,
                 $"Arrival_{sc.CornerName}_F2_From_F1", new Vector2(splitArrX, y2 + 0.31f),
                 out StairTeleporter tp2To1, out Transform arr2From1);
 
             CreateStairNode(floorRoots[2], $"Stair_{sc.CornerName}_F2_To_F3", stairUpSpr,
-                stairCenterX, y2 - 0.31f, 0.74f, 0.38f, stairRotZ, sc.IsWestWing, interactLayer,
+                stairCenterX, y2 - 0.31f, 0.74f, 0.38f, stairUpRotZ, isStairUp: true, interactLayer,
                 $"Arrival_{sc.CornerName}_F2_From_F3", new Vector2(splitArrX, y2 - 0.31f),
                 out StairTeleporter tp2To3, out Transform arr2From3);
 
             // --- Floor 3 Stair Down (F3 -> F2) ---
             CreateStairNode(floorRoots[3], $"Stair_{sc.CornerName}_F3_To_F2", stairDownSpr,
-                stairCenterX, y3, 0.76f, 0.44f, stairRotZ, sc.IsWestWing, interactLayer,
+                stairCenterX, y3, 0.76f, 0.44f, stairDownRotZ, isStairUp: false, interactLayer,
                 $"Arrival_{sc.CornerName}_F3_From_F2", new Vector2(singleArrX, y3),
                 out StairTeleporter tp3To2, out Transform arr3From2);
 
@@ -1122,7 +1124,7 @@ public static class SchoolMapSceneBuilder
         float w,
         float h,
         float rotZ,
-        bool isWestWing,
+        bool isStairUp,
         int interactLayer,
         string arrivalName,
         Vector2 arrivalPos,
@@ -1150,8 +1152,9 @@ public static class SchoolMapSceneBuilder
         box.isTrigger = true;
         if (sprite != null)
         {
+            float offsetSign = isStairUp ? -1f : 1f;
             box.size = new Vector2(sprite.bounds.size.x * 0.48f, sprite.bounds.size.y * 0.90f);
-            box.offset = new Vector2(sprite.bounds.size.x * 0.24f, 0f);
+            box.offset = new Vector2(offsetSign * sprite.bounds.size.x * 0.24f, 0f);
         }
 
         teleporter = stairGo.AddComponent<StairTeleporter>();
@@ -1543,7 +1546,8 @@ public static class SchoolMapSceneBuilder
         oRef.transform.SetParent(doorRoot.transform, false);
         oRef.layer = wallLayer;
         var oSr = oRef.AddComponent<SpriteRenderer>();
-        bool useSwapSprite = isHidingSpot && openSpr != null;
+        bool hasSwingArc = Mathf.Abs(swingDeg) >= 0.5f;
+        bool useSwapSprite = isHidingSpot && !hasSwingArc && openSpr != null;
         oSr.sprite = useSwapSprite ? openSpr : closedSpr;
         oSr.sortingLayerName = "Wall";
         oSr.sortingOrder = 1;
@@ -1552,7 +1556,7 @@ public static class SchoolMapSceneBuilder
             oRef.transform.localScale = new Vector3(length / oSr.sprite.bounds.size.x, thick / oSr.sprite.bounds.size.y, 1f);
         }
 
-        if (Mathf.Abs(swingDeg) >= 0.5f && !isHidingSpot)
+        if (hasSwingArc)
         {
             Vector3 vClosed = Quaternion.Euler(0f, 0f, closedAngle) * new Vector3(length * 0.5f, 0f, 0f);
             Vector3 hingeLocal = -vClosed;
@@ -1574,7 +1578,7 @@ public static class SchoolMapSceneBuilder
         so.FindProperty("isFrontDoor").boolValue = isFrontDoor;
         so.FindProperty("requiresKey").boolValue = requiresKey;
         so.FindProperty("isHidingSpot").boolValue = isHidingSpot;
-        so.FindProperty("swapSpriteWhenOpen").boolValue = isHidingSpot;
+        so.FindProperty("swapSpriteWhenOpen").boolValue = useSwapSprite;
         so.FindProperty("disableObstacleColliderWhenOpen").boolValue = true;
         so.ApplyModifiedPropertiesWithoutUndo();
     }
@@ -1628,7 +1632,25 @@ public static class SchoolMapSceneBuilder
     {
         GameObject swGo = new GameObject($"{roomName} LS");
         swGo.transform.SetParent(lightSys, false);
-        Vector2 pos = switchPos ?? new Vector2(rect.xMin + 0.14f, rect.yMin + 0.14f);
+        Vector2 pos = switchPos ?? new Vector2(rect.xMin + 0.058f, rect.yMin + 0.14f);
+        if (roomName == "F3_Corridor_Central") pos.x = 0.15f;
+
+        float dL = Mathf.Abs(pos.x - rect.xMin);
+        float dR = Mathf.Abs(rect.xMax - pos.x);
+        float dB = Mathf.Abs(pos.y - rect.yMin);
+        float dT = Mathf.Abs(rect.yMax - pos.y);
+        float minD = Mathf.Min(Mathf.Min(dL, dR), Mathf.Min(dB, dT));
+        const float flushOffset = 0.058f;
+        bool onVerticalWall = (minD == dL || minD == dR);
+        if (onVerticalWall)
+        {
+            pos.x = (minD == dL) ? (rect.xMin + flushOffset) : (rect.xMax - flushOffset);
+        }
+        else
+        {
+            pos.y = (minD == dB) ? (rect.yMin + flushOffset) : (rect.yMax - flushOffset);
+        }
+
         swGo.transform.position = new Vector3(pos.x, pos.y, 0f);
         swGo.layer = interactLayer;
 
@@ -1638,10 +1660,8 @@ public static class SchoolMapSceneBuilder
         swSr.color = new Color(0.86f, 0.82f, 0.65f, 1f);
         swSr.sortingLayerName = "Item";
         swSr.sortingOrder = 1;
-        if (capSpr != null)
-        {
-            swGo.transform.localScale = new Vector3(0.05f / capSpr.bounds.size.x, 0.05f / capSpr.bounds.size.y, 1f);
-        }
+        Vector3 swScale = onVerticalWall ? new Vector3(0.20f, 0.50f, 1f) : new Vector3(0.50f, 0.20f, 1f);
+        swGo.transform.localScale = swScale;
 
         swGo.AddComponent<BoxCollider2D>().isTrigger = true;
         swGo.AddComponent<NetworkObject>();
@@ -1652,7 +1672,7 @@ public static class SchoolMapSceneBuilder
         GameObject lightGo = new GameObject($"{roomName}_Light2D");
         lightGo.transform.SetParent(swGo.transform, false);
         lightGo.transform.position = new Vector3(rect.center.x, rect.center.y, 0f);
-        lightGo.transform.localScale = Vector3.one;
+        lightGo.transform.localScale = new Vector3(0.20f / swScale.x, 0.20f / swScale.y, 1f);
         var light = lightGo.AddComponent<Light2D>();
         light.lightType = Light2D.LightType.Point;
         light.color = new Color(1f, 0.94f, 0.80f, 1f);
@@ -1776,7 +1796,9 @@ public static class SchoolMapSceneBuilder
 
     private static void CreateJeepneyRampDoor(Transform doorsRoot, Vector2 pos, int wallLayer, int interactLayer)
     {
-        Sprite doorSpr = LoadBarangaySprite("House/door_main_oak");
+        Sprite closedSpr = LoadBarangaySprite("Jeepney/jeepney_ramp_closed");
+        Sprite openSpr = LoadBarangaySprite("Jeepney/jeepney_ramp_open");
+
         GameObject rampGo = new GameObject("JeepneyRampDoor");
         rampGo.transform.SetParent(doorsRoot, false);
         rampGo.transform.position = new Vector3(pos.x, pos.y, 0f);
@@ -1785,34 +1807,41 @@ public static class SchoolMapSceneBuilder
 
         GameObject cRef = new GameObject("ClosedRef");
         cRef.transform.SetParent(rampGo.transform, false);
+        cRef.transform.localPosition = Vector3.zero;
         cRef.layer = wallLayer;
         var cSr = cRef.AddComponent<SpriteRenderer>();
-        cSr.sprite = doorSpr;
-        cSr.sortingLayerName = "Wall";
+        cSr.sprite = closedSpr;
+        cSr.sortingLayerName = "Van";
         cSr.sortingOrder = 2;
-        if (doorSpr != null)
+        if (closedSpr != null)
         {
-            cRef.transform.localScale = new Vector3(0.24f / doorSpr.bounds.size.x, 0.045f / doorSpr.bounds.size.y, 1f);
-            cRef.AddComponent<BoxCollider2D>().size = doorSpr.bounds.size;
+            cRef.transform.localScale = new Vector3(0.24f / closedSpr.bounds.size.x, 0.055f / closedSpr.bounds.size.y, 1f);
+            cRef.AddComponent<BoxCollider2D>().size = closedSpr.bounds.size;
         }
+        AddShadowCaster2D(cRef);
         cRef.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
 
         GameObject oRef = new GameObject("OpenRef");
         oRef.transform.SetParent(rampGo.transform, false);
-        oRef.transform.localPosition = new Vector3(-0.12f, -0.09f, 0f);
-        oRef.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+        oRef.transform.localPosition = new Vector3(0f, -0.075f, 0f);
         oRef.layer = wallLayer;
         var oSr = oRef.AddComponent<SpriteRenderer>();
-        oSr.sprite = doorSpr;
-        oSr.sortingLayerName = "Wall";
-        oSr.sortingOrder = 2;
-        if (doorSpr != null) oRef.transform.localScale = cRef.transform.localScale;
+        oSr.sprite = openSpr != null ? openSpr : closedSpr;
+        oSr.sortingLayerName = "Van";
+        oSr.sortingOrder = -1;
+        if (oSr.sprite != null)
+        {
+            oRef.transform.localScale = new Vector3(0.24f / oSr.sprite.bounds.size.x, 0.16f / oSr.sprite.bounds.size.y, 1f);
+        }
         oRef.AddComponent<NavMeshModifier>().ignoreFromBuild = true;
 
         var nd = rampGo.AddComponent<NetworkDoor>();
         SerializedObject so = new SerializedObject(nd);
         so.FindProperty("closedDoorRef").objectReferenceValue = cSr;
         so.FindProperty("openDoorRef").objectReferenceValue = oSr;
+        so.FindProperty("motionType").enumValueIndex = (int)DoorMotionType.LinearLerp;
+        so.FindProperty("swingSpeed").floatValue = 6f;
+        so.FindProperty("swapSpriteWhenOpen").boolValue = true;
         so.FindProperty("isFrontDoor").boolValue = false;
         so.FindProperty("requiresKey").boolValue = false;
         so.FindProperty("isHidingSpot").boolValue = false;
@@ -1931,6 +1960,9 @@ public static class SchoolMapSceneBuilder
             return go.transform;
         }
         for (int i = tr.childCount - 1; i >= 0; i--) Object.DestroyImmediate(tr.GetChild(i).gameObject);
+        tr.localPosition = Vector3.zero;
+        tr.localRotation = Quaternion.identity;
+        tr.localScale = Vector3.one;
         return tr;
     }
 

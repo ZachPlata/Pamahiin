@@ -69,26 +69,34 @@ public class TruckEndGameButton : NetworkBehaviour, IInteractable
         if (hasSearchedRampDoor) return null;
 
         hasSearchedRampDoor = true;
-        var rampGo = GameObject.Find("JeepneyRampDoor");
-        if (rampGo != null)
-        {
-            cachedRampDoor = rampGo.GetComponent<NetworkDoor>();
-            if (cachedRampDoor != null) return cachedRampDoor;
-        }
+        NetworkDoor[] allDoors = Object.FindObjectsByType<NetworkDoor>(FindObjectsInactive.Include);
+        NetworkDoor bestDoor = null;
+        bool bestValid = false;
+        float bestDist = float.MaxValue;
 
-        for (int i = 0; i < NetworkDoor.AllDoors.Count; i++)
+        for (int i = 0; i < allDoors.Length; i++)
         {
-            NetworkDoor door = NetworkDoor.AllDoors[i];
+            NetworkDoor door = allDoors[i];
             if (door == null) continue;
+
             string lower = door.gameObject.name.ToLowerInvariant();
-            if (lower.Contains("jeepneyramp") || lower.Contains("rampdoor"))
+            bool isRamp = door.gameObject.name == "JeepneyRampDoor"
+                || lower.Contains("jeepneyramp")
+                || lower.Contains("rampdoor");
+            if (!isRamp) continue;
+
+            bool valid = door.HasValidDoorVisual;
+            float dist = Vector2.Distance(transform.position, door.transform.position);
+            if (bestDoor == null || (valid && !bestValid) || (valid == bestValid && dist < bestDist))
             {
-                cachedRampDoor = door;
-                return cachedRampDoor;
+                bestDoor = door;
+                bestValid = valid;
+                bestDist = dist;
             }
         }
 
-        return null;
+        cachedRampDoor = bestDoor;
+        return cachedRampDoor;
     }
 
     private bool IsRampStageCompleted()

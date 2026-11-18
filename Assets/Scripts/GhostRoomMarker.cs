@@ -51,6 +51,43 @@ public class GhostRoomMarker : MonoBehaviour
 
         if (ghostHandler.ghostroomMarker.OverlapPoint(position)) return true;
         Bounds b = ghostHandler.ghostroomMarker.bounds;
+        return PointInBounds(position, b);
+    }
+
+    private static bool PointInBounds(Vector2 position, Bounds b)
+    {
         return position.x >= b.min.x && position.x <= b.max.x && position.y >= b.min.y && position.y <= b.max.y;
+    }
+
+    private void DrawRoomOutlineGizmo(bool selected)
+    {
+        if (RoomCollider == null) return;
+
+        Bounds b = RoomCollider.bounds;
+        Vector3 size = new Vector3(Mathf.Max(0.05f, b.size.x), Mathf.Max(0.05f, b.size.y), 0.01f);
+        Vector3 center = new Vector3(b.center.x, b.center.y, 0f);
+
+        if (selected)
+        {
+            Gizmos.color = new Color(0.35f, 1f, 0.55f, 0.10f);
+            Gizmos.DrawCube(center, size);
+            Gizmos.color = new Color(0.35f, 1f, 0.55f, 1f);
+        }
+        else
+        {
+            Gizmos.color = new Color(0.25f, 0.90f, 0.95f, 0.75f);
+        }
+
+        Gizmos.DrawWireCube(center, size);
+    }
+
+    private void OnDrawGizmos()
+    {
+        DrawRoomOutlineGizmo(selected: false);
+    }
+
+    private void OnDrawGizmosSelected()
+    {
+        DrawRoomOutlineGizmo(selected: true);
     }
 }

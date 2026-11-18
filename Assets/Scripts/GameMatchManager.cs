@@ -430,8 +430,27 @@ public class GameMatchManager : NetworkBehaviour
     private NetworkDoor FindJeepneyRampDoor()
     {
         if (cachedRampDoor != null) return cachedRampDoor;
-        var go = GameObject.Find("JeepneyRampDoor");
-        if (go != null) cachedRampDoor = go.GetComponent<NetworkDoor>();
+
+        NetworkDoor[] allDoors = FindObjectsByType<NetworkDoor>(FindObjectsInactive.Include);
+        NetworkDoor best = null;
+        for (int i = 0; i < allDoors.Length; i++)
+        {
+            NetworkDoor door = allDoors[i];
+            if (door == null) continue;
+
+            string lower = door.gameObject.name.ToLowerInvariant();
+            if (door.gameObject.name != "JeepneyRampDoor" && !lower.Contains("jeepneyramp") && !lower.Contains("rampdoor"))
+            {
+                continue;
+            }
+
+            if (best == null || (door.HasValidDoorVisual && !best.HasValidDoorVisual))
+            {
+                best = door;
+            }
+        }
+
+        cachedRampDoor = best;
         return cachedRampDoor;
     }
 
