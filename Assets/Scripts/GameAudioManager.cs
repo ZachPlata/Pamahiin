@@ -103,14 +103,53 @@ public class GameAudioManager : MonoBehaviour
     public const float DEFAULT_MIN_DISTANCE = 0.45f;
     public const float DEFAULT_MAX_DISTANCE = 3.2f;
 
-    public static bool HasSceneBasement { get; private set; }
+    private static string cachedBasementScenePath = null;
+    private static bool cachedHasSceneBasement = false;
+
+    public static bool HasSceneBasement
+    {
+        get
+        {
+            string path = UnityEngine.SceneManagement.SceneManager.GetActiveScene().path;
+            if (!string.Equals(cachedBasementScenePath, path, System.StringComparison.Ordinal))
+            {
+                RefreshSceneBasementFlag();
+            }
+            return cachedHasSceneBasement;
+        }
+    }
 
     public static void RefreshSceneBasementFlag()
     {
-        HasSceneBasement = FindAnyObjectByType<StairTeleporter>(FindObjectsInactive.Include) != null;
+        var activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+        cachedBasementScenePath = activeScene.path;
+        cachedHasSceneBasement = FindAnyObjectByType<StairTeleporter>(FindObjectsInactive.Include) != null;
     }
 
     public static bool IsBasementPosition(Vector3 worldPos) => HasSceneBasement && worldPos.y < BASEMENT_Y_THRESHOLD;
+
+    private static bool IsLegacyBasementFallback(Vector3 worldPos)
+    {
+        if (HasSceneBasement) return worldPos.y < BASEMENT_Y_THRESHOLD;
+        if (InvestigationZone.AllZones.Count > 0) return false;
+        return UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME
+            && worldPos.y < BASEMENT_Y_THRESHOLD;
+    }
+
+    /// <summary>
+    /// Returns true if both positions belong to the same logical floor.
+    /// Consults FloorZone when present in multi-floor scenes, falling back to
+    /// BASEMENT_Y_THRESHOLD for legacy single-house scenes like BarangayMap.
+    /// </summary>
+    public static bool IsSameFloor(Vector3 posA, Vector3 posB)
+    {
+        if (FloorZone.TryGetFloorIndex(posA, out int floorA) &&
+            FloorZone.TryGetFloorIndex(posB, out int floorB))
+        {
+            return floorA == floorB;
+        }
+        return IsLegacyBasementFallback(posA) == IsLegacyBasementFallback(posB);
+    }
 
     public static float GetEffectiveSfxVolume(float baseVolume = 1f)
     {
@@ -185,7 +224,7 @@ public class GameAudioManager : MonoBehaviour
     public static float GetFloorAttenuation(Vector3 soundPos, float crossFloorMultiplier = 0.08f)
     {
         if (!TryGetListenerWorldPosition(out Vector3 listenerPos)) return 1f;
-        return IsBasementPosition(soundPos) != IsBasementPosition(listenerPos) ? crossFloorMultiplier : 1f;
+        return !IsSameFloor(soundPos, listenerPos) ? crossFloorMultiplier : 1f;
     }
 
     public static void ConfigureProximityAudioSource(AudioSource src, float minDistance = DEFAULT_MIN_DISTANCE, float maxDistance = DEFAULT_MAX_DISTANCE, float spatialBlend = 1.0f)

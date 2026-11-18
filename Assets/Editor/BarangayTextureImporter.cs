@@ -12,6 +12,7 @@ public class BarangayTextureImporter : AssetPostprocessor
 {
     private const string TARGET_ROOT = "Assets/Resources/Sprites/BarangayMap/";
     private const string CEMETERY_ROOT = "Assets/Resources/Sprites/CemeteryMap/";
+    private const string SCHOOL_ROOT = "Assets/Resources/Sprites/SchoolMap/";
     private const string RITUAL_ROOT = "Assets/Resources/Sprites/Ritual/";
     private const string GHOST_DEATH_PATH = "Assets/Resources/Sprites/ghost_death_sheet.png";
     public const string PLAYER_DEATH_PATH = "Assets/Resources/Sprites/CHARACTERS/player_death_choke_sheet.png";
@@ -125,11 +126,12 @@ public class BarangayTextureImporter : AssetPostprocessor
         string normalizedPath = assetPath.Replace('\\', '/');
         bool isBarangay = normalizedPath.StartsWith(TARGET_ROOT);
         bool isCemetery = normalizedPath.StartsWith(CEMETERY_ROOT);
+        bool isSchool = normalizedPath.StartsWith(SCHOOL_ROOT);
         bool isSlicedHorrorSheet = TryGetSlicedSheetSpec(normalizedPath, out _);
         bool isRitualOrDeath = normalizedPath.StartsWith(RITUAL_ROOT)
             || normalizedPath == GHOST_DEATH_PATH
             || isSlicedHorrorSheet;
-        if (!isBarangay && !isCemetery && !isRitualOrDeath) return;
+        if (!isBarangay && !isCemetery && !isSchool && !isRitualOrDeath) return;
 
         TextureImporter ti = assetImporter as TextureImporter;
         if (ti == null) return;
@@ -144,7 +146,9 @@ public class BarangayTextureImporter : AssetPostprocessor
             || normalizedPath.EndsWith("/cemetery_dirt_alley.png")
             || normalizedPath.EndsWith("/cemetery_path_stone.png")
             || normalizedPath.EndsWith("/cemetery_mausoleum_tile.png")
-            || normalizedPath.EndsWith("/cemetery_roof_concrete.png")));
+            || normalizedPath.EndsWith("/cemetery_roof_concrete.png")))
+            || (isSchool && (normalizedPath.Contains("/Floors/")
+                || normalizedPath.Contains("/Walls/wall_")));
 
         float ppu = isRitualOrDeath ? 100f : 64f;
         if (isBarangay)

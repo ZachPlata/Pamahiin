@@ -335,7 +335,7 @@ public class EventGhostBehavior : NetworkBehaviour
             foreach (var prop in GhostPropInteractable.AllProps)
             {
                 if (prop != null && prop.CanGhostDisrupt &&
-                    GameAudioManager.IsBasementPosition(prop.transform.position) == GameAudioManager.IsBasementPosition(rb.position) &&
+                    GameAudioManager.IsSameFloor(prop.transform.position, rb.position) &&
                     Vector2.Distance(rb.position, prop.transform.position) <= propScanRadius)
                 {
                     hasGhostProp = true;
@@ -538,7 +538,7 @@ public class EventGhostBehavior : NetworkBehaviour
             foreach (var prop in GhostPropInteractable.AllProps)
             {
                 if (prop != null && prop.CanGhostDisrupt &&
-                    GameAudioManager.IsBasementPosition(prop.transform.position) == GameAudioManager.IsBasementPosition(rb.position) &&
+                    GameAudioManager.IsSameFloor(prop.transform.position, rb.position) &&
                     Vector2.Distance(rb.position, prop.transform.position) <= propScanRadius)
                 {
                     nearbyProps.Add(prop);

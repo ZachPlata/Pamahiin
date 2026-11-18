@@ -418,12 +418,54 @@
     -unity-background-scale-mode: scale-to-fit;
 }
 
+.blueprint-floor-tabs {
+    flex-direction: row;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.blueprint-floor-tab {
+    flex-grow: 1;
+    font-size: 8px;
+    -unity-font-style: normal;
+    color: rgb(210, 185, 145);
+    background-color: rgb(42, 32, 24);
+    border-width: 1px;
+    border-color: rgb(120, 92, 54);
+    border-radius: 0px;
+    padding: 4px 6px;
+    margin-right: 4px;
+}
+
+.blueprint-floor-tab:hover {
+    background-color: rgb(62, 46, 32);
+    color: rgb(248, 232, 196);
+}
+
+.blueprint-floor-tab-active {
+    background-color: rgb(118, 42, 32);
+    color: rgb(255, 242, 206);
+    border-color: rgb(215, 175, 92);
+}
+
 .blueprint-barangay {
     background-image: url('project://database/Assets/UI/Journal/blueprint_barangay.png');
 }
 
 .blueprint-cemetery {
     background-image: url('project://database/Assets/UI/Journal/blueprint_cemetery.png');
+}
+
+.blueprint-school-f1 {
+    background-image: url('project://database/Assets/UI/Journal/blueprint_school_f1.png');
+}
+
+.blueprint-school-f2 {
+    background-image: url('project://database/Assets/UI/Journal/blueprint_school_f2.png');
+}
+
+.blueprint-school-f3 {
+    background-image: url('project://database/Assets/UI/Journal/blueprint_school_f3.png');
 }
 
 .blueprint-unavailable {

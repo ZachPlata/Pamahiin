@@ -54,9 +54,10 @@ namespace Pamahiin.EditModeTests
                 Component mgr = go.AddComponent(progType);
                 string[] maps = (string[])progType.GetField("AvailableMaps").GetValue(mgr);
                 Assert.IsNotNull(maps);
-                Assert.AreEqual(2, maps.Length);
+                Assert.AreEqual(3, maps.Length);
                 Assert.IsTrue(maps.Any(m => m.Contains("Barangay San Nicolas")));
                 Assert.IsTrue(maps.Any(m => m.Contains("Kampo Santo ng San Nicolas")));
+                Assert.IsTrue(maps.Any(m => m.Contains("San Nicolas High School")));
                 Assert.IsFalse(maps.Any(m => m.Contains("Abandoned House (Original Prototype)")));
 
                 MethodInfo setMapIndex = progType.GetMethod("SetMapIndex");
@@ -222,6 +223,10 @@ namespace Pamahiin.EditModeTests
                 {
                     EditorSceneManager.OpenScene(originalPath, OpenSceneMode.Single);
                 }
+                else
+                {
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                }
             }
         }
 
@@ -267,11 +272,15 @@ namespace Pamahiin.EditModeTests
             Type progType = ResolveGameType("ProgressionAndLoadoutManager");
             Type matchType = ResolveGameType("GameMatchManager");
 
-            var progGo = new GameObject("TestProgForMatch");
+            PropertyInfo instanceProp = progType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
+            UnityEngine.Object existingObj = instanceProp?.GetValue(null) as UnityEngine.Object;
+            GameObject progGo = existingObj == null ? new GameObject("TestProgForMatch") : null;
+            Component prog = existingObj != null ? existingObj as Component : progGo.AddComponent(progType);
+            if (progGo != null) instanceProp?.SetValue(null, prog);
+            int prevMapIndex = (int)progType.GetProperty("SelectedMapIndex").GetValue(prog);
             var matchGo = new GameObject("TestMatchManager");
             try
             {
-                Component prog = progGo.AddComponent(progType);
                 progType.GetMethod("SetMapIndex").Invoke(prog, new object[] { 1 });
 
                 Component match = matchGo.AddComponent(matchType);
@@ -282,8 +291,10 @@ namespace Pamahiin.EditModeTests
             }
             finally
             {
+                progType.GetMethod("SetMapIndex").Invoke(prog, new object[] { prevMapIndex });
+                if (progGo != null) instanceProp?.SetValue(null, null);
                 UnityEngine.Object.DestroyImmediate(matchGo);
-                UnityEngine.Object.DestroyImmediate(progGo);
+                if (progGo != null) UnityEngine.Object.DestroyImmediate(progGo);
             }
         }
     }

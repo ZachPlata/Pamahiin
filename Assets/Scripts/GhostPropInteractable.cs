@@ -123,7 +123,9 @@ public class GhostPropInteractable : NetworkBehaviour, IInteractable
         }
 
         Texture2D tex = null;
-        if (spriteSheetResource.StartsWith("CemeteryMap/") || spriteSheetResource.StartsWith("BarangayMap/"))
+        if (spriteSheetResource.StartsWith("CemeteryMap/") ||
+            spriteSheetResource.StartsWith("BarangayMap/") ||
+            spriteSheetResource.StartsWith("SchoolMap/"))
         {
             tex = Resources.Load<Texture2D>($"Sprites/{spriteSheetResource}");
         }
@@ -134,6 +136,10 @@ public class GhostPropInteractable : NetworkBehaviour, IInteractable
         if (tex == null)
         {
             tex = Resources.Load<Texture2D>($"Sprites/CemeteryMap/{spriteSheetResource}");
+        }
+        if (tex == null)
+        {
+            tex = Resources.Load<Texture2D>($"Sprites/SchoolMap/{spriteSheetResource}");
         }
         if (tex == null) return;
 

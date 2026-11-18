@@ -65,8 +65,13 @@ public class JournalController : MonoBehaviour
     private Label lblCaseGhostBg;
     private Label lblBlueprintMapName;
     private Label lblBlueprintSubtitle;
+    private VisualElement blueprintFloorTabs;
+    private Button btnBlueprintF1;
+    private Button btnBlueprintF2;
+    private Button btnBlueprintF3;
     private VisualElement blueprintImage;
     private Label lblBlueprintUnavailable;
+    private int selectedSchoolFloor = 1;
     private GameMatchManager subscribedMatchManager;
 
     // Bottom Navigation
@@ -586,8 +591,22 @@ public class JournalController : MonoBehaviour
         lblCaseGhostBg = root.Q<Label>("lbl-case-ghost-bg");
         lblBlueprintMapName = root.Q<Label>("lbl-blueprint-map-name");
         lblBlueprintSubtitle = root.Q<Label>("lbl-blueprint-subtitle");
+        blueprintFloorTabs = root.Q<VisualElement>("blueprint-floor-tabs");
+        btnBlueprintF1 = root.Q<Button>("btn-blueprint-f1");
+        btnBlueprintF2 = root.Q<Button>("btn-blueprint-f2");
+        btnBlueprintF3 = root.Q<Button>("btn-blueprint-f3");
         blueprintImage = root.Q<VisualElement>("blueprint-image");
         lblBlueprintUnavailable = root.Q<Label>("lbl-blueprint-unavailable");
+
+        if (btnBlueprintF1 != null) btnBlueprintF1.clicked += () => SelectSchoolBlueprintFloor(1);
+        if (btnBlueprintF2 != null) btnBlueprintF2.clicked += () => SelectSchoolBlueprintFloor(2);
+        if (btnBlueprintF3 != null) btnBlueprintF3.clicked += () => SelectSchoolBlueprintFloor(3);
+    }
+
+    private void SelectSchoolBlueprintFloor(int floor)
+    {
+        selectedSchoolFloor = Mathf.Clamp(floor, 1, 3);
+        RefreshCaseBriefingAndBlueprintUI();
     }
 
     private static string FormatDifficultyBadge(ContractDifficulty difficulty)
@@ -621,12 +640,13 @@ public class JournalController : MonoBehaviour
             string mapTitle = mgr != null ? mgr.GetSelectedMapDisplayName() : "Barangay San Nicolas — 6 Tanglewood Drive";
 
             if (lblBlueprintMapName != null) lblBlueprintMapName.text = mapTitle;
-            ApplyBlueprintForScene(selectedScene);
+            ApplyBlueprintMapMode(selectedScene);
             return;
         }
 
         string activeScene = SceneManager.GetActiveScene().name;
         bool isCemeteryScene = activeScene == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME;
+        bool isSchoolScene = activeScene == ProgressionAndLoadoutManager.SCHOOL_MAP_SCENE_NAME;
 
         EnsureMatchManagerSubscription();
         var matchMgr = GameMatchManager.Instance;
@@ -641,39 +661,66 @@ public class JournalController : MonoBehaviour
         {
             if (lblCaseId != null) lblCaseId.text = "SYNCING";
             if (lblCaseGhostName != null) lblCaseGhostName.text = "Investigating...";
-            if (lblCaseBgTitle != null) lblCaseBgTitle.text = isCemeteryScene ? "Kampo Santo Incident Record" : "Barangay Incident Record";
+            if (lblCaseBgTitle != null)
+            {
+                lblCaseBgTitle.text = isCemeteryScene
+                    ? "Kampo Santo Incident Record"
+                    : (isSchoolScene ? "Campus Incident Record" : "Barangay Incident Record");
+            }
             if (lblCaseGhostBg != null)
             {
                 lblCaseGhostBg.text = isCemeteryScene
                     ? "Retrieving Kampo Santo ng San Nicolas burial ledgers and witness statements..."
-                    : "Retrieving Barangay San Nicolas civil records and witness statements...";
+                    : (isSchoolScene
+                        ? "Retrieving San Nicolas High School campus records and witness statements..."
+                        : "Retrieving Barangay San Nicolas civil records and witness statements...");
             }
         }
 
         if (lblBlueprintMapName != null)
         {
-            lblBlueprintMapName.text = isCemeteryScene
-                ? "Kampo Santo ng San Nicolas — Public Cemetery"
-                : "Barangay San Nicolas — 6 Tanglewood Drive";
+            lblBlueprintMapName.text = activeScene switch
+            {
+                ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME => "Barangay San Nicolas — 6 Tanglewood Drive",
+                ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME => "Kampo Santo ng San Nicolas — Public Cemetery",
+                ProgressionAndLoadoutManager.SCHOOL_MAP_SCENE_NAME => "San Nicolas High School (3 Floors)",
+                _ => "Floor Plan Unavailable"
+            };
         }
-        ApplyBlueprintForScene(activeScene);
+        ApplyBlueprintMapMode(activeScene);
     }
 
-    private void ApplyBlueprintForScene(string sceneName)
+    private void ApplyBlueprintMapMode(string targetScene)
     {
-        bool isBarangay = sceneName == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
-        bool isCemetery = sceneName == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME;
-        bool available = isBarangay || isCemetery;
+        bool isBarangay = targetScene == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
+        bool isCemetery = targetScene == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME;
+        bool isSchool = targetScene == ProgressionAndLoadoutManager.SCHOOL_MAP_SCENE_NAME;
+        bool available = isBarangay || isCemetery || isSchool;
+
+        if (blueprintFloorTabs != null)
+        {
+            if (isSchool) blueprintFloorTabs.RemoveFromClassList("hidden");
+            else blueprintFloorTabs.AddToClassList("hidden");
+        }
 
         if (lblBlueprintSubtitle != null)
         {
-            if (isCemetery)
+            if (isBarangay)
+            {
+                lblBlueprintSubtitle.text = "General Floor Plan (Main Floor & Basement)";
+            }
+            else if (isCemetery)
             {
                 lblBlueprintSubtitle.text = "Cemetery Grounds & Mausoleum Layout";
             }
-            else if (isBarangay)
+            else if (isSchool)
             {
-                lblBlueprintSubtitle.text = "General Floor Plan (Main Floor & Basement)";
+                lblBlueprintSubtitle.text = selectedSchoolFloor switch
+                {
+                    2 => "2nd Floor Schematic — Upper Campus Wings",
+                    3 => "3rd Floor Schematic — Top Campus Wings",
+                    _ => "1st Floor Schematic — Ground Campus & Courtyard"
+                };
             }
             else
             {
@@ -685,17 +732,35 @@ public class JournalController : MonoBehaviour
         {
             blueprintImage.RemoveFromClassList("blueprint-barangay");
             blueprintImage.RemoveFromClassList("blueprint-cemetery");
+            blueprintImage.RemoveFromClassList("blueprint-school-f1");
+            blueprintImage.RemoveFromClassList("blueprint-school-f2");
+            blueprintImage.RemoveFromClassList("blueprint-school-f3");
 
             if (available)
             {
-                blueprintImage.AddToClassList(isCemetery ? "blueprint-cemetery" : "blueprint-barangay");
                 blueprintImage.RemoveFromClassList("hidden");
+                if (isBarangay)
+                {
+                    blueprintImage.AddToClassList("blueprint-barangay");
+                }
+                else if (isCemetery)
+                {
+                    blueprintImage.AddToClassList("blueprint-cemetery");
+                }
+                else
+                {
+                    blueprintImage.AddToClassList($"blueprint-school-f{Mathf.Clamp(selectedSchoolFloor, 1, 3)}");
+                }
             }
             else
             {
                 blueprintImage.AddToClassList("hidden");
             }
         }
+
+        UpdateSchoolBlueprintFloorTabButton(btnBlueprintF1, selectedSchoolFloor == 1);
+        UpdateSchoolBlueprintFloorTabButton(btnBlueprintF2, selectedSchoolFloor == 2);
+        UpdateSchoolBlueprintFloorTabButton(btnBlueprintF3, selectedSchoolFloor == 3);
 
         if (lblBlueprintUnavailable != null)
         {
@@ -709,6 +774,13 @@ public class JournalController : MonoBehaviour
                 lblBlueprintUnavailable.RemoveFromClassList("hidden");
             }
         }
+    }
+
+    private static void UpdateSchoolBlueprintFloorTabButton(Button btn, bool active)
+    {
+        if (btn == null) return;
+        if (active) btn.AddToClassList("blueprint-floor-tab-active");
+        else btn.RemoveFromClassList("blueprint-floor-tab-active");
     }
 
     private void BindLobbySpreadControls(VisualElement root)
@@ -1323,6 +1395,16 @@ public class JournalController : MonoBehaviour
 
         if (isJournalOpen)
         {
+            if (SceneManager.GetActiveScene().name == ProgressionAndLoadoutManager.SCHOOL_MAP_SCENE_NAME &&
+                PlayerController.LocalInstance != null)
+            {
+                int playerFloor = FloorZone.GetFloorIndex(PlayerController.LocalInstance.transform.position);
+                if (playerFloor >= FloorZone.FLOOR_FIRST && playerFloor <= FloorZone.FLOOR_THIRD)
+                {
+                    selectedSchoolFloor = playerFloor;
+                }
+            }
+
             journalOverlay.RemoveFromClassList("hidden");
             RefreshCaseBriefingAndBlueprintUI();
             if (ProgressionAndLoadoutManager.IsInLobbyScene)

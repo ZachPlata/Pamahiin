@@ -113,6 +113,11 @@
                     <ui:VisualElement class="journal-page right-page">
                         <ui:Label name="lbl-blueprint-map-name" text="Barangay San Nicolas — 6 Tanglewood Drive" class="page-title blueprint-map-title" />
                         <ui:Label name="lbl-blueprint-subtitle" text="General Floor Plan (Main Floor &amp; Basement)" class="instruction-text blueprint-subtitle" />
+                        <ui:VisualElement name="blueprint-floor-tabs" class="blueprint-floor-tabs hidden">
+                            <ui:Button name="btn-blueprint-f1" text="1F GROUND" class="blueprint-floor-tab blueprint-floor-tab-active" />
+                            <ui:Button name="btn-blueprint-f2" text="2F UPPER" class="blueprint-floor-tab" />
+                            <ui:Button name="btn-blueprint-f3" text="3F TOP" class="blueprint-floor-tab" />
+                        </ui:VisualElement>
 
                         <ui:VisualElement name="blueprint-frame" class="blueprint-frame">
                             <ui:VisualElement name="blueprint-image" class="blueprint-image blueprint-barangay" />
