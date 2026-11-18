@@ -567,6 +567,14 @@ public class EventGhostBehavior : NetworkBehaviour
             }
         }
 
+        if (CemeteryCandleManager.Instance != null && Random.value < 0.45f)
+        {
+            if (CemeteryCandleManager.Instance.BlowOutNearestCandle(rb.position, interactionScanRadius))
+            {
+                return;
+            }
+        }
+
         if (canDisruptProp && nearbyProps.Count > 0 && Random.value < 0.45f)
         {
             var chosen = nearbyProps[Random.Range(0, nearbyProps.Count)];

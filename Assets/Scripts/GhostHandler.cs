@@ -591,6 +591,12 @@ public class GhostHandler : NetworkBehaviour
 
         // Notify atmosphere controller on ALL clients via ClientRpc
         TriggerGhostEventEffectClientRpc();
+
+        if (CemeteryCandleManager.Instance != null)
+        {
+            Vector3 candleCheckPos = eventGhost != null ? eventGhost.transform.position : transform.position;
+            CemeteryCandleManager.Instance.BlowOutNearestCandle(candleCheckPos, 2.5f);
+        }
     }
 
     [Rpc(SendTo.ClientsAndHost)]
@@ -683,7 +689,12 @@ public class GhostHandler : NetworkBehaviour
         Vector3 pos = p.transform.position;
         if (GameAudioManager.IsBasementPosition(pos)) return true;
 
-        if (cachedEnclosedRoofs == null || cachedEnclosedRoofs.Length == 0)
+        if (InvestigationZone.AllZones.Count > 0 && InvestigationZone.IsPositionInAnyZone(pos))
+        {
+            return true;
+        }
+
+        if (cachedEnclosedRoofs == null || cachedEnclosedRoofs.Length == 0 || cachedEnclosedRoofs[0] == null)
         {
             var all = FindObjectsByType<RoofFader>(FindObjectsInactive.Include);
             var enclosed = new System.Collections.Generic.List<RoofFader>();

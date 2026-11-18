@@ -1121,7 +1121,7 @@ public class NetworkController : MonoBehaviour
             {
                 loadingMgr.SetProgress(
                     Mathf.Lerp(0.18f, 0.45f, Mathf.Clamp01(elapsed / minHold)),
-                    "Loading Barangay transit route...");
+                    "Loading transit route...");
             }
             yield return null;
         }
@@ -1207,7 +1207,7 @@ public class NetworkController : MonoBehaviour
 
         if (LoadingScreenManager.IsLoadingVisible)
         {
-            LoadingScreenManager.Instance.SetProgress(0.88f, "Stabilizing Barangay weather & lighting...");
+            LoadingScreenManager.Instance.SetProgress(0.88f, "Stabilizing site weather & lighting...");
         }
 
         elapsed = 0f;

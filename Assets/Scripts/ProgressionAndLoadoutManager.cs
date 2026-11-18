@@ -73,7 +73,8 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public const string LOBBY_SCENE_NAME = "LobbyScene";
     public const string BARANGAY_MAP_SCENE_NAME = "BarangayMap";
-    public const string GAME_MAP_SCENE_NAME = "GameMapScene"; // Legacy prototype scene (index 1)
+    public const string CEMETERY_MAP_SCENE_NAME = "CemeteryMap";
+    public const string GAME_MAP_SCENE_NAME = "GameMapScene"; // Legacy prototype scene (kept on disk for cloning)
     public const string MAIN_MENU_SCENE_NAME = "MainMenuScene";
     public const string WAREHOUSE_TUTORIAL_SCENE_NAME = "WarehouseTutorialScene";
 
@@ -128,8 +129,8 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public readonly string[] AvailableMaps = new string[]
     {
-        "Barangay San Nicolas — 6 Tanglewood Drive", // Default index 0 -> BarangayMap
-        "Abandoned House (Original Prototype)"       // Legacy index 1 -> REMOVE THIS LINE to retire GameMapScene
+        "Barangay San Nicolas — 6 Tanglewood Drive",
+        "Kampo Santo ng San Nicolas — Public Cemetery"
     };
 
     private readonly Dictionary<string, int> loadoutCounts = new Dictionary<string, int>();
@@ -1061,13 +1062,12 @@ public class ProgressionAndLoadoutManager : MonoBehaviour
 
     public string GetSelectedSceneName()
     {
-        // REMOVE index 1 branch below if removing GameMapScene from AvailableMaps
-        return SelectedMapIndex == 1 ? GAME_MAP_SCENE_NAME : BARANGAY_MAP_SCENE_NAME;
+        return SelectedMapIndex == 1 ? CEMETERY_MAP_SCENE_NAME : BARANGAY_MAP_SCENE_NAME;
     }
 
     public static bool IsGameplayMapScene(string sceneName)
     {
-        return sceneName == BARANGAY_MAP_SCENE_NAME || sceneName == GAME_MAP_SCENE_NAME;
+        return sceneName == BARANGAY_MAP_SCENE_NAME || sceneName == CEMETERY_MAP_SCENE_NAME;
     }
 
     public static float GetDifficultyRewardMultiplier(ContractDifficulty difficulty)

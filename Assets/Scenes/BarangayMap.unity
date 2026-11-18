@@ -31336,7 +31336,7 @@ GameObject:
   - component: {fileID: 1086655140}
   - component: {fileID: 1086655139}
   - component: {fileID: 1086655138}
-  m_Layer: 0
+  m_Layer: 6
   m_Name: wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -32078,7 +32078,7 @@ GameObject:
   - component: {fileID: 1110370835}
   - component: {fileID: 1110370834}
   - component: {fileID: 1110370833}
-  m_Layer: 7
+  m_Layer: 6
   m_Name: wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -35226,6 +35226,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WeatherManager
   ShowTopMostFoldoutHeaderGroup: 1
   globalLight: {fileID: 306768442}
+  useCustomExteriorBounds: 0
+  customExteriorZones:
+  - serializedVersion: 2
+    x: -1.72
+    y: -3.15
+    width: 1.38
+    height: 6.6
+  - serializedVersion: 2
+    x: 0
+    y: -3.1
+    width: 8.5
+    height: 6.5
+  customFireflyCount: 128
+  customHeroFireflyLights: 18
+  customFogWispCount: 72
+  customRainGridSpacingX: 0.58
+  customRainGridSpacingY: 0.54
+  fireflyAnchorLightPrefixes:
+  - LampPostLight_
+  - CandleLight_
+  - CemeteryFloodLight_
 --- !u!1 &1224208316
 GameObject:
   m_ObjectHideFlags: 0
@@ -43263,7 +43284,7 @@ GameObject:
   - component: {fileID: 1538030810}
   - component: {fileID: 1538030809}
   - component: {fileID: 1538030808}
-  m_Layer: 7
+  m_Layer: 6
   m_Name: Wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -57975,7 +57996,7 @@ GameObject:
   - component: {fileID: 2052875106}
   - component: {fileID: 2052875105}
   - component: {fileID: 2052875104}
-  m_Layer: 7
+  m_Layer: 6
   m_Name: wall
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -617,13 +617,16 @@ public class JournalController : MonoBehaviour
                 lblCaseGhostBg.text = "Contract briefing and spirit dossier will be issued upon arrival at the investigation site.";
             }
 
+            string selectedScene = mgr != null ? mgr.GetSelectedSceneName() : ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
             string mapTitle = mgr != null ? mgr.GetSelectedMapDisplayName() : "Barangay San Nicolas — 6 Tanglewood Drive";
-            bool hasBarangayBlueprint = mgr == null || mgr.GetSelectedSceneName() == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
 
             if (lblBlueprintMapName != null) lblBlueprintMapName.text = mapTitle;
-            SetBlueprintImageAvailability(hasBarangayBlueprint);
+            ApplyBlueprintForScene(selectedScene);
             return;
         }
+
+        string activeScene = SceneManager.GetActiveScene().name;
+        bool isCemeteryScene = activeScene == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME;
 
         EnsureMatchManagerSubscription();
         var matchMgr = GameMatchManager.Instance;
@@ -638,37 +641,60 @@ public class JournalController : MonoBehaviour
         {
             if (lblCaseId != null) lblCaseId.text = "SYNCING";
             if (lblCaseGhostName != null) lblCaseGhostName.text = "Investigating...";
-            if (lblCaseBgTitle != null) lblCaseBgTitle.text = "Barangay Incident Record";
+            if (lblCaseBgTitle != null) lblCaseBgTitle.text = isCemeteryScene ? "Kampo Santo Incident Record" : "Barangay Incident Record";
             if (lblCaseGhostBg != null)
             {
-                lblCaseGhostBg.text = "Retrieving Barangay San Nicolas civil records and witness statements...";
+                lblCaseGhostBg.text = isCemeteryScene
+                    ? "Retrieving Kampo Santo ng San Nicolas burial ledgers and witness statements..."
+                    : "Retrieving Barangay San Nicolas civil records and witness statements...";
             }
         }
 
-        string activeScene = SceneManager.GetActiveScene().name;
-        bool isBarangayScene = activeScene == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
         if (lblBlueprintMapName != null)
         {
-            lblBlueprintMapName.text = isBarangayScene
-                ? "Barangay San Nicolas — 6 Tanglewood Drive"
-                : "Abandoned House (Original Prototype)";
+            lblBlueprintMapName.text = isCemeteryScene
+                ? "Kampo Santo ng San Nicolas — Public Cemetery"
+                : "Barangay San Nicolas — 6 Tanglewood Drive";
         }
-        SetBlueprintImageAvailability(isBarangayScene);
+        ApplyBlueprintForScene(activeScene);
     }
 
-    private void SetBlueprintImageAvailability(bool available)
+    private void ApplyBlueprintForScene(string sceneName)
     {
+        bool isBarangay = sceneName == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME;
+        bool isCemetery = sceneName == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME;
+        bool available = isBarangay || isCemetery;
+
         if (lblBlueprintSubtitle != null)
         {
-            lblBlueprintSubtitle.text = available
-                ? "General Floor Plan (Main Floor & Basement)"
-                : "Floor Plan Unavailable";
+            if (isCemetery)
+            {
+                lblBlueprintSubtitle.text = "Cemetery Grounds & Mausoleum Layout";
+            }
+            else if (isBarangay)
+            {
+                lblBlueprintSubtitle.text = "General Floor Plan (Main Floor & Basement)";
+            }
+            else
+            {
+                lblBlueprintSubtitle.text = "Floor Plan Unavailable";
+            }
         }
 
         if (blueprintImage != null)
         {
-            if (available) blueprintImage.RemoveFromClassList("hidden");
-            else blueprintImage.AddToClassList("hidden");
+            blueprintImage.RemoveFromClassList("blueprint-barangay");
+            blueprintImage.RemoveFromClassList("blueprint-cemetery");
+
+            if (available)
+            {
+                blueprintImage.AddToClassList(isCemetery ? "blueprint-cemetery" : "blueprint-barangay");
+                blueprintImage.RemoveFromClassList("hidden");
+            }
+            else
+            {
+                blueprintImage.AddToClassList("hidden");
+            }
         }
 
         if (lblBlueprintUnavailable != null)
@@ -679,7 +705,7 @@ public class JournalController : MonoBehaviour
             }
             else
             {
-                lblBlueprintUnavailable.text = "Blueprint only available for Barangay San Nicolas — 6 Tanglewood Drive.";
+                lblBlueprintUnavailable.text = "No floor plan available for this location.";
                 lblBlueprintUnavailable.RemoveFromClassList("hidden");
             }
         }

@@ -1193,7 +1193,7 @@ public class HunterGhostBehavior : NetworkBehaviour
 
     private bool IsInsideEnclosedRoof(Vector2 pos, out bool hasEnclosedRoof)
     {
-        if (enclosedRoofs == null)
+        if (enclosedRoofs == null || (enclosedRoofs.Length > 0 && enclosedRoofs[0] == null))
         {
             var all = Object.FindObjectsByType<RoofFader>(FindObjectsInactive.Include);
             var list = new List<RoofFader>();
@@ -1212,8 +1212,18 @@ public class HunterGhostBehavior : NetworkBehaviour
         return false;
     }
 
+    private bool IsPositionInsideInvestigationBounds(Vector2 pos)
+    {
+        bool inRoof = IsInsideEnclosedRoof(pos, out bool hasRoof);
+        if (InvestigationZone.AllZones.Count > 0)
+        {
+            return inRoof || InvestigationZone.IsPositionInAnyZone(pos);
+        }
+        return !hasRoof || inRoof;
+    }
+
     /// <summary>
-    /// True when the player is inside the house and the ghost has a complete NavMesh path to them.
+    /// True when the player is inside the investigation area (house or outdoor InvestigationZone) and the ghost has a complete NavMesh path to them.
     /// Results are cached briefly to keep per-frame scans cheap.
     /// </summary>
     private bool IsTargetInsideAndReachable(PlayerController player)
@@ -1221,14 +1231,10 @@ public class HunterGhostBehavior : NetworkBehaviour
         if (player == null) return false;
 
         Vector3 targetPos = player.transform.position;
-        if (!GameAudioManager.IsBasementPosition(targetPos))
+        if (!GameAudioManager.IsBasementPosition(targetPos) && !IsPositionInsideInvestigationBounds(targetPos))
         {
-            bool inRoof = IsInsideEnclosedRoof(targetPos, out bool hasRoof);
-            if (hasRoof && !inRoof)
-            {
-                reachabilityCache[player] = new KeyValuePair<float, bool>(Time.time + 0.1f, false);
-                return false;
-            }
+            reachabilityCache[player] = new KeyValuePair<float, bool>(Time.time + 0.1f, false);
+            return false;
         }
 
         if (reachabilityCache.TryGetValue(player, out var cached) && Time.time < cached.Key)
@@ -1245,13 +1251,9 @@ public class HunterGhostBehavior : NetworkBehaviour
     {
         targetPos.z = transform.position.z;
 
-        if (!GameAudioManager.IsBasementPosition(targetPos))
+        if (!GameAudioManager.IsBasementPosition(targetPos) && !IsPositionInsideInvestigationBounds(targetPos))
         {
-            bool inRoof = IsInsideEnclosedRoof(targetPos, out bool hasRoof);
-            if (hasRoof && !inRoof)
-            {
-                return false;
-            }
+            return false;
         }
 
         // Fallback when the agent isn't ready: roof/basement containment alone suffices

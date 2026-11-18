@@ -122,7 +122,19 @@ public class GhostPropInteractable : NetworkBehaviour, IInteractable
             return;
         }
 
-        Texture2D tex = Resources.Load<Texture2D>($"Sprites/BarangayMap/{spriteSheetResource}");
+        Texture2D tex = null;
+        if (spriteSheetResource.StartsWith("CemeteryMap/") || spriteSheetResource.StartsWith("BarangayMap/"))
+        {
+            tex = Resources.Load<Texture2D>($"Sprites/{spriteSheetResource}");
+        }
+        if (tex == null)
+        {
+            tex = Resources.Load<Texture2D>($"Sprites/BarangayMap/{spriteSheetResource}");
+        }
+        if (tex == null)
+        {
+            tex = Resources.Load<Texture2D>($"Sprites/CemeteryMap/{spriteSheetResource}");
+        }
         if (tex == null) return;
 
         tex.filterMode = FilterMode.Point;

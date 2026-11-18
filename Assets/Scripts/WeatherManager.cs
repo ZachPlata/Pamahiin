@@ -55,6 +55,34 @@ public class WeatherManager : NetworkBehaviour
     [Header("Ambient References (Auto-Located If Null)")]
     [SerializeField] private Light2D globalLight;
 
+    [Header("Custom Map Exterior Bounds (CemeteryMap)")]
+    [SerializeField] private bool useCustomExteriorBounds = false;
+    [SerializeField] private Rect[] customExteriorZones =
+    {
+        new Rect(-1.72f, -3.15f, 1.38f, 6.60f),
+        new Rect(0.00f, -3.10f, 8.50f, 6.50f)
+    };
+    [SerializeField] private int customFireflyCount = 128;
+    [SerializeField] private int customHeroFireflyLights = 18;
+    [SerializeField] private int customFogWispCount = 72;
+    [SerializeField] private float customRainGridSpacingX = 0.58f;
+    [SerializeField] private float customRainGridSpacingY = 0.54f;
+    [SerializeField] private string[] fireflyAnchorLightPrefixes =
+    {
+        "LampPostLight_",
+        "CandleLight_",
+        "CemeteryFloodLight_"
+    };
+
+    public bool UseCustomExteriorBounds => useCustomExteriorBounds;
+
+    private Rect[] GetActiveExteriorZones()
+    {
+        return (useCustomExteriorBounds && customExteriorZones != null && customExteriorZones.Length > 0)
+            ? customExteriorZones
+            : ExteriorZones;
+    }
+
     private NetworkVariable<int> netWeatherType = new NetworkVariable<int>(
         (int)BarangayWeatherType.NightFireflies,
         NetworkVariableReadPermission.Everyone,
@@ -181,6 +209,7 @@ public class WeatherManager : NetworkBehaviour
     private void Awake()
     {
         Instance = this;
+        GameAudioManager.RefreshSceneBasementFlag();
         var emitterGo = new GameObject("WeatherAudioEmitter");
         emitterGo.transform.SetParent(transform, false);
         weatherAudioEmitter = emitterGo.transform;
@@ -562,34 +591,50 @@ public class WeatherManager : NetworkBehaviour
         Random.State oldState = Random.state;
         Random.InitState(6464);
 
-        // Locate active streetlamp lights so ~70% of fireflies gather around streetlights
-        List<Vector3> streetlampPositions = new List<Vector3>();
+        // Locate active outdoor lights to attract ~70-75% of fireflies
+        List<Vector3> anchorLightPositions = new List<Vector3>();
         foreach (var l in FindObjectsByType<Light2D>(FindObjectsInactive.Include))
         {
-            if (l != null && l.gameObject.name.StartsWith("LampPostLight_"))
+            if (l == null) continue;
+            if (useCustomExteriorBounds)
             {
-                streetlampPositions.Add(new Vector3(l.transform.position.x, l.transform.position.y, 0f));
+                if (!l.enabled || !l.gameObject.activeInHierarchy) continue;
+                if (!MatchesAnyPrefix(l.gameObject.name, fireflyAnchorLightPrefixes)) continue;
+                Vector3 lp = new Vector3(l.transform.position.x, l.transform.position.y, 0f);
+                if (!IsPositionIndoors(lp))
+                {
+                    anchorLightPositions.Add(lp);
+                }
+            }
+            else if (l.gameObject.name.StartsWith("LampPostLight_"))
+            {
+                anchorLightPositions.Add(new Vector3(l.transform.position.x, l.transform.position.y, 0f));
             }
         }
 
-        // 1. Fireflies (64 world-space entities: ~70% circling streetlamps, ~30% curbs/yard edges)
+        // 1. Fireflies (world-space entities: ~70-75% circling lights, ~25-30% exterior zones)
         firefliesContainer = new GameObject("Fireflies_WorldEntities");
         firefliesContainer.transform.SetParent(transform, false);
         fireflyEntities.Clear();
-        int streetlampFireflyQuota = streetlampPositions.Count > 0 ? Mathf.RoundToInt(FIREFLY_COUNT * 0.70f) : 0;
-        for (int i = 0; i < FIREFLY_COUNT; i++)
+        int totalFireflies = useCustomExteriorBounds ? Mathf.Max(16, customFireflyCount) : FIREFLY_COUNT;
+        int heroLightCount = useCustomExteriorBounds ? Mathf.Max(0, customHeroFireflyLights) : HERO_FIREFLY_LIGHTS;
+        float lightQuotaRatio = useCustomExteriorBounds ? 0.75f : 0.70f;
+        int streetlampFireflyQuota = anchorLightPositions.Count > 0 ? Mathf.RoundToInt(totalFireflies * lightQuotaRatio) : 0;
+        for (int i = 0; i < totalFireflies; i++)
         {
             bool nearStreetlamp = i < streetlampFireflyQuota;
             Vector3 anchor;
             if (nearStreetlamp)
             {
-                Vector3 lampPos = streetlampPositions[i % streetlampPositions.Count];
-                Vector2 ringOffset = Random.insideUnitCircle.normalized * Random.Range(0.14f, 0.36f);
+                Vector3 lampPos = anchorLightPositions[i % anchorLightPositions.Count];
+                Vector2 randDir = Random.insideUnitCircle;
+                if (randDir.sqrMagnitude < 0.0001f) randDir = Vector2.right;
+                Vector2 ringOffset = randDir.normalized * (useCustomExteriorBounds ? Random.Range(0.08f, 0.32f) : Random.Range(0.14f, 0.36f));
                 anchor = ClampPointOutdoors(lampPos + new Vector3(ringOffset.x, ringOffset.y, 0f));
             }
             else
             {
-                anchor = SampleCurbOrYardAnchor();
+                anchor = useCustomExteriorBounds ? SampleExteriorAnchor(out _) : SampleCurbOrYardAnchor();
             }
 
             GameObject go = new GameObject($"Firefly_{i}");
@@ -603,7 +648,7 @@ public class WeatherManager : NetworkBehaviour
             if (fireflyFrames.Length > 0) sr.sprite = fireflyFrames[startFrame];
 
             Light2D heroLight = null;
-            if (i < HERO_FIREFLY_LIGHTS)
+            if (i < heroLightCount)
             {
                 heroLight = go.AddComponent<Light2D>();
                 heroLight.lightType = Light2D.LightType.Point;
@@ -630,55 +675,83 @@ public class WeatherManager : NetworkBehaviour
             });
         }
 
-        // 2. Static World-Space Grouped RainCluster Entities (10 drops/cluster covering the full Barangay road outside the Jeepney + perimeter alleys)
+        // 2. Static World-Space Grouped RainCluster Entities
         rainContainer = new GameObject("Rain_WorldEntities");
         rainContainer.transform.SetParent(transform, false);
         rainEntities.Clear();
 
-        float[] roadColumnsX = { -1.50f, -1.08f, -0.64f, -0.22f };
         int clusterIdx = 0;
-        for (int row = 0; row < ROAD_RAIN_ROWS; row++)
+        if (useCustomExteriorBounds)
         {
-            float baseY = Mathf.Lerp(-2.60f, 2.60f, row / (float)(ROAD_RAIN_ROWS - 1));
-            for (int col = 0; col < roadColumnsX.Length; col++)
+            Rect[] activeZones = GetActiveExteriorZones();
+            float stepX = Mathf.Max(0.25f, customRainGridSpacingX);
+            float stepY = Mathf.Max(0.25f, customRainGridSpacingY);
+            for (int z = 0; z < activeZones.Length; z++)
             {
-                float x = roadColumnsX[col] + Random.Range(-0.05f, 0.05f);
-                float y = baseY + Random.Range(-0.05f, 0.05f);
-                if (col == 3 && (y < -1.80f || y > 1.60f))
+                Rect zone = activeZones[z];
+                for (float y = zone.yMin + 0.12f; y <= zone.yMax - 0.12f; y += stepY)
                 {
-                    continue;
+                    for (float x = zone.xMin + 0.12f; x <= zone.xMax - 0.12f; x += stepX)
+                    {
+                        Vector3 candidate = new Vector3(
+                            Mathf.Clamp(x + Random.Range(-0.06f, 0.06f), zone.xMin + 0.06f, zone.xMax - 0.06f),
+                            Mathf.Clamp(y + Random.Range(-0.06f, 0.06f), zone.yMin + 0.06f, zone.yMax - 0.06f),
+                            0f);
+                        if (!IsRainBlockedPosition(candidate))
+                        {
+                            AddRainCluster(candidate, weatherSortingLayerId, ref clusterIdx);
+                        }
+                    }
                 }
-
-                Vector3 candidate = new Vector3(x, y, 0f);
-                if (IsRainBlockedPosition(candidate))
+            }
+        }
+        else
+        {
+            float[] roadColumnsX = { -1.50f, -1.08f, -0.64f, -0.22f };
+            for (int row = 0; row < ROAD_RAIN_ROWS; row++)
+            {
+                float baseY = Mathf.Lerp(-2.60f, 2.60f, row / (float)(ROAD_RAIN_ROWS - 1));
+                for (int col = 0; col < roadColumnsX.Length; col++)
                 {
-                    float shiftedX = col <= 1 ? -1.48f : -0.20f;
-                    Vector3 shifted = new Vector3(shiftedX + Random.Range(-0.04f, 0.04f), y, 0f);
-                    if (IsRainBlockedPosition(shifted))
+                    float x = roadColumnsX[col] + Random.Range(-0.05f, 0.05f);
+                    float y = baseY + Random.Range(-0.05f, 0.05f);
+                    if (col == 3 && (y < -1.80f || y > 1.60f))
                     {
                         continue;
                     }
-                    candidate = shifted;
+
+                    Vector3 candidate = new Vector3(x, y, 0f);
+                    if (IsRainBlockedPosition(candidate))
+                    {
+                        float shiftedX = col <= 1 ? -1.48f : -0.20f;
+                        Vector3 shifted = new Vector3(shiftedX + Random.Range(-0.04f, 0.04f), y, 0f);
+                        if (IsRainBlockedPosition(shifted))
+                        {
+                            continue;
+                        }
+                        candidate = shifted;
+                    }
+
+                    AddRainCluster(candidate, weatherSortingLayerId, ref clusterIdx);
                 }
-
-                AddRainCluster(candidate, weatherSortingLayerId, ref clusterIdx);
             }
-        }
 
-        for (int i = 0; i < PERIMETER_RAIN_CLUSTER_COUNT; i++)
-        {
-            Vector3 alleyAnchor = SamplePerimeterAlleyRainAnchor(i);
-            if (!IsRainBlockedPosition(alleyAnchor))
+            for (int i = 0; i < PERIMETER_RAIN_CLUSTER_COUNT; i++)
             {
-                AddRainCluster(alleyAnchor, weatherSortingLayerId, ref clusterIdx);
+                Vector3 alleyAnchor = SamplePerimeterAlleyRainAnchor(i);
+                if (!IsRainBlockedPosition(alleyAnchor))
+                {
+                    AddRainCluster(alleyAnchor, weatherSortingLayerId, ref clusterIdx);
+                }
             }
         }
 
-        // 3. Fog Wisps (30 world-space entities on Floor +10, beneath Jeepney/props/walls/roofs)
+        // 3. Fog Wisps (world-space entities on Floor +10, beneath Jeepney/props/walls/roofs)
         fogContainer = new GameObject("Fog_WorldEntities");
         fogContainer.transform.SetParent(transform, false);
         fogEntities.Clear();
-        for (int i = 0; i < FOG_WISP_COUNT; i++)
+        int totalFogWisps = useCustomExteriorBounds ? Mathf.Max(16, customFogWispCount) : FOG_WISP_COUNT;
+        for (int i = 0; i < totalFogWisps; i++)
         {
             Vector3 anchor = SampleExteriorAnchor(out _, VehicleExclusionMode.Fog);
             GameObject go = new GameObject($"FogWisp_{i}");
@@ -727,9 +800,27 @@ public class WeatherManager : NetworkBehaviour
         return SampleExteriorAnchor(out _);
     }
 
+    private static bool MatchesAnyPrefix(string name, string[] prefixes)
+    {
+        if (string.IsNullOrEmpty(name) || prefixes == null) return false;
+        for (int i = 0; i < prefixes.Length; i++)
+        {
+            if (!string.IsNullOrEmpty(prefixes[i]) && name.StartsWith(prefixes[i]))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private Vector3 ClampPointOutdoors(Vector3 candidate)
     {
         if (!IsPositionIndoors(candidate)) return candidate;
+        if (useCustomExteriorBounds)
+        {
+            Vector3 pushed = PushOutsideRectList(candidate, enclosedBuildingFogRects);
+            if (!IsPositionIndoors(pushed)) return pushed;
+        }
         return new Vector3(Mathf.Min(-0.18f, candidate.x), candidate.y, 0f);
     }
 
@@ -778,10 +869,11 @@ public class WeatherManager : NetworkBehaviour
 
     private Vector3 SampleExteriorAnchor(out int zoneIndex, VehicleExclusionMode exclusionMode = VehicleExclusionMode.None)
     {
+        Rect[] zones = GetActiveExteriorZones();
         float totalArea = 0f;
-        for (int z = 0; z < ExteriorZones.Length; z++)
+        for (int z = 0; z < zones.Length; z++)
         {
-            totalArea += ExteriorZones[z].width * ExteriorZones[z].height;
+            totalArea += zones[z].width * zones[z].height;
         }
 
         int maxAttempts = exclusionMode != VehicleExclusionMode.None ? 64 : 32;
@@ -790,9 +882,9 @@ public class WeatherManager : NetworkBehaviour
             float pick = Random.Range(0f, totalArea);
             zoneIndex = 0;
             float accum = 0f;
-            for (int z = 0; z < ExteriorZones.Length; z++)
+            for (int z = 0; z < zones.Length; z++)
             {
-                accum += ExteriorZones[z].width * ExteriorZones[z].height;
+                accum += zones[z].width * zones[z].height;
                 if (pick <= accum)
                 {
                     zoneIndex = z;
@@ -800,7 +892,7 @@ public class WeatherManager : NetworkBehaviour
                 }
             }
 
-            Rect zone = ExteriorZones[zoneIndex];
+            Rect zone = zones[zoneIndex];
             Vector3 candidate = new Vector3(
                 Random.Range(zone.xMin, zone.xMax),
                 Random.Range(zone.yMin, zone.yMax),
@@ -820,7 +912,7 @@ public class WeatherManager : NetworkBehaviour
             return streetFallback;
         }
 
-        zoneIndex = 2;
+        zoneIndex = Mathf.Min(2, zones.Length - 1);
         Vector3 safeFallback = new Vector3(Random.Range(0.25f, 3.85f), Random.Range(2.05f, 2.48f), 0f);
         if (exclusionMode == VehicleExclusionMode.Fog && IsFogBlockedPosition(safeFallback))
         {
@@ -831,7 +923,8 @@ public class WeatherManager : NetworkBehaviour
 
     private Vector3 SampleExteriorOffsetInZone(Vector3 anchor, int zoneIndex, float radius, VehicleExclusionMode exclusionMode = VehicleExclusionMode.None)
     {
-        Rect zone = ExteriorZones[Mathf.Clamp(zoneIndex, 0, ExteriorZones.Length - 1)];
+        Rect[] zones = GetActiveExteriorZones();
+        Rect zone = zones[Mathf.Clamp(zoneIndex, 0, zones.Length - 1)];
         int attempts = exclusionMode != VehicleExclusionMode.None ? 10 : 1;
         for (int attempt = 0; attempt < attempts; attempt++)
         {
@@ -868,8 +961,8 @@ public class WeatherManager : NetworkBehaviour
 
     public bool IsPositionIndoors(Vector3 worldPos)
     {
-        // Basement sits below y = -3.2f and is always indoors
-        if (worldPos.y < -3.2f) return true;
+        // Basement sits below y = -3.2f only on maps that have a basement
+        if (GameAudioManager.IsBasementPosition(worldPos)) return true;
 
         if (cachedRoofs.Count == 0)
         {
@@ -1191,8 +1284,35 @@ public class WeatherManager : NetworkBehaviour
         return found;
     }
 
-    private static Vector3 GetNearestExteriorEdgePoint(Vector3 pos)
+    private Vector3 GetNearestExteriorEdgePoint(Vector3 pos)
     {
+        if (useCustomExteriorBounds)
+        {
+            for (int i = 0; i < cachedRoofs.Count; i++)
+            {
+                RoofFader rf = cachedRoofs[i];
+                if (rf == null || !rf.IsEnclosedBuilding || !rf.IsPositionInside(pos)) continue;
+
+                foreach (Collider2D col in rf.GetComponents<Collider2D>())
+                {
+                    if (col == null) continue;
+                    Bounds b = col.bounds;
+                    if (!col.OverlapPoint(pos) && !b.Contains(new Vector3(pos.x, pos.y, b.center.z))) continue;
+
+                    float dLeft = Mathf.Abs(pos.x - (b.min.x - 0.06f));
+                    float dRight = Mathf.Abs((b.max.x + 0.06f) - pos.x);
+                    float dBottom = Mathf.Abs(pos.y - (b.min.y - 0.06f));
+                    float dTop = Mathf.Abs((b.max.y + 0.06f) - pos.y);
+                    float best = Mathf.Min(Mathf.Min(dLeft, dRight), Mathf.Min(dBottom, dTop));
+
+                    if (best == dLeft) return new Vector3(b.min.x - 0.06f, pos.y, 0f);
+                    if (best == dRight) return new Vector3(b.max.x + 0.06f, pos.y, 0f);
+                    if (best == dBottom) return new Vector3(pos.x, b.min.y - 0.06f, 0f);
+                    return new Vector3(pos.x, b.max.y + 0.06f, 0f);
+                }
+            }
+        }
+
         // Main house spans approximately x=[0.00..4.48], y=[-1.85..+1.65]; push out to closest perimeter edge.
         float dWest = Mathf.Abs(pos.x - (-0.08f));
         float dEast = Mathf.Abs(4.55f - pos.x);
@@ -1550,7 +1670,8 @@ public class WeatherManager : NetworkBehaviour
             bool isWeatherAffectedLight = light.GetComponentInParent<PlayerController>() != null
                 || light.GetComponentInParent<FlashlightItem>() != null
                 || lightName.StartsWith("LampPostLight_")
-                || lightName.StartsWith("JeepneyHeadlight");
+                || lightName.StartsWith("JeepneyHeadlight")
+                || lightName.StartsWith("CemeteryFloodLight_");
             if (!isWeatherAffectedLight) continue;
 
             cachedFogAffectedLights.Add(light);

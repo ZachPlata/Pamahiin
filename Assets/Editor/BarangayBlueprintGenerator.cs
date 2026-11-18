@@ -34,6 +34,8 @@ public static class BarangayBlueprintGenerator
     private static readonly Color32 ColText = new Color32(244, 232, 206, 255);
     private static readonly Color32 ColTextMuted = new Color32(186, 162, 126, 255);
     private static readonly Color32 ColTextShadow = new Color32(16, 12, 10, 225);
+    private static readonly Color32 ColFuse = new Color32(118, 232, 145, 255);
+    private static readonly Color32 ColFuseFill = new Color32(28, 52, 34, 255);
 
     private sealed class BlueprintCanvas
     {
@@ -174,6 +176,8 @@ public static class BarangayBlueprintGenerator
         ['▲'] = new[] { ".....", "..#..", ".###.", ".###.", "#####", "#####", "....." },
         ['▶'] = new[] { ".#...", ".##..", ".###.", ".####", ".###.", ".##..", ".#..." },
         ['◀'] = new[] { "...#.", "..##.", ".###.", "####.", ".###.", "..##.", "...#." },
+        ['['] = new[] { ".###.", ".#...", ".#...", ".#...", ".#...", ".#...", ".###." },
+        [']'] = new[] { ".###.", "...#.", "...#.", "...#.", "...#.", "...#.", ".###." },
     };
 
     [MenuItem("Pamahiin/Generate Journal Blueprint PNG")]
@@ -211,6 +215,9 @@ public static class BarangayBlueprintGenerator
             importer.alphaIsTransparency = true;
             importer.SaveAndReimport();
         }
+
+        AssetDatabase.ImportAsset("Assets/UI/Journal/JournalUI.uss", ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset("Assets/UI/Journal/JournalUI.uxml", ImportAssetOptions.ForceUpdate);
 
         Debug.Log($"[BarangayBlueprintGenerator] Generated crisp blueprint asset at {BlueprintAssetPath}");
     }
@@ -319,7 +326,8 @@ public static class BarangayBlueprintGenerator
         DrawWorldLabel(c, MainOriginX, MainOriginY, "CLOSET", 4.15f, 0.68f, 2, ColText);
         DrawWorldLabel(c, MainOriginX, MainOriginY, "FOYER / HALL", 1.35f, 0.16f, 2, ColText);
         DrawWorldLabel(c, MainOriginX, MainOriginY, "LIVING ROOM", 3.62f, 0.00f, 2, ColText);
-        DrawWorldLabel(c, MainOriginX, MainOriginY, "GARAGE", 0.81f, -0.96f, 2, ColText);
+        DrawWorldLabel(c, MainOriginX, MainOriginY, "GARAGE", 0.81f, -0.78f, 2, ColText);
+        DrawFuseBoxMarker(c, MainOriginX, MainOriginY, 1.50f, -1.18f, 0.82f, -1.32f);
         DrawWorldLabel(c, MainOriginX, MainOriginY, "UTILITY", 2.02f, -0.56f, 2, ColText);
         DrawWorldLabel(c, MainOriginX, MainOriginY, "KITCHEN", 2.43f, -1.32f, 2, ColText);
         DrawWorldLabel(c, MainOriginX, MainOriginY, "DINING\nROOM", 3.86f, -1.32f, 2, ColText);
@@ -353,9 +361,9 @@ public static class BarangayBlueprintGenerator
         DrawWorldWall(c, BasementOriginX, BasementOriginY, 0.64f, -5.55f, 1.00f, -5.55f, extT); // Alcove Bot
         DrawWorldWall(c, BasementOriginX, BasementOriginY, 1.00f, -5.80f, 1.00f, -5.55f, extT); // West Lower
 
-        // NW Stairwell Partition
+        // NW Stairwell Partition (wall on left/west end, open on right/east entry)
         DrawWorldWall(c, BasementOriginX, BasementOriginY, 1.42f, -4.46f, 2.28f, -4.46f, intT);
-        DrawWorldWall(c, BasementOriginX, BasementOriginY, 2.28f, -4.46f, 2.28f, -4.10f, intT);
+        DrawWorldWall(c, BasementOriginX, BasementOriginY, 1.42f, -4.46f, 1.42f, -4.10f, intT);
 
         // 4. Basement Labels
         DrawWorldLabel(c, BasementOriginX, BasementOriginY, "STAIRS ▲", 1.88f, -4.64f, 2, ColBrass);
@@ -364,7 +372,51 @@ public static class BarangayBlueprintGenerator
 
     private static void DrawLegendFooter(BlueprintCanvas c)
     {
-        DrawCenteredText(c, "6 TANGLEWOOD DRIVE   |   ▶ ENTRY   |   ▼ / ▲ STAIRS", CanvasWidth * 0.5f, 32, 2, ColTextMuted, shadow: false);
+        DrawCenteredText(c, "6 TANGLEWOOD DRIVE  |  ▶ ENTRY  |  [F] FUSE BOX  |  ▼ / ▲ STAIRS", CanvasWidth * 0.5f, 32, 2, ColTextMuted, shadow: false);
+    }
+
+    private static void DrawFuseBoxMarker(
+        BlueprintCanvas c, float originX, float originY,
+        float boxWx, float boxWy, float labelWx, float labelWy)
+    {
+        float bx = originX + boxWx * PxPerUnit;
+        float by = originY + boxWy * PxPerUnit;
+        float lx = originX + labelWx * PxPerUnit;
+        float ly = originY + labelWy * PxPerUnit;
+
+        int bx0 = Mathf.RoundToInt(bx - 9f);
+        int by0 = Mathf.RoundToInt(by - 11f);
+        int bx1 = Mathf.RoundToInt(bx + 9f);
+        int by1 = Mathf.RoundToInt(by + 11f);
+
+        float dx = bx - lx;
+        float dy = by - ly;
+        if (Mathf.Abs(dx) > 1f || Mathf.Abs(dy) > 1f)
+        {
+            float tLabel = Mathf.Min(
+                Mathf.Abs(dx) > 0.01f ? 52f / Mathf.Abs(dx) : 1f,
+                Mathf.Abs(dy) > 0.01f ? 11f / Mathf.Abs(dy) : 1f);
+            float tBadge = Mathf.Min(
+                Mathf.Abs(dx) > 0.01f ? 12f / Mathf.Abs(dx) : 1f,
+                Mathf.Abs(dy) > 0.01f ? 14f / Mathf.Abs(dy) : 1f);
+            if (tLabel + tBadge < 0.95f)
+            {
+                c.DrawThickLine(
+                    lx + dx * tLabel,
+                    ly + dy * tLabel,
+                    bx - dx * tBadge,
+                    by - dy * tBadge,
+                    2f,
+                    ColFuse);
+            }
+        }
+
+        c.FillRect(bx0 - 1, by0 - 1, bx1 + 1, by1 + 1, ColTextShadow);
+        c.FillRect(bx0, by0, bx1, by1, ColFuseFill);
+        c.DrawRectOutline(bx0, by0, bx1, by1, 2, ColFuse);
+        DrawCenteredText(c, "F", bx, by, 2, ColFuse, shadow: false);
+
+        DrawCenteredText(c, "FUSE BOX", lx, ly, 2, ColFuse, shadow: true);
     }
 
     private static void FillWorldRect(BlueprintCanvas c, float originX, float originY, Rect r, Color32 col)

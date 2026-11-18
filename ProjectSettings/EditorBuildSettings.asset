@@ -15,8 +15,8 @@ EditorBuildSettings:
     path: Assets/Scenes/BarangayMap.unity
     guid: 791d42e933b20c74eaf8afe94e118c21
   - enabled: 1
-    path: Assets/Scenes/GameMapScene.unity
-    guid: 93ee2fcb66f8de04d8f99c7a247084a7
+    path: Assets/Scenes/CemeteryMap.unity
+    guid: 7710a0b04d2ebe24eb25895e1a1d9c3e
   - enabled: 1
     path: Assets/Scenes/LoadingScene.unity
     guid: f8f027ebb17bb3d4d9c91ec72fafa8a6

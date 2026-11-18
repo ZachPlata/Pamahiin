@@ -11,6 +11,7 @@ using UnityEngine;
 public class BarangayTextureImporter : AssetPostprocessor
 {
     private const string TARGET_ROOT = "Assets/Resources/Sprites/BarangayMap/";
+    private const string CEMETERY_ROOT = "Assets/Resources/Sprites/CemeteryMap/";
     private const string RITUAL_ROOT = "Assets/Resources/Sprites/Ritual/";
     private const string GHOST_DEATH_PATH = "Assets/Resources/Sprites/ghost_death_sheet.png";
     public const string PLAYER_DEATH_PATH = "Assets/Resources/Sprites/CHARACTERS/player_death_choke_sheet.png";
@@ -123,21 +124,27 @@ public class BarangayTextureImporter : AssetPostprocessor
     {
         string normalizedPath = assetPath.Replace('\\', '/');
         bool isBarangay = normalizedPath.StartsWith(TARGET_ROOT);
+        bool isCemetery = normalizedPath.StartsWith(CEMETERY_ROOT);
         bool isSlicedHorrorSheet = TryGetSlicedSheetSpec(normalizedPath, out _);
         bool isRitualOrDeath = normalizedPath.StartsWith(RITUAL_ROOT)
             || normalizedPath == GHOST_DEATH_PATH
             || isSlicedHorrorSheet;
-        if (!isBarangay && !isRitualOrDeath) return;
+        if (!isBarangay && !isCemetery && !isRitualOrDeath) return;
 
         TextureImporter ti = assetImporter as TextureImporter;
         if (ti == null) return;
 
-        bool isTileable = isBarangay && (normalizedPath.Contains("/Exterior/asphalt_road")
+        bool isTileable = (isBarangay && (normalizedPath.Contains("/Exterior/asphalt_road")
             || normalizedPath.Contains("/House/floor_")
             || normalizedPath.Contains("/House/wall_")
             || normalizedPath.Contains("/House/roof_")
             || normalizedPath.Contains("/Burial/burial_dirt_floor")
-            || normalizedPath.Contains("/Burial/burial_dirt_wall"));
+            || normalizedPath.Contains("/Burial/burial_dirt_wall")))
+            || (isCemetery && (normalizedPath.EndsWith("/cemetery_grass.png")
+            || normalizedPath.EndsWith("/cemetery_dirt_alley.png")
+            || normalizedPath.EndsWith("/cemetery_path_stone.png")
+            || normalizedPath.EndsWith("/cemetery_mausoleum_tile.png")
+            || normalizedPath.EndsWith("/cemetery_roof_concrete.png")));
 
         float ppu = isRitualOrDeath ? 100f : 64f;
         if (isBarangay)
@@ -146,6 +153,13 @@ public class BarangayTextureImporter : AssetPostprocessor
                 ppu = 256f;
             else if (normalizedPath.Contains("/Weather/rain_streaks_sheet") || normalizedPath.Contains("/Weather/fireflies_sheet"))
                 ppu = 128f;
+        }
+        else if (isCemetery)
+        {
+            if (normalizedPath.EndsWith("/gate_iron.png"))
+                ppu = 128f;
+            else
+                ppu = 64f;
         }
 
         ti.textureType = TextureImporterType.Sprite;
@@ -169,7 +183,10 @@ public class BarangayTextureImporter : AssetPostprocessor
             ti.SetPlatformTextureSettings(defaultPlatform);
         }
 
-        if (isRitualOrDeath || normalizedPath.Contains("/Props/") || normalizedPath.Contains("/Weather/"))
+        if (isRitualOrDeath
+            || normalizedPath.Contains("/Props/")
+            || normalizedPath.Contains("/Weather/")
+            || (isCemetery && normalizedPath.EndsWith("/candle_sheet.png")))
         {
             ti.isReadable = true;
         }

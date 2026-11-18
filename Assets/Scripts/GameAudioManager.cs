@@ -56,6 +56,7 @@ public class GameAudioManager : MonoBehaviour
         uiAudioSource.spatialBlend = 0f;
 
         SceneManager.sceneLoaded += OnSceneLoaded;
+        RefreshSceneBasementFlag();
     }
 
     private void OnDestroy()
@@ -68,6 +69,7 @@ public class GameAudioManager : MonoBehaviour
         wiredButtons.Clear();
         cachedAudioListener = null;
         nextUiScanTime = 0f;
+        RefreshSceneBasementFlag();
         PixelScenePostProcessor.ApplyPixelArtToScene();
     }
 
@@ -101,7 +103,14 @@ public class GameAudioManager : MonoBehaviour
     public const float DEFAULT_MIN_DISTANCE = 0.45f;
     public const float DEFAULT_MAX_DISTANCE = 3.2f;
 
-    public static bool IsBasementPosition(Vector3 worldPos) => worldPos.y < BASEMENT_Y_THRESHOLD;
+    public static bool HasSceneBasement { get; private set; }
+
+    public static void RefreshSceneBasementFlag()
+    {
+        HasSceneBasement = FindAnyObjectByType<StairTeleporter>(FindObjectsInactive.Include) != null;
+    }
+
+    public static bool IsBasementPosition(Vector3 worldPos) => HasSceneBasement && worldPos.y < BASEMENT_Y_THRESHOLD;
 
     public static float GetEffectiveSfxVolume(float baseVolume = 1f)
     {

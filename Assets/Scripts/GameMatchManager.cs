@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Server-side manager that handles match progression, specifically tracking journal deductions,
@@ -83,6 +84,41 @@ public class GameMatchManager : NetworkBehaviour
             "{name} rented a room here during the late eighties before vanishing without collecting {poss} luggage. Every caretaker hired since has abandoned the property before the first month ended.")
     };
 
+    // Completely spoiler-free Kampo Santo ng San Nicolas cemetery haunting records (zero entity species clues)
+    private static readonly GhostBackgroundTemplate[] CemeteryBackgroundTemplates =
+    {
+        new GhostBackgroundTemplate(
+            "Retired Sepulturero",
+            "Parish burial ledgers record {name} as senior gravedigger at Kampo Santo ng San Nicolas for thirty years. After {subj} collapsed beside the old balete grove on All Souls' Eve, night caretakers heard shovels scraping stone well past midnight."),
+        new GhostBackgroundTemplate(
+            "All Souls' Caretaker",
+            "Tasked with sweeping the northern nitso tiers and lighting altar candles, {name} vanished during a November typhoon. Visitors still report extinguished vigil flames relighting on their own along empty alleys."),
+        new GhostBackgroundTemplate(
+            "Mausoleum Benefactor",
+            "{name} funded the construction of the southern family crypts before passing under disputed circumstances. Relatives abandoned the mausoleum grounds after heavy wrought-iron gates began latching behind mourners."),
+        new GhostBackgroundTemplate(
+            "Missing Candle Vendor",
+            "Every dusk, {name} tended the flower and vigil stall just inside the cemetery gate. Weeks after {poss} sudden disappearance, fresh marigold petals and melted wax droplets continued appearing beside closed niches."),
+        new GhostBackgroundTemplate(
+            "Old Bell-Ringer",
+            "Known across San Nicolas for tolling the parish curfew bell before cemetery closings, {name} was interred near the central cross plaza. Locals claim muffled footsteps circle the stone pedestal whenever fog settles over the graves."),
+        new GhostBackgroundTemplate(
+            "Unclaimed Niche Occupant",
+            "Interred in an unmarked upper tier of the northeast nitso wall, {name} left no surviving kin to renew the plot lease. Groundskeepers who approached the alley after dark reported cold drafts spilling from sealed plaster."),
+        new GhostBackgroundTemplate(
+            "Parish Gravedigger",
+            "Following decades of midnight burials during the cholera years, {name} kept careful tally books inside the bantay shed. Successors quit within days after hearing urgent knocking on the shed door from outside the empty yard."),
+        new GhostBackgroundTemplate(
+            "Late-Night Vigiler",
+            "{name} kept silent bedside vigils inside the Delos Santos mausoleum long after visiting hours ended. Patrol tanods refuse to enter the southern lanes after spotting a lone figure standing near the stone altar."),
+        new GhostBackgroundTemplate(
+            "Stonecutter Apprentice",
+            "Carving inscriptions across dozens of marble lapidas, {name} suffered a fatal accident near the southwest plots. Subsequent stonemasons discovered fresh chisel marks etched into untouched slabs overnight."),
+        new GhostBackgroundTemplate(
+            "Cemetery Gatekeeper",
+            "{name} held the iron keys to Kampo Santo ng San Nicolas until {poss} death in 1994. Night guards still report the rusty west gate rattling violently even when no wind stirs the acacia leaves.")
+    };
+
     private readonly NetworkVariable<int> ghostGenderIndex = new NetworkVariable<int>(
         -1, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     private readonly NetworkVariable<int> ghostFirstNameIndex = new NetworkVariable<int>(
@@ -145,6 +181,15 @@ public class GameMatchManager : NetworkBehaviour
     private int ActiveBackgroundIndex => UseNetworkedContractProfile ? ghostBackgroundIndex.Value : localBackgroundIndex;
     private int ActiveCaseNumber => UseNetworkedContractProfile ? ghostCaseNumber.Value : localCaseNumber;
 
+    private static bool IsCemeteryMapActive()
+    {
+        string activeScene = SceneManager.GetActiveScene().name;
+        if (activeScene == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME) return true;
+        if (activeScene == ProgressionAndLoadoutManager.BARANGAY_MAP_SCENE_NAME) return false;
+        return ProgressionAndLoadoutManager.Instance != null &&
+               ProgressionAndLoadoutManager.Instance.GetSelectedSceneName() == ProgressionAndLoadoutManager.CEMETERY_MAP_SCENE_NAME;
+    }
+
     public bool HasAssignedGhostProfile =>
         ActiveGenderIndex >= 0 &&
         ActiveFirstNameIndex >= 0 &&
@@ -153,7 +198,9 @@ public class GameMatchManager : NetworkBehaviour
         ActiveCaseNumber > 0;
 
     public string AssignedCaseId =>
-        HasAssignedGhostProfile ? $"BSN-{ActiveCaseNumber:D4}" : "SYNCING";
+        HasAssignedGhostProfile
+            ? $"{(IsCemeteryMapActive() ? "KSN" : "BSN")}-{ActiveCaseNumber:D4}"
+            : "SYNCING";
 
     public string AssignedGhostName
     {
@@ -172,9 +219,14 @@ public class GameMatchManager : NetworkBehaviour
     {
         get
         {
-            if (!HasAssignedGhostProfile) return "Barangay Incident Record";
-            int idx = Mathf.Clamp(ActiveBackgroundIndex, 0, BackgroundTemplates.Length - 1);
-            return BackgroundTemplates[idx].title;
+            bool isCemetery = IsCemeteryMapActive();
+            if (!HasAssignedGhostProfile)
+            {
+                return isCemetery ? "Kampo Santo Incident Record" : "Barangay Incident Record";
+            }
+            GhostBackgroundTemplate[] pool = isCemetery ? CemeteryBackgroundTemplates : BackgroundTemplates;
+            int idx = Mathf.Clamp(ActiveBackgroundIndex, 0, pool.Length - 1);
+            return pool[idx].title;
         }
     }
 
@@ -182,20 +234,24 @@ public class GameMatchManager : NetworkBehaviour
     {
         get
         {
+            bool isCemetery = IsCemeteryMapActive();
             if (!HasAssignedGhostProfile)
             {
-                return "Retrieving Barangay San Nicolas civil records and witness statements...";
+                return isCemetery
+                    ? "Retrieving Kampo Santo ng San Nicolas burial ledgers and witness statements..."
+                    : "Retrieving Barangay San Nicolas civil records and witness statements...";
             }
 
             bool isFemale = ActiveGenderIndex == 1;
-            int idx = Mathf.Clamp(ActiveBackgroundIndex, 0, BackgroundTemplates.Length - 1);
+            GhostBackgroundTemplate[] pool = isCemetery ? CemeteryBackgroundTemplates : BackgroundTemplates;
+            int idx = Mathf.Clamp(ActiveBackgroundIndex, 0, pool.Length - 1);
             string fullName = AssignedGhostName;
             string subj = isFemale ? "she" : "he";
             string subjCap = isFemale ? "She" : "He";
             string obj = isFemale ? "her" : "him";
             string poss = isFemale ? "her" : "his";
 
-            return BackgroundTemplates[idx].template
+            return pool[idx].template
                 .Replace("{name}", fullName)
                 .Replace("{subjCap}", subjCap)
                 .Replace("{subj}", subj)
